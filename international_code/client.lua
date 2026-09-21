@@ -89,26 +89,24 @@ local function prompt(label,default)
 end
 
 local function multi(label,initial)
+  common.ensureLayout()
+  local path = common.ROOT .. "/draft-" .. os.getComputerID() .. "-" .. common.randomToken(6) .. ".txt"
+  local h = assert(fs.open(path, "w"))
+  h.write(initial or "")
+  h.close()
+
   clear()
-  bar(label,"Saisissez le texte. Une ligne contenant uniquement . termine la saisie.")
-  local lines={}
-  if initial and initial~="" then lines[#lines+1]=initial end
-  local y=4
-  while true do
-    at(2,y,"> ",palette.accent)
-    term.setTextColor(palette.text)
-    local s=read()
-    if s=="." then break end
-    lines[#lines+1]=s
-    y=y+1
-    local _,h=term.getSize()
-    if y>=h-1 then
-      clear()
-      bar(label,"Suite...  '.' pour terminer")
-      y=4
-    end
+  bar(label, "Editeur CraftOS - enregistrez votre texte puis quittez l'editeur.")
+  sleep(0.15)
+
+  local ok = shell.run("edit", path)
+  local text = common.readAll(path) or ""
+  if fs.exists(path) then fs.delete(path) end
+
+  if not ok then
+    message("EDITEUR", "L'editeur CraftOS a signale une erreur. Le brouillon lisible a ete recupere.", palette.warn)
   end
-  return table.concat(lines,"\n")
+  return text
 end
 
 local function menu(title,items,subtitle)
