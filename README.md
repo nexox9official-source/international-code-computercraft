@@ -76,6 +76,33 @@ wget run https://raw.githubusercontent.com/nexox9official-source/international-c
 wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua admin
 ```
 
+## Navigation v0.2
+
+Le Code n'affiche plus simplement une liste brute de 500 articles. Le terminal propose maintenant :
+
+- **Parcourir par Livre / catégorie** ;
+- **rechercher par numéro, titre ou mot contenu dans l'article** ;
+- afficher tous les articles si nécessaire ;
+- ouvrir une catégorie puis naviguer uniquement dans ses articles ;
+- consulter le texte complet avant de revenir à la liste ;
+- depuis un dossier judiciaire, parcourir ou rechercher le Code avant de citer un article.
+
+### Consulter le Code pendant une rédaction
+
+Les textes longs (loi, fait, contexte, motivation, jugement, sanctions, etc.) utilisent maintenant un **bureau de rédaction persistant**.
+
+Le brouillon est enregistré dans `/international_code/drafts/`. Lorsque l'utilisateur quitte momentanément l'éditeur CraftOS, il peut :
+
+1. reprendre l'écriture ;
+2. parcourir le Code par catégories ;
+3. rechercher un article ;
+4. lire l'article complet ;
+5. choisir un article et **insérer automatiquement sa référence dans le brouillon** ;
+6. revenir au même brouillon sans perdre le texte déjà écrit ;
+7. terminer seulement lorsqu'il décide d'utiliser le texte.
+
+Ainsi, consulter `UNS-ART-242` au milieu de la rédaction d'un jugement ne détruit plus la motivation en cours.
+
 ## Imprimante
 
 Une imprimante connectée physiquement au terminal est détectée automatiquement. Les articles et dossiers peuvent être imprimés sur plusieurs pages.
@@ -210,4 +237,4 @@ Les 25 Livres du Code sont automatiquement associés aux articles par groupes de
 
 ## Statut
 
-**v0.1 - première base jouable.** Le code Lua est structuré pour être étendu avec audiences, mandats, appels formels, signatures/quorum, réplication vers un second serveur et écran Monitor public.
+**v0.2 - navigation juridique et bureau de rédaction persistant.** Le code Lua est structuré pour être étendu avec audiences, mandats, appels formels, signatures/quorum, réplication vers un second serveur et écran Monitor public.
