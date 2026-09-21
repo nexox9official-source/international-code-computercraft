@@ -34,7 +34,8 @@ print("")
 if not http then error("API HTTP indisponible.",0) end
 for _,f in ipairs(files) do download(f) end
 
-local s=fs.open("/startup.lua","w")
+if not fs.exists("/startup") then fs.makeDir("/startup") end
+local s=assert(fs.open("/startup/90_uns_international_code.lua","w"))
 s.write('if fs.exists("/ic.lua") then shell.run("ic") end\n')
 s.close()
 
