@@ -89,6 +89,7 @@ local function prompt(label,default)
 end
 
 local referenceBrowser
+local menu
 
 local function multi(label,initial)
   common.ensureLayout()
@@ -155,7 +156,7 @@ local function multi(label,initial)
   end
 end
 
-local function menu(title,items,subtitle)
+menu=function(title,items,subtitle)
   local selected=1
   local offset=0
   while true do
