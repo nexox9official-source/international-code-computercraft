@@ -88,25 +88,71 @@ local function prompt(label,default)
   return v
 end
 
+local referenceBrowser
+
 local function multi(label,initial)
   common.ensureLayout()
-  local path = common.ROOT .. "/draft-" .. os.getComputerID() .. "-" .. common.randomToken(6) .. ".txt"
+  local draftsDir = common.ROOT .. "/drafts"
+  if not fs.exists(draftsDir) then fs.makeDir(draftsDir) end
+
+  local path = draftsDir .. "/draft-" .. os.getComputerID() .. "-" .. common.randomToken(6) .. ".txt"
   local h = assert(fs.open(path, "w"))
   h.write(initial or "")
   h.close()
 
-  clear()
-  bar(label, "Editeur CraftOS - enregistrez votre texte puis quittez l'editeur.")
-  sleep(0.15)
+  local firstOpen = true
+  while true do
+    clear()
+    bar(label, firstOpen
+      and "Votre brouillon reste sauvegarde pendant toute la consultation du Code."
+      or "Brouillon conserve. Reprenez, consultez le Code ou terminez.")
+    at(2,4,"Fichier de travail: "..path,palette.muted)
+    at(2,6,"L'editeur CraftOS va s'ouvrir.",palette.text)
+    at(2,7,"Enregistrez puis quittez-le pour revenir au bureau de redaction.",palette.muted)
+    sleep(0.35)
 
-  local ok = shell.run("edit", path)
-  local text = common.readAll(path) or ""
-  if fs.exists(path) then fs.delete(path) end
+    local ok = shell.run("edit", path)
+    if not ok then
+      message("EDITEUR", "L'editeur CraftOS a signale une erreur. Le brouillon est toujours conserve.", palette.warn)
+    end
+    firstOpen = false
 
-  if not ok then
-    message("EDITEUR", "L'editeur CraftOS a signale une erreur. Le brouillon lisible a ete recupere.", palette.warn)
+    local desk = menu("BUREAU DE REDACTION",{
+      {text="Reprendre l'ecriture",id="resume"},
+      {text="Consulter le Code par categories",id="browse"},
+      {text="Rechercher un article dans le Code",id="search"},
+      {text="Inserer une reference d'article a la fin du brouillon",id="insert"},
+      {text="Terminer et utiliser ce texte",id="finish"},
+      {text="Abandonner cette modification et conserver le brouillon sur le PC",id="keep"}
+    },"Le texte n'est jamais efface lorsque vous consultez les lois.")
+
+    if not desk or desk.id=="resume" then
+      -- Reouvre simplement le meme fichier : aucun texte n'est perdu.
+    elseif desk.id=="browse" then
+      if referenceBrowser then referenceBrowser({mode="browse",readonly=true}) end
+    elseif desk.id=="search" then
+      if referenceBrowser then referenceBrowser({mode="search",readonly=true}) end
+    elseif desk.id=="insert" then
+      local law = referenceBrowser and referenceBrowser({mode="browse",pick=true,readonly=true}) or nil
+      if law then
+        local current = common.readAll(path) or ""
+        local suffix = ""
+        if current ~= "" and not current:match("\n$") then suffix="\n" end
+        local out = assert(fs.open(path,"a"))
+        out.write(suffix.."["..law.ref.."] "..law.title.."\n")
+        out.close()
+        message("REFERENCE AJOUTEE",law.ref.." a ete ajoute au brouillon.",palette.ok)
+      end
+    elseif desk.id=="finish" then
+      local text = common.readAll(path) or ""
+      if fs.exists(path) then fs.delete(path) end
+      return text
+    elseif desk.id=="keep" then
+      local text = common.readAll(path) or ""
+      message("BROUILLON CONSERVE","Le brouillon reste sur ce PC : "..path,palette.warn)
+      return text
+    end
   end
-  return text
 end
 
 local function menu(title,items,subtitle)
@@ -203,6 +249,123 @@ local function textPage(title,sections)
   end
 end
 
+
+local function lawQuickView(law)
+  if not law then return end
+  local full,err=rpc("LAW_GET",{ref=law.ref})
+  if not full then message("ARTICLE",err,palette.bad);return end
+  textPage(full.ref,{
+    {label=full.title,text=full.body},
+    {label="Classement",text=(full.book or "").." / "..(full.section or "")},
+    {label="Statut",text=(full.status or "?").." / version "..tostring(full.version or 1)}
+  })
+end
+
+local function collectBooks(laws)
+  local books={}
+  local order={}
+  for _,law in ipairs(laws or {}) do
+    local name=(law.book and law.book~="") and law.book or "SANS CATEGORIE"
+    if not books[name] then
+      books[name]={name=name,laws={},first=law.number or 999999}
+      order[#order+1]=books[name]
+    end
+    books[name].laws[#books[name].laws+1]=law
+    if (law.number or 999999)<books[name].first then books[name].first=law.number end
+  end
+  table.sort(order,function(a,b) return a.first<b.first end)
+  return order
+end
+
+local function chooseLawFromList(title,laws,opts)
+  opts=opts or {}
+  if not laws or #laws==0 then
+    message("CODE","Aucun article dans cette selection.",palette.warn)
+    return nil
+  end
+
+  while true do
+    local items={}
+    for _,law in ipairs(laws) do
+      items[#items+1]={
+        text=law.ref.."  "..law.title.."  ["..(law.status or "?").."]",
+        law=law
+      }
+    end
+
+    local p=menu(title,items,#laws.." article(s) - Entree pour ouvrir")
+    if not p then return nil end
+    local law=p.law
+    if opts.pick then
+      local action=menu(law.ref.." - "..law.title,{
+        {text="Lire l'article",id="read"},
+        {text="Choisir cette reference",id="pick"}
+      },"Vous pouvez lire avant de l'utiliser.")
+      if action and action.id=="read" then
+        lawQuickView(law)
+      elseif action and action.id=="pick" then
+        return law
+      end
+    elseif opts.manage then
+      return law
+    else
+      lawQuickView(law)
+    end
+  end
+end
+
+referenceBrowser=function(opts)
+  opts=opts or {}
+  while true do
+    local all,err=rpc("LAW_LIST",{query=""})
+    if not all then message("CODE",err,palette.bad);return nil end
+
+    if opts.mode=="search" then
+      local q=prompt("Recherche article / mot / numero")
+      if q=="" then return nil end
+      local found,e=rpc("LAW_LIST",{query=q})
+      if not found then message("RECHERCHE",e,palette.bad);return nil end
+      local chosen=chooseLawFromList("RESULTATS: "..q,found,opts)
+      if chosen or opts.pick then return chosen end
+      opts.mode="browse"
+    else
+      local books=collectBooks(all)
+      local items={
+        {text="[?] Rechercher dans les 500+ articles",id="search"},
+        {text="[*] Parcourir tous les articles",id="all"}
+      }
+      for _,book in ipairs(books) do
+        items[#items+1]={
+          text=book.name.."  ("..#book.laws..")",
+          book=book
+        }
+      end
+
+      local p=menu("BIBLIOTHEQUE DU CODE",items,#all.." articles / "..#books.." categories")
+      if not p then return nil end
+
+      if p.id=="search" then
+        local q=prompt("Recherche article / mot / numero")
+        if q~="" then
+          local found,e=rpc("LAW_LIST",{query=q})
+          if not found then
+            message("RECHERCHE",e,palette.bad)
+          else
+            local chosen=chooseLawFromList("RESULTATS: "..q,found,opts)
+            if chosen then return chosen end
+          end
+        end
+      elseif p.id=="all" then
+        local chosen=chooseLawFromList("TOUS LES ARTICLES",all,opts)
+        if chosen then return chosen end
+      elseif p.book then
+        local chosen=chooseLawFromList(p.book.name,p.book.laws,opts)
+        if chosen then return chosen end
+      end
+    end
+  end
+end
+
 local roleAllows={
   lawWrite={writer=true,admin=true},
   caseWrite={clerk=true,judge=true,admin=true},
@@ -277,38 +440,66 @@ end
 
 local function lawsScreen(query)
   while true do
-    local laws,err=rpc("LAW_LIST",{query=query or ""})
-    if not laws then message("CODE",err,palette.bad);return end
-
     local items={}
     if allowed("lawWrite") then
       items[#items+1]={text="[+] Creer un nouvel article",id="new"}
     end
-    items[#items+1]={text="[?] Rechercher / filtrer",id="search"}
+    items[#items+1]={text="[L] Parcourir par LIVRE / categorie",id="books"}
+    items[#items+1]={text="[?] Rechercher par numero, titre ou mot",id="search"}
+    items[#items+1]={text="[*] Afficher tous les articles",id="all"}
 
-    for _,l in ipairs(laws) do
-      items[#items+1]={
-        text=l.ref.."  "..l.title.."  ["..l.status.."]",
-        law=l
-      }
-    end
-
-    local pick=menu("CODE INTERNATIONAL",items,#laws.." article(s) affiches / numeros jamais reutilises")
+    local pick=menu("CODE INTERNATIONAL",items,"Navigation par categories + recherche instantanee")
     if not pick then return end
 
     if pick.id=="new" then
       local title=prompt("Titre")
-      local book=prompt("Livre / categorie")
-      local section=prompt("Titre / section")
+      local all=rpc("LAW_LIST",{query=""}) or {}
+      local books=collectBooks(all)
+      local bookItems={}
+      for _,b in ipairs(books) do bookItems[#bookItems+1]={text=b.name,book=b.name} end
+      bookItems[#bookItems+1]={text="[NOUVELLE CATEGORIE]",book="__new"}
+      local bp=menu("CATEGORIE / LIVRE",bookItems,"Choisissez le Livre de classement")
+      local book=""
+      if bp then
+        if bp.book=="__new" then book=prompt("Nom du nouveau Livre / categorie")
+        else book=bp.book end
+      end
+      local section=prompt("Titre / section (optionnel)")
       local body=multi("TEXTE DE L'ARTICLE","")
       local r,e=rpc("LAW_CREATE",{title=title,book=book,section=section,body=body,status="draft"})
       message("CREATION",r and ("Cree: "..r.ref) or e,r and palette.ok or palette.bad)
 
-    elseif pick.id=="search" then
-      query=prompt("Recherche",query or "")
+    elseif pick.id=="books" then
+      while true do
+        local law=referenceBrowser({mode="browse",manage=true})
+        if not law then break end
+        viewLaw(law.ref)
+      end
 
-    elseif pick.law then
-      viewLaw(pick.law.ref)
+    elseif pick.id=="search" then
+      while true do
+        local q=prompt("Recherche",query or "")
+        if q=="" then break end
+        query=q
+        local laws,err=rpc("LAW_LIST",{query=q})
+        if not laws then
+          message("CODE",err,palette.bad)
+          break
+        end
+        local law=chooseLawFromList("RESULTATS: "..q,laws,{manage=true})
+        if law then viewLaw(law.ref) else break end
+      end
+
+    elseif pick.id=="all" then
+      local laws,err=rpc("LAW_LIST",{query=""})
+      if not laws then message("CODE",err,palette.bad)
+      else
+        while true do
+          local law=chooseLawFromList("TOUS LES ARTICLES",laws,{manage=true})
+          if not law then break end
+          viewLaw(law.ref)
+        end
+      end
     end
   end
 end
@@ -384,9 +575,22 @@ local function caseDetails(id)
       message("PREUVE",r and "Preuve ajoutee au dossier." or e,r and palette.ok or palette.bad)
 
     elseif a.id=="article" then
-      local ref=prompt("Reference article (ex: 145 ou UNS-ART-145)")
-      local r,e=rpc("CASE_ADD_ARTICLE",{id=c.id,ref=ref})
-      message("ARTICLE CITE",r and "Reference ajoutee." or e,r and palette.ok or palette.bad)
+      local mode=menu("CITER UN ARTICLE",{
+        {text="Parcourir les categories",id="browse"},
+        {text="Rechercher par numero / titre / mot",id="search"},
+        {text="Saisir une reference manuellement",id="manual"}
+      },"Le dossier reste ouvert pendant la consultation du Code.")
+      local ref=nil
+      if mode and mode.id=="manual" then
+        ref=prompt("Reference article (ex: 145 ou UNS-ART-145)")
+      elseif mode then
+        local law=referenceBrowser({mode=mode.id,pick=true,readonly=true})
+        if law then ref=law.ref end
+      end
+      if ref and ref~="" then
+        local r,e=rpc("CASE_ADD_ARTICLE",{id=c.id,ref=ref})
+        message("ARTICLE CITE",r and ("Reference ajoutee: "..ref) or e,r and palette.ok or palette.bad)
+      end
 
     elseif a.id=="summary" then
       local summary=multi("CONTEXTE / EXPOSE",c.summary)
