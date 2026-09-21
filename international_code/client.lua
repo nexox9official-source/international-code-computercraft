@@ -91,62 +91,289 @@ end
 local referenceBrowser
 local menu
 
+local function splitDraft(text)
+  text=tostring(text or ""):gsub("\r\n","\n"):gsub("\r","\n")
+  local lines={}
+  local pos=1
+  while true do
+    local s,e=text:find("\n",pos,true)
+    if not s then
+      lines[#lines+1]=text:sub(pos)
+      break
+    end
+    lines[#lines+1]=text:sub(pos,s-1)
+    pos=e+1
+  end
+  if #lines==0 then lines[1]="" end
+  return lines
+end
+
+local function joinDraft(lines)
+  return table.concat(lines,"\n")
+end
+
 local function multi(label,initial)
   common.ensureLayout()
-  local draftsDir = common.ROOT .. "/drafts"
+  local draftsDir=common.ROOT.."/drafts"
   if not fs.exists(draftsDir) then fs.makeDir(draftsDir) end
 
-  local path = draftsDir .. "/draft-" .. os.getComputerID() .. "-" .. common.randomToken(6) .. ".txt"
-  local h = assert(fs.open(path, "w"))
-  h.write(initial or "")
-  h.close()
+  local path=draftsDir.."/draft-"..os.getComputerID().."-"..common.randomToken(6)..".txt"
+  local lines=splitDraft(initial or "")
+  local cy=1
+  local cx=#lines[1]+1
+  local top=1
+  local left=1
+  local dirty=true
 
-  local firstOpen = true
-  while true do
+  local function save()
+    common.writeAll(path,joinDraft(lines))
+    dirty=false
+  end
+
+  local function clampCursor()
+    if cy<1 then cy=1 end
+    if cy>#lines then cy=#lines end
+    if cx<1 then cx=1 end
+    local max=#lines[cy]+1
+    if cx>max then cx=max end
+  end
+
+  local function dimensions()
+    local w,h=term.getSize()
+    local bodyTop=4
+    local bodyBottom=math.max(bodyTop,h-2)
+    local visible=math.max(1,bodyBottom-bodyTop+1)
+    local textX=6
+    local bodyWidth=math.max(8,w-textX)
+    return w,h,bodyTop,bodyBottom,visible,textX,bodyWidth
+  end
+
+  local function ensureVisible()
+    clampCursor()
+    local _,_,_,_,visible,_,bodyWidth=dimensions()
+    if cy<top then top=cy end
+    if cy>=top+visible then top=cy-visible+1 end
+    if top<1 then top=1 end
+
+    if cx<left then left=cx end
+    if cx>left+bodyWidth-1 then left=cx-bodyWidth+1 end
+    if left<1 then left=1 end
+  end
+
+  local function render()
+    ensureVisible()
+    local w,h,bodyTop,bodyBottom,visible,textX,bodyWidth=dimensions()
     clear()
-    bar(label, firstOpen
-      and "Votre brouillon reste sauvegarde pendant toute la consultation du Code."
-      or "Brouillon conserve. Reprenez, consultez le Code ou terminez.")
-    at(2,4,"Fichier de travail: "..path,palette.muted)
-    at(2,6,"L'editeur CraftOS va s'ouvrir.",palette.text)
-    at(2,7,"Enregistrez puis quittez-le pour revenir au bureau de redaction.",palette.muted)
-    sleep(0.35)
+    bar(label,"Edition directe + consultation du Code sans perdre le brouillon")
 
-    local ok = shell.run("edit", path)
-    if not ok then
-      message("EDITEUR", "L'editeur CraftOS a signale une erreur. Le brouillon est toujours conserve.", palette.warn)
-    end
-    firstOpen = false
-
-    local desk = menu("BUREAU DE REDACTION",{
-      {text="Reprendre l'ecriture",id="resume"},
-      {text="Consulter le Code par categories",id="browse"},
-      {text="Rechercher un article dans le Code",id="search"},
-      {text="Inserer une reference d'article a la fin du brouillon",id="insert"},
-      {text="Terminer et utiliser ce texte",id="finish"}
-    },"Le texte n'est jamais efface lorsque vous consultez les lois.")
-
-    if not desk or desk.id=="resume" then
-      -- Reouvre simplement le meme fichier : aucun texte n'est perdu.
-    elseif desk.id=="browse" then
-      if referenceBrowser then referenceBrowser({mode="browse",readonly=true}) end
-    elseif desk.id=="search" then
-      if referenceBrowser then referenceBrowser({mode="search",readonly=true}) end
-    elseif desk.id=="insert" then
-      local law = referenceBrowser and referenceBrowser({mode="browse",pick=true,readonly=true}) or nil
-      if law then
-        local current = common.readAll(path) or ""
-        local suffix = ""
-        if current ~= "" and not current:match("\n$") then suffix="\n" end
-        local out = assert(fs.open(path,"a"))
-        out.write(suffix.."["..law.ref.."] "..law.title.."\n")
-        out.close()
-        message("REFERENCE AJOUTEE",law.ref.." a ete ajoute au brouillon.",palette.ok)
+    for row=bodyTop,bodyBottom do
+      local lineNo=top+(row-bodyTop)
+      term.setBackgroundColor(palette.bg)
+      if lineNo<=#lines then
+        at(1,row,string.format("%4d ",lineNo),lineNo==cy and palette.accent or palette.muted)
+        local raw=lines[lineNo] or ""
+        local shown=raw:sub(left,left+bodyWidth-1)
+        at(textX,row,common.fit(shown,bodyWidth),palette.text)
+      else
+        at(1,row,common.fit("~",w),palette.muted)
       end
-    elseif desk.id=="finish" then
-      local text = common.readAll(path) or ""
-      if fs.exists(path) then fs.delete(path) end
-      return text
+    end
+
+    local state=dirty and "AUTO*" or "AUTO"
+    footer("F2 Categories  F3 Recherche  F4 Inserer article  F5 Terminer  "..state)
+
+    local screenX=textX+(cx-left)
+    local screenY=bodyTop+(cy-top)
+    if screenX<textX then screenX=textX end
+    if screenX>w then screenX=w end
+    if screenY<bodyTop then screenY=bodyTop end
+    if screenY>bodyBottom then screenY=bodyBottom end
+    term.setCursorPos(screenX,screenY)
+    term.setCursorBlink(true)
+  end
+
+  local function markChanged()
+    dirty=true
+    save()
+  end
+
+  local function insertChunk(chunk)
+    chunk=tostring(chunk or ""):gsub("\r\n","\n"):gsub("\r","\n")
+    local parts=splitDraft(chunk)
+    local line=lines[cy]
+    local before=line:sub(1,cx-1)
+    local after=line:sub(cx)
+
+    if #parts==1 then
+      lines[cy]=before..parts[1]..after
+      cx=cx+#parts[1]
+    else
+      lines[cy]=before..parts[1]
+      local insertAt=cy+1
+      for i=2,#parts-1 do
+        table.insert(lines,insertAt,parts[i])
+        insertAt=insertAt+1
+      end
+      table.insert(lines,insertAt,parts[#parts]..after)
+      cy=insertAt
+      cx=#parts[#parts]+1
+    end
+    markChanged()
+  end
+
+  save()
+
+  while true do
+    render()
+    local ev,a,b,c=os.pullEvent()
+
+    if ev=="char" then
+      insertChunk(a)
+
+    elseif ev=="paste" then
+      insertChunk(a)
+
+    elseif ev=="key" then
+      if a==keys.left then
+        if cx>1 then
+          cx=cx-1
+        elseif cy>1 then
+          cy=cy-1
+          cx=#lines[cy]+1
+        end
+
+      elseif a==keys.right then
+        if cx<=#lines[cy] then
+          cx=cx+1
+        elseif cy<#lines then
+          cy=cy+1
+          cx=1
+        end
+
+      elseif a==keys.up then
+        if cy>1 then
+          cy=cy-1
+          cx=math.min(cx,#lines[cy]+1)
+        end
+
+      elseif a==keys.down then
+        if cy<#lines then
+          cy=cy+1
+          cx=math.min(cx,#lines[cy]+1)
+        end
+
+      elseif a==keys.home then
+        cx=1
+
+      elseif a==keys["end"] then
+        cx=#lines[cy]+1
+
+      elseif a==keys.pageUp then
+        local _,_,_,_,visible=dimensions()
+        cy=math.max(1,cy-visible)
+        cx=math.min(cx,#lines[cy]+1)
+
+      elseif a==keys.pageDown then
+        local _,_,_,_,visible=dimensions()
+        cy=math.min(#lines,cy+visible)
+        cx=math.min(cx,#lines[cy]+1)
+
+      elseif a==keys.backspace then
+        if cx>1 then
+          local line=lines[cy]
+          lines[cy]=line:sub(1,cx-2)..line:sub(cx)
+          cx=cx-1
+          markChanged()
+        elseif cy>1 then
+          local previous=lines[cy-1]
+          local current=table.remove(lines,cy)
+          cy=cy-1
+          cx=#previous+1
+          lines[cy]=previous..current
+          markChanged()
+        end
+
+      elseif a==keys.delete then
+        local line=lines[cy]
+        if cx<=#line then
+          lines[cy]=line:sub(1,cx-1)..line:sub(cx+1)
+          markChanged()
+        elseif cy<#lines then
+          lines[cy]=line..table.remove(lines,cy+1)
+          markChanged()
+        end
+
+      elseif a==keys.enter then
+        local line=lines[cy]
+        local before=line:sub(1,cx-1)
+        local after=line:sub(cx)
+        lines[cy]=before
+        table.insert(lines,cy+1,after)
+        cy=cy+1
+        cx=1
+        markChanged()
+
+      elseif a==keys.tab then
+        insertChunk("  ")
+
+      elseif a==keys.f2 then
+        save()
+        term.setCursorBlink(false)
+        if referenceBrowser then referenceBrowser({mode="browse",readonly=true}) end
+
+      elseif a==keys.f3 then
+        save()
+        term.setCursorBlink(false)
+        if referenceBrowser then referenceBrowser({mode="search",readonly=true}) end
+
+      elseif a==keys.f4 then
+        save()
+        term.setCursorBlink(false)
+        local law=referenceBrowser and referenceBrowser({mode="browse",pick=true,readonly=true}) or nil
+        if law then insertChunk("["..law.ref.."] "..law.title) end
+
+      elseif a==keys.f5 then
+        save()
+        term.setCursorBlink(false)
+        local text=joinDraft(lines)
+        if fs.exists(path) then fs.delete(path) end
+        return text
+
+      elseif a==keys.escape then
+        save()
+        term.setCursorBlink(false)
+        local action=menu("QUITTER L'EDITEUR",{
+          {text="Continuer la redaction",id="resume"},
+          {text="Terminer et utiliser ce texte",id="finish"}
+        },"Le brouillon est autosauvegarde.")
+        if action and action.id=="finish" then
+          local text=joinDraft(lines)
+          if fs.exists(path) then fs.delete(path) end
+          return text
+        end
+      end
+
+    elseif ev=="mouse_click" then
+      local _,_,bodyTop,bodyBottom,_,textX=dimensions()
+      local x,y=b,c
+      if y>=bodyTop and y<=bodyBottom then
+        local lineNo=top+(y-bodyTop)
+        if lineNo>=1 and lineNo<=#lines then
+          cy=lineNo
+          if x<textX then
+            cx=1
+          else
+            cx=math.min(#lines[cy]+1,left+(x-textX))
+          end
+        end
+      end
+
+    elseif ev=="mouse_scroll" then
+      if a<0 then cy=math.max(1,cy-3) else cy=math.min(#lines,cy+3) end
+      cx=math.min(cx,#lines[cy]+1)
+
+    elseif ev=="term_resize" then
+      -- Le prochain render recalculera la zone visible.
     end
   end
 end
