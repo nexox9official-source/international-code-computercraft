@@ -4,7 +4,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** destiné au Code interna
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. `North Coalition` est conservé uniquement comme État proposant dans le corpus juridique initial.
 
-## Ce que fait la v0.1
+## Ce que fait la v0.2
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `viewer`, `admin`) ;
