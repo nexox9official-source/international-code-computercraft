@@ -540,9 +540,6 @@ end
 referenceBrowser=function(opts)
   opts=opts or {}
   while true do
-    local all,err=rpc("LAW_LIST",{query=""})
-    if not all then message("CODE",err,palette.bad);return nil end
-
     if opts.mode=="search" then
       local q=prompt("Recherche article / mot / numero")
       if q=="" then return nil end
@@ -552,19 +549,23 @@ referenceBrowser=function(opts)
       if chosen or opts.pick then return chosen end
       opts.mode="browse"
     else
-      local books=collectBooks(all)
+      local books,err=rpc("LAW_BOOKS",{})
+      if not books then message("CODE",err,palette.bad);return nil end
+
       local items={
-        {text="[?] Rechercher dans les 500+ articles",id="search"},
+        {text="[?] Rechercher dans le Code",id="search"},
         {text="[*] Parcourir tous les articles",id="all"}
       }
+      local total=0
       for _,book in ipairs(books) do
+        total=total+(book.count or 0)
         items[#items+1]={
-          text=book.name.."  ("..#book.laws..")",
+          text=book.name.."  ("..tostring(book.count or 0)..")",
           book=book
         }
       end
 
-      local p=menu("BIBLIOTHEQUE DU CODE",items,#all.." articles / "..#books.." categories")
+      local p=menu("BIBLIOTHEQUE DU CODE",items,total.." articles / "..#books.." categories")
       if not p then return nil end
 
       if p.id=="search" then
@@ -579,11 +580,25 @@ referenceBrowser=function(opts)
           end
         end
       elseif p.id=="all" then
-        local chosen=chooseLawFromList("TOUS LES ARTICLES",all,opts)
-        if chosen then return chosen end
+        local all,e=rpc("LAW_LIST",{query=""})
+        if not all then
+          message("CODE",e,palette.bad)
+        else
+          local chosen=chooseLawFromList("TOUS LES ARTICLES",all,opts)
+          if chosen then return chosen end
+        end
       elseif p.book then
-        local chosen=chooseLawFromList(p.book.name,p.book.laws,opts)
-        if chosen then return chosen end
+        local laws,e=rpc("LAW_LIST",{book=p.book.name})
+        if not laws then
+          message("CODE",e,palette.bad)
+        else
+          local range=""
+          if p.book.first and p.book.last then
+            range=" / UNS-ART-"..string.format("%03d",p.book.first).." a "..string.format("%03d",p.book.last)
+          end
+          local chosen=chooseLawFromList(p.book.name,laws,opts)
+          if chosen then return chosen end
+        end
       end
     end
   end
@@ -676,10 +691,9 @@ local function lawsScreen(query)
 
     if pick.id=="new" then
       local title=prompt("Titre")
-      local all=rpc("LAW_LIST",{query=""}) or {}
-      local books=collectBooks(all)
+      local books=rpc("LAW_BOOKS",{}) or {}
       local bookItems={}
-      for _,b in ipairs(books) do bookItems[#bookItems+1]={text=b.name,book=b.name} end
+      for _,b in ipairs(books) do bookItems[#bookItems+1]={text=b.name.." ("..tostring(b.count or 0)..")",book=b.name} end
       bookItems[#bookItems+1]={text="[NOUVELLE CATEGORIE]",book="__new"}
       local bp=menu("CATEGORIE / LIVRE",bookItems,"Choisissez le Livre de classement")
       local book=""
