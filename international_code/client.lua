@@ -123,8 +123,7 @@ local function multi(label,initial)
       {text="Consulter le Code par categories",id="browse"},
       {text="Rechercher un article dans le Code",id="search"},
       {text="Inserer une reference d'article a la fin du brouillon",id="insert"},
-      {text="Terminer et utiliser ce texte",id="finish"},
-      {text="Abandonner cette modification et conserver le brouillon sur le PC",id="keep"}
+      {text="Terminer et utiliser ce texte",id="finish"}
     },"Le texte n'est jamais efface lorsque vous consultez les lois.")
 
     if not desk or desk.id=="resume" then
@@ -147,10 +146,6 @@ local function multi(label,initial)
     elseif desk.id=="finish" then
       local text = common.readAll(path) or ""
       if fs.exists(path) then fs.delete(path) end
-      return text
-    elseif desk.id=="keep" then
-      local text = common.readAll(path) or ""
-      message("BROUILLON CONSERVE","Le brouillon reste sur ce PC : "..path,palette.warn)
       return text
     end
   end
