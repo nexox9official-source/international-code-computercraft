@@ -32,6 +32,34 @@ local function can(role, action)
   return p and (p["*"] or p[action]) or false
 end
 
+local bookNames = {
+  "LIVRE I - DISPOSITIONS FONDAMENTALES, DEFINITIONS ET HIERARCHIE DES NORMES",
+  "LIVRE II - SOURCES DU DROIT, PUBLICATION ET INTERPRETATION",
+  "LIVRE III - ADHESION, STATUT ET OBLIGATIONS DES ETATS MEMBRES",
+  "LIVRE IV - SUSPENSION, EXCLUSION ET CONTINUITE DES ETATS",
+  "LIVRE V - INSTITUTIONS DE L'UNION ET REPARTITION DES POUVOIRS",
+  "LIVRE VI - ASSEMBLEE, VOTES, LEGISLATION ET REGISTRE OFFICIEL",
+  "LIVRE VII - COMPETENCE DE LA COUR INTERNATIONALE DE L'UNION",
+  "LIVRE VIII - JUGES, PARQUET, GREFFE ET INDEPENDANCE JUDICIAIRE",
+  "LIVRE IX - PROCEDURE JUDICIAIRE, SAISINE ET DROITS DES PARTIES",
+  "LIVRE X - ENQUETES, PREUVES, TEMOINS ET INTEGRITE DES DOSSIERS",
+  "LIVRE XI - JUGEMENTS, SANCTIONS, APPELS ET EXECUTION",
+  "LIVRE XII - RESPONSABILITE INTERNATIONALE DES ETATS ET REPARATIONS",
+  "LIVRE XIII - PAIX, SECURITE COLLECTIVE ET RECOURS A LA FORCE",
+  "LIVRE XIV - CONDUITE DES HOSTILITES ET DROIT DES CONFLITS ARMES",
+  "LIVRE XV - CRIMES INTERNATIONAUX MAJEURS ET RESPONSABILITE INDIVIDUELLE",
+  "LIVRE XVI - DROITS FONDAMENTAUX, DETENTION ET PROTECTION DES PERSONNES",
+  "LIVRE XVII - DIPLOMATIE, TRAITES ET RELATIONS OFFICIELLES",
+  "LIVRE XVIII - FRONTIERES, TERRITOIRES, OCCUPATION ET SOUVERAINETE",
+  "LIVRE XIX - COMMERCE, FINANCE, SANCTIONS ET CRIMINALITE ECONOMIQUE",
+  "LIVRE XX - ENTREPRISES, ORGANISATIONS, CORRUPTION ET CRIMINALITE ORGANISEE",
+  "LIVRE XXI - AIDE HUMANITAIRE, SANTE, DEPLACEMENTS ET PROTECTION DES POPULATIONS",
+  "LIVRE XXII - RESSOURCES, ENVIRONNEMENT, MATIERES DANGEREUSES ET ZONES CONTAMINEES",
+  "LIVRE XXIII - TECHNOLOGIES, COMMUNICATIONS, COMPUTERS, CYBERSECURITE ET PREUVES NUMERIQUES",
+  "LIVRE XXIV - RENSEIGNEMENT, SECRETS, INFORMATION PUBLIQUE ET INFRASTRUCTURES STRATEGIQUES",
+  "LIVRE XXV - URGENCES, APOCALYPSE, RECONSTRUCTION, ARCHIVES ET DISPOSITIONS FINALES"
+}
+
 local function loadSeed()
   local laws = {}
   for i = 1, 5 do
@@ -39,10 +67,30 @@ local function loadSeed()
     if fs.exists(path) then
       local ok, chunk = pcall(dofile, path)
       if ok and type(chunk) == "table" then
-        for _, law in ipairs(chunk) do laws[#laws + 1] = law end
+        for _, entry in ipairs(chunk) do
+          local law = entry
+          if entry.number == nil and type(entry[1]) == "number" then
+            local n = entry[1]
+            law = {
+              number = n,
+              ref = string.format("UNS-ART-%03d", n),
+              title = entry[2] or ("Article " .. n),
+              body = entry[3] or "",
+              book = bookNames[math.ceil(n / 20)] or "",
+              section = "",
+              status = "draft",
+              version = 1,
+              history = {}
+            }
+          end
+          if type(law) == "table" and law.number and law.ref then
+            laws[#laws + 1] = law
+          end
+        end
       end
     end
   end
+  table.sort(laws, function(a,b) return (a.number or 0) < (b.number or 0) end)
   return laws
 end
 
