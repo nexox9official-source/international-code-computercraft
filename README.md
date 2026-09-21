@@ -89,19 +89,19 @@ Le Code n'affiche plus simplement une liste brute de 500 articles. Le terminal p
 
 ### Consulter le Code pendant une rédaction
 
-Les textes longs (loi, fait, contexte, motivation, jugement, sanctions, etc.) utilisent maintenant un **bureau de rédaction persistant**.
+Les textes longs (loi, fait, contexte, motivation, jugement, sanctions, etc.) utilisent maintenant un **éditeur juridique intégré** avec autosauvegarde dans `/international_code/drafts/`.
 
-Le brouillon est enregistré dans `/international_code/drafts/`. Lorsque l'utilisateur quitte momentanément l'éditeur CraftOS, il peut :
+Il n'est plus nécessaire de fermer le texte en cours pour retrouver une loi :
 
-1. reprendre l'écriture ;
-2. parcourir le Code par catégories ;
-3. rechercher un article ;
-4. lire l'article complet ;
-5. choisir un article et **insérer automatiquement sa référence dans le brouillon** ;
-6. revenir au même brouillon sans perdre le texte déjà écrit ;
-7. terminer seulement lorsqu'il décide d'utiliser le texte.
+- **F2** : ouvre directement les Livres / catégories du Code ;
+- **F3** : recherche un article par numéro, titre ou mot ;
+- **F4** : parcourt/recherche le Code puis insère la référence choisie **à la position du curseur** ;
+- **F5** : termine la rédaction et utilise le texte ;
+- **Échap** : ouvre le menu de sortie sans perdre le brouillon.
 
-Ainsi, consulter `UNS-ART-242` au milieu de la rédaction d'un jugement ne détruit plus la motivation en cours.
+Pendant F2/F3/F4, le tampon d'édition reste en mémoire et une copie est enregistrée sur le PC. En revenant de la bibliothèque juridique, le texte, les lignes et le brouillon sont toujours présents.
+
+Ainsi, au milieu d'une motivation, un juge peut faire **F3**, rechercher « légitime défense », lire l'article, revenir à son texte puis faire **F4** pour insérer `[UNS-ART-244] Légitime défense individuelle` exactement là où se trouve le curseur.
 
 ## Imprimante
 
