@@ -3,22 +3,22 @@ local S = {}
 
 local permissions = {
   viewer = {
-    PING=true, DASHBOARD=true, SERVER_INFO=true, LAW_LIST=true, LAW_GET=true,
+    PING=true, DASHBOARD=true, SERVER_INFO=true, LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true
   },
   writer = {
-    PING=true, DASHBOARD=true, SERVER_INFO=true, LAW_LIST=true, LAW_GET=true,
+    PING=true, DASHBOARD=true, SERVER_INFO=true, LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true, LAW_CREATE=true, LAW_AMEND=true, LAW_REPEAL=true,
     LAW_SET_STATUS=true, AUDIT_LIST=true
   },
   clerk = {
-    PING=true, DASHBOARD=true, SERVER_INFO=true, LAW_LIST=true, LAW_GET=true,
+    PING=true, DASHBOARD=true, SERVER_INFO=true, LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true,
     CASE_REMOVE_ARTICLE=true, CASE_SET_STATUS=true, AUDIT_LIST=true
   },
   judge = {
-    PING=true, DASHBOARD=true, SERVER_INFO=true, LAW_LIST=true, LAW_GET=true,
+    PING=true, DASHBOARD=true, SERVER_INFO=true, LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true,
     CASE_REMOVE_ARTICLE=true, CASE_ADD_JUDGMENT=true, CASE_SET_STATUS=true,
@@ -139,6 +139,8 @@ local function loadState()
   state.audit = state.audit or {}
   state.caseCounters = state.caseCounters or {}
   state.nextArticle = state.nextArticle or 1
+  state.meta = state.meta or {}
+  state.meta.version = common.VERSION
   return state
 end
 
@@ -181,17 +183,38 @@ local function listLaws(state, payload)
   payload = payload or {}
   local q = common.trim(payload.query)
   local status = common.trim(payload.status)
+  local book = common.trim(payload.book)
   local items = {}
   for _, law in pairs(state.laws) do
     local hit = (q == "" or common.contains(law.ref, q) or common.contains(law.title, q) or common.contains(law.body, q))
     local statusHit = (status == "" or law.status == status)
-    if hit and statusHit then items[#items + 1] = {
+    local bookHit = (book == "" or law.book == book)
+    if hit and statusHit and bookHit then items[#items + 1] = {
       ref=law.ref, number=law.number, title=law.title, status=law.status,
       version=law.version, book=law.book, section=law.section, updatedAt=law.updatedAt
     } end
   end
   table.sort(items, function(a,b) return (a.number or 0) < (b.number or 0) end)
   return items
+end
+
+local function listBooks(state)
+  local map={}
+  for _,law in pairs(state.laws) do
+    local name=(law.book and law.book~="") and law.book or "SANS CATEGORIE"
+    local b=map[name]
+    if not b then
+      b={name=name,count=0,first=law.number or 999999,last=law.number or 0}
+      map[name]=b
+    end
+    b.count=b.count+1
+    if (law.number or 999999)<b.first then b.first=law.number end
+    if (law.number or 0)>b.last then b.last=law.number end
+  end
+  local out={}
+  for _,b in pairs(map) do out[#out+1]=b end
+  table.sort(out,function(a,b) return a.first<b.first end)
+  return out
 end
 
 local function listCases(state, payload)
@@ -233,6 +256,7 @@ local function handleAction(state, actor, action, p)
     for _ in pairs(state.cases) do cc=cc+1 end
     return { laws=lc, cases=cc, revision=state.meta.revision, codeStatus=state.meta.codeStatus }
   end
+  if action == "LAW_BOOKS" then return listBooks(state) end
   if action == "LAW_LIST" then return listLaws(state, p) end
   if action == "LAW_GET" then return common.deepcopy(state.laws[normalizeArticleRef(p.ref)]) end
 
