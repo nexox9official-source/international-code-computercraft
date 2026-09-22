@@ -180,6 +180,7 @@ function N.newState()
     elections={},electionCounters={},
     decrees={},decreeCounters={},
     cases={},caseCounters={},
+    citizens={},nextCitizen=1,
     nationalAudit={}
   }
 end
@@ -209,6 +210,8 @@ function N.ensure(state)
   n.decreeCounters=n.decreeCounters or {}
   n.cases=n.cases or {}
   n.caseCounters=n.caseCounters or {}
+  n.citizens=n.citizens or {}
+  n.nextCitizen=n.nextCitizen or 1
   n.nationalAudit=n.nationalAudit or {}
 
   local corpus=loadCorpus()
@@ -255,7 +258,7 @@ local function noticeEligible(ctx,state,e,title,body,severity,objectType,objectI
   local wanted={}
   for _,id in ipairs(e.eligibleIdentities or {}) do wanted[id]=true end
   for _,cl in pairs(state.clients or {}) do
-    local id=identity(cl)
+    local id=votingKey(state.national,cl) or identity(cl)
     if wanted[id] then
       ctx.pushNotice(state,{
         title=title,body=body,severity=severity or "info",
@@ -363,10 +366,60 @@ local function nextId(counterTable,prefix)
   return string.format("%s-%s-%04d",prefix,y,v)
 end
 
+local function nextCitizenId(n)
+  local id=string.format("NC-CIT-%04d",tonumber(n.nextCitizen) or 1)
+  n.nextCitizen=(tonumber(n.nextCitizen) or 1)+1
+  return id
+end
+
+local function findCitizenByIdentity(n,raw)
+  local q=common.normalizeSearch(raw)
+  if q=="" then return nil end
+  for _,cit in pairs(n.citizens or {}) do
+    if common.normalizeSearch(cit.identity or "")==q or common.normalizeSearch(cit.displayName or "")==q then return cit end
+  end
+  return nil
+end
+
+local function citizenForClient(n,cl)
+  if not cl then return nil end
+  if cl.citizenId and n.citizens[cl.citizenId] then return n.citizens[cl.citizenId] end
+  return findCitizenByIdentity(n,identity(cl))
+end
+
+local function createCitizen(n,identityValue,status,createdBy,notes)
+  identityValue=common.safeName(identityValue)
+  if identityValue=="" then return nil,"Identite citoyenne obligatoire." end
+  local existing=findCitizenByIdentity(n,identityValue)
+  if existing then return existing,nil,false end
+  local id=nextCitizenId(n)
+  local valid={citizen=true,resident=true,suspended=true,deceased=true}
+  local row={
+    id=id,identity=identityValue,displayName=identityValue,
+    status=valid[status] and status or "citizen",
+    notes=common.trim(notes),createdAt=common.now(),createdBy=createdBy or "system",
+    updatedAt=common.now(),history={}
+  }
+  row.seal=seal("NC-CIT",{row.id,row.identity,row.status,row.createdAt,row.createdBy})
+  n.citizens[id]=row
+  return row,nil,true
+end
+
+local function votingKey(n,cl)
+  local cit=citizenForClient(n,cl)
+  if cit and cit.status=="citizen" then return cit.id end
+  return nil
+end
+
+local function isVotingCitizen(n,cl)
+  return votingKey(n,cl)~=nil
+end
+
 local function uniqueEligibleIdentities(state,electorate)
+  local n=state.national
   local seen,out={},{}
   for _,cl in pairs(state.clients or {}) do
-    if isNationalMember(state,cl) then
+    if isNationalMember(state,cl) and isVotingCitizen(n,cl) then
       local r=cl.nationalRole or "citizen"
       local allowed=false
       if electorate=="council" then
@@ -375,8 +428,8 @@ local function uniqueEligibleIdentities(state,electorate)
         allowed=(r~="public")
       end
       if allowed then
-        local id=identity(cl)
-        if id~="" and not seen[id] then seen[id]=true;out[#out+1]=id end
+        local key=votingKey(n,cl)
+        if key and not seen[key] then seen[key]=true;out[#out+1]=key end
       end
     end
   end
@@ -930,8 +983,8 @@ function N.handle(state,actor,action,p,ctx)
     local e=n.elections[common.trim(p.id):upper()]
     if not e then return nil,"Scrutin introuvable." end
     if e.stage~="open" then return nil,"Scrutin ferme." end
-    local who=identity(actor)
-    if not isEligible(who,e.eligibleIdentities) then return nil,"Vous ne faites pas partie du corps electoral de ce scrutin." end
+    local who=votingKey(n,actor)
+    if not who or not isEligible(who,e.eligibleIdentities) then return nil,"Vous ne faites pas partie du corps electoral de ce scrutin." end
     local choice=common.trim(p.choice)
     if choice~="abstain" then
       local found=false
@@ -1058,8 +1111,8 @@ function N.handle(state,actor,action,p,ctx)
     local b=n.bills[common.trim(p.id):upper()]
     if not b then return nil,"Projet introuvable." end
     if b.stage~="voting" then return nil,"Vote ferme." end
-    local who=identity(actor)
-    if not isEligible(who,b.eligibleIdentities) then return nil,"Vous ne faites pas partie du corps electoral." end
+    local who=votingKey(n,actor)
+    if not who or not isEligible(who,b.eligibleIdentities) then return nil,"Vous ne faites pas partie du corps electoral." end
     local choice=common.lower(p.choice)
     if choice~="yes" and choice~="no" and choice~="abstain" then return nil,"Vote invalide." end
     b.votes[who]={choice=choice,at=common.now(),clientId=actor.clientId}
