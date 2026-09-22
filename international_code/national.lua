@@ -605,6 +605,9 @@ function N.handle(state,actor,action,p,ctx)
     if target.ministryCode and target.ministryCode~="" and wanted~="minister" then
       return nil,"Ce terminal detient un ministere. Retirez d'abord le titulaire via le registre gouvernemental."
     end
+    if target.clientId==n.meta.presidentClientId and wanted~="president" then
+      return nil,"Le terminal presidentiel ne peut pas etre degrade directement. Transferez d'abord la Presidence depuis un terminal administrateur."
+    end
     target.nationalRole=(wanted~="" and wanted or nil)
     target.nationalIdentity=common.trim(p.identity)~="" and common.safeName(p.identity) or (target.nationalIdentity or target.label)
     if target.nationalRole then target.stateId=n.meta.stateId end
@@ -768,6 +771,7 @@ function N.handle(state,actor,action,p,ctx)
     if e.stage=="elected" then
       local target=state.clients[e.winnerClientId]
       if not target then return nil,"Candidat elu introuvable au moment de la nomination." end
+      nationalAudit(state,actor,"NC_ELECTION_CLOSE",e.id,e.result.." / "..e.resultSeal)
       local appointed,err=appointMinister(state,n,ctx,actor,ministry,target,"elected",e.id,"Election reguliere")
       if not appointed then return nil,err end
       e.appointmentSeal=appointed.appointmentSeal
