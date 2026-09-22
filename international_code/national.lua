@@ -1,4 +1,5 @@
 local common = dofile("/international_code/common.lua")
+local services = dofile("/international_code/national_services.lua")
 
 local N = {}
 local CORPUS_PATH = "/international_code/national/corpus_v2.json"
@@ -180,6 +181,9 @@ function N.newState()
     sessions={},sessionCounters={},
     gazette={},gazetteCounters={},
     citizens={},nextCitizen=1,
+    organizations={},nextOrganization=1,
+    licenses={},licenseCounters={},
+    fines={},fineCounters={},
     nationalAudit={}
   }
 end
@@ -220,6 +224,7 @@ function N.ensure(state)
     if num>maxCitizen then maxCitizen=num end
   end
   n.nextCitizen=math.max(tonumber(n.nextCitizen) or 1,maxCitizen+1)
+  services.ensure(n)
   n.nationalAudit=n.nationalAudit or {}
 
   local corpus=loadCorpus()
@@ -1031,6 +1036,11 @@ function N.handle(state,actor,action,p,ctx)
         if tostring(x.seal or ""):upper()==wanted then return caseResult("appeal",x.id or "Appel",x.filedAt,x.filedBy) end
         if tostring(x.decisionSeal or ""):upper()==wanted then return caseResult("appeal_decision",(x.id or "Appel").." / "..(x.result or ""),x.decidedAt,x.decidedBy) end
       end
+    end
+
+    local svc=services.verifySeal(n,wanted)
+    if svc then
+      return result(svc.kind,svc.objectId,svc.title,svc.issuedAt,svc.issuedBy,false)
     end
 
     return {valid=false,seal=wanted}
@@ -2188,6 +2198,18 @@ function N.handle(state,actor,action,p,ctx)
     appeal.gazetteId=gaz.id
     mutate(ctx,state,actor,"NC_CASE_DECIDE_APPEAL",case.id,appeal.id.." / "..appeal.result.." / "..gaz.id)
     return copy(case)
+  end
+
+  do
+    local handled,data,err=services.handle(state,actor,action,p,{
+      getLaw=getLaw,
+      mutate=function(a,obj,details) return mutate(ctx,state,actor,a,obj,details) end,
+      notice=function(spec) return notice(ctx,state,spec) end,
+      gazette=function(kind,objectId,title,summary,sourceSeal,visibility)
+        return publishGazette(n,actor,kind,objectId,title,summary,sourceSeal,visibility)
+      end
+    })
+    if handled then return data,err end
   end
 
   if action=="NC_AUDIT_LIST" then
