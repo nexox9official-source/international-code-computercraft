@@ -2214,7 +2214,7 @@ function C.run()
     info=rpc("NC_INFO",{}) or info
     local subtitle=roleLabel(dash.nationalRole).." / "..tostring(dash.nationalIdentity)..
       (dash.ministryCode and (" / "..dash.ministryCode) or "")..
-      " | "..tostring(dash.activeCitizens or 0).." citoyen(s) / "..dash.activeLaws.." lois / "..tostring(dash.openSessions or 0).." session(s) / "..tostring(dash.openCases or 0).." dossier(s) / "..tostring(dash.unreadNotices or 0).." notif."
+      " | "..tostring(dash.activeCitizens or 0).." citoyen(s) / "..dash.activeLaws.." lois / "..tostring(dash.pendingRequests or 0).." demande(s) / "..tostring(dash.openCases or 0).." dossier(s) / "..tostring(dash.unreadNotices or 0).." notif."
 
     local items={
       {text=(dash.unreadNotices or 0)>0 and ("[!] NOTIFICATIONS NATIONALES ("..dash.unreadNotices..")") or "NOTIFICATIONS NATIONALES",id="notices"},
