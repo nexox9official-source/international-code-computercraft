@@ -1078,6 +1078,10 @@ function N.handle(state,actor,action,p,ctx)
       if sess.status=="open" then openSessions=openSessions+1
       elseif sess.status=="scheduled" then scheduledSessions=scheduledSessions+1 end
     end
+    local pendingRequests=0
+    for _,req in pairs(n.requests or {}) do
+      if req.status=="submitted" or req.status=="in_review" then pendingRequests=pendingRequests+1 end
+    end
     local unreadNational=0
     for _,row in ipairs(listNationalNotices(ctx,state,actor,{unreadOnly=true})) do if not row.read then unreadNational=unreadNational+1 end end
     return {
@@ -1085,7 +1089,8 @@ function N.handle(state,actor,action,p,ctx)
       categories=#(n.categories or {}),ministries=ministriesTotal,filledMinistries=filled,
       citizens=citizens,activeCitizens=activeCitizens,
       openElections=openElections,votingBills=votingBills,publishedDecrees=publishedDecrees,
-      openCases=openCases,openSessions=openSessions,scheduledSessions=scheduledSessions,unreadNotices=unreadNational,
+      openCases=openCases,openSessions=openSessions,scheduledSessions=scheduledSessions,
+      pendingRequests=pendingRequests,unreadNotices=unreadNational,
       foundingMode=n.meta.foundingMode,presidentIdentity=n.meta.presidentIdentity,
       nationalRole=nationalRole(state,actor),nationalIdentity=identity(actor),ministryCode=actor.ministryCode
     }
