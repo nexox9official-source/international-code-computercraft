@@ -1056,6 +1056,11 @@ local function situationSnapshot(state,actor,payload)
     end
   end
 
+  local conflicts={}
+  for _,conflict in ipairs(listConflicts(state,{},actor)) do
+    if conflict.status~="ended" then conflicts[#conflicts+1]=conflict end
+  end
+
   local enforcements={}
   for _,e in ipairs(listEnforcements(state,actor,{})) do
     if e.status=="ordered" or e.status=="active" or e.status=="partial" or e.status=="breached" then
@@ -1109,14 +1114,27 @@ local function situationSnapshot(state,actor,payload)
       }
     end
   end
+  for _,conflict in ipairs(conflicts) do
+    for _,zone in ipairs(conflict.zones or {}) do
+      local pos=zone.position or {}
+      if zone.status~="closed" and pos.x and pos.z and (not pos.dimension or pos.dimension=="" or pos.dimension==dimension) then
+        points[#points+1]={
+          kind="conflict",id=conflict.id,zoneId=zone.id,
+          title=zone.name or conflict.title,
+          x=pos.x,y=pos.y,z=pos.z,radius=pos.radius,
+          dimension=pos.dimension or dimension,status=conflict.status,zoneStatus=zone.status
+        }
+      end
+    end
+  end
 
   return {
     dimension=dimension,generatedAt=common.now(),
     counts={
-      incidents=#incidents,missions=#missions,enforcements=#enforcements,
+      incidents=#incidents,missions=#missions,conflicts=#conflicts,enforcements=#enforcements,
       resolutions=#resolutions,sessions=#sessions
     },
-    incidents=incidents,missions=missions,enforcements=enforcements,
+    incidents=incidents,missions=missions,conflicts=conflicts,enforcements=enforcements,
     resolutions=resolutions,sessions=sessions,points=points
   }
 end
