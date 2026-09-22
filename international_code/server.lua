@@ -1154,7 +1154,9 @@ local function handleAction(state, actor, action, p)
     return national.handle(state,actor,action,p,{
       mutate=mutate,
       saveState=saveState,
-      audit=audit
+      audit=audit,
+      pushNotice=pushNotice,
+      listNotices=listNotices
     })
   end
   if action:match("^CASE_") and action~="CASE_LIST" and action~="CASE_GET" and action~="CASE_CREATE" and p.id then
