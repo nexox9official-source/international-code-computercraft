@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.11.0
+
+### Conflits et crises
+- registre permanent `CONFLICT-AAAA-XXXX` ;
+- conflits internationaux, civils, frontaliers, occupations et insurrections RP ;
+- États impliqués + description libre des coalitions/groupes ;
+- statuts tension / active / ceasefire / peace_process / ended ;
+- transitions de statut contrôlées côté serveur ;
+- liens vers résolution, traité, dossier judiciaire et traité de cessez-le-feu ;
+- visibilité publique ou restreinte ;
+- sceau initial `UNS-CONFLICT-...` et historique de statut `UNS-CFSTAT-...`.
+
+### Zones de conflit
+- zones `ZONE-XXX` avec dimension, X/Y/Z et rayon ;
+- statuts active / contested / demilitarized / humanitarian / closed ;
+- versionnement des zones sans suppression des anciennes versions ;
+- sceau `UNS-CFZONE-...` vérifiable pour chaque version ;
+- zones ajoutées à la cartographie du centre de situation.
+
+### Intégrations
+- incidents rattachables à un conflit ;
+- missions rattachables à un conflit ;
+- recherche des missions/incidents directement depuis la fiche d'un conflit ;
+- conflits ajoutables à l'ordre du jour des sessions ;
+- conflits inclus dans `SITUATION_GET` ;
+- lettre `C` sur la carte X/Z ;
+- page dédiée dans le registre public ;
+- `ic conflict CONFLICT-...` pour un Monitor LIVE ;
+- registre public étendu à douze pages.
+
 ## 0.10.0
 
 ### Incidents internationaux
