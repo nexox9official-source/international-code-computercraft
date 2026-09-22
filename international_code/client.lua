@@ -4244,6 +4244,7 @@ local function helpScreen()
     {label="Sessions",text="Les sessions SESSION gerent convocations, ordre du jour, presence par Etat, ouverture officielle, traitement des points et proces-verbal final. Les delegues peuvent enregistrer la presence de leur Etat pendant une session ouverte."},
     {label="Missions",text="Les missions MISSION gerent observation, maintien de la paix, humanitaire, enquete, inspection, surveillance, reconstruction ou mediation. Elles peuvent etre liees a une resolution, un traite ou un dossier, avec Etats participants, coordonnees Minecraft et rapports scelles."},
     {label="Situation / incidents",text="Le registre INC suit incidents frontaliers, diplomatiques, humanitaires, cyber, contamination, infrastructures et autres evenements. Chaque incident peut porter une dimension + coordonnees X/Y/Z, Etats impliques, liens institutionnels, SITREP terrain et historique de statut. ic situation affiche le centre de situation sur Monitor."},
+    {label="Conflits",text="Le registre CONFLICT suit les crises et conflits RP dans la duree: Etats impliques, parties, statut tension/actif/cessez-le-feu/processus de paix/termine, zones geolocalisees versionnees, traite de cessez-le-feu, incidents et missions lies."},
     {label="Etats membres",text="Le registre STATE conserve le statut, le gouvernement et le representant des pays. Un administrateur peut rattacher un terminal delegate a un Etat pour ses votes officiels."},
     {label="Traites",text="Les traites TREATY sont rediges puis figes avant signature. Chaque Etat partie signe depuis un terminal delegate rattache. Une fois toutes les signatures reunies, le traite peut entrer en vigueur avec un sceau officiel."},
     {label="Notifications",text="Le serveur cree des alertes pour les votes ouverts, signatures de traites, audiences, appels et mesures d'execution. Les delegues recoivent automatiquement les actions qui concernent leur Etat."},
@@ -4339,7 +4340,7 @@ function C.run()
   while true do
     local dash,err=rpc("DASHBOARD",{})
     local subtitle=dash and
-      ("Role "..cfg.role.." | "..tostring(dash.activeIncidents or 0).." incident(s)"..
+      ("Role "..cfg.role.." | "..tostring(dash.activeConflicts or 0).." conflit(s) | "..tostring(dash.activeIncidents or 0).." incident(s)"..
       ((dash.criticalIncidents or 0)>0 and (" / "..dash.criticalIncidents.." CRIT") or "")..
       " | "..tostring(dash.activeMissions or 0).." mission(s) | "..tostring((dash.votingBills or 0)+(dash.votingResolutions or 0)).." scrutin(s) | "..tostring(dash.unreadNotices or 0).." notif. | r"..dash.revision)
       or ("HORS LIGNE - "..tostring(err))
@@ -4351,6 +4352,7 @@ function C.run()
       {text="RESOLUTIONS / CONSEIL / SECURITE",id="resolutions"},
       {text="CALENDRIER / SESSIONS / ORDRE DU JOUR",id="sessions"},
       {text=(dash and (dash.criticalIncidents or 0)>0) and ("[!] SITUATION INTERNATIONALE ("..dash.criticalIncidents.." CRIT)") or "SITUATION INTERNATIONALE / INCIDENTS",id="situation"},
+      {text="CONFLITS / CRISES / CESSEZ-LE-FEU",id="conflicts"},
       {text="MISSIONS INTERNATIONALES / OBSERVATEURS",id="missions"},
       {text="TRAITES / DIPLOMATIE",id="treaties"},
       {text="REGISTRE DES ETATS MEMBRES",id="states"},
@@ -4381,6 +4383,8 @@ function C.run()
       sessionsScreen("","")
     elseif p.id=="situation" then
       situationDeskScreen()
+    elseif p.id=="conflicts" then
+      conflictsScreen("","")
     elseif p.id=="missions" then
       missionsScreen("","")
     elseif p.id=="treaties" then
@@ -4402,6 +4406,7 @@ function C.run()
         {text="Dans les sessions / calendrier",id="session"},
         {text="Dans les missions",id="mission"},
         {text="Dans les incidents",id="incident"},
+        {text="Dans les conflits / crises",id="conflict"},
         {text="Dans les traites",id="treaty"},
         {text="Dans les Etats membres",id="state"},
         {text="Dans les dossiers",id="case"},
@@ -4413,6 +4418,7 @@ function C.run()
       elseif kind and kind.id=="session" then sessionsScreen(q,"")
       elseif kind and kind.id=="mission" then missionsScreen(q,"")
       elseif kind and kind.id=="incident" then incidentsScreen(q,"","")
+      elseif kind and kind.id=="conflict" then conflictsScreen(q,"")
       elseif kind and kind.id=="treaty" then treatiesScreen(q,"","")
       elseif kind and kind.id=="state" then statesScreen(q,"")
       elseif kind and kind.id=="enforcement" then enforcementsScreen(q,"","","")
