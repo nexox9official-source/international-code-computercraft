@@ -1,4 +1,4 @@
-# Architecture v0.16
+# Architecture v0.17
 
 ## Topologie
 
@@ -47,6 +47,7 @@ state
          +-- organizations[NC-ORG-...]
          +-- licenses[NC-LIC-...]
          +-- fines[NC-FINE-...]
+         +-- requests[NC-REQ-...]
          +-- nationalAudit
 ```
 
@@ -199,6 +200,27 @@ Les autorisations ne sont pas gérées par un rôle ministériel générique : c
 Les amendes figent la version de l'article cité lors de l'émission. Une contestation n'efface jamais l'acte initial ; elle ajoute des événements scellés à son historique.
 
 Le dossier individuel n'est pas une base séparée. `NC_RECORD_GET` calcule une vue à partir du registre civil, des licences, des amendes, des organisations et des jugements définitifs.
+
+## Guichet administratif
+
+Les demandes citoyennes sont conservées dans `national.requests`.
+
+```text
+NC-CIT
+  |
+  +--> NC-REQ
+         |
+         +-- targetMinistry -> MIN-...
+         +-- legalBasis ----> NC-ART
+         |
+         +-- approved license ------> NC-LIC
+         |
+         +-- approved organization -> NC-ORG
+```
+
+Le routage est calculé côté serveur. Un client ne peut pas contourner le portefeuille compétent en modifiant simplement l'interface : `NC_REQUEST_DECIDE` revalide l'autorité du ministre, puis les actions `NC_LICENSE_ISSUE` ou `NC_ORG_CREATE` appliquent encore leurs propres contrôles.
+
+Le workflow crée donc deux traces distinctes lorsqu'une autorisation est accordée : la décision sur `NC-REQ`, puis l'acte administratif final. Chacune possède son historique et ses sceaux.
 
 ## Journal officiel national
 
