@@ -7,15 +7,16 @@ local permissions = {
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
-    BILL_LIST=true, BILL_GET=true
+    BILL_LIST=true, BILL_GET=true, TREATY_LIST=true, TREATY_GET=true
   },
   writer = {
     PING=true, DASHBOARD=true, SERVER_INFO=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
-    BILL_LIST=true, BILL_GET=true, BILL_CREATE=true, BILL_EDIT=true, BILL_SET_STAGE=true,
+    BILL_LIST=true, BILL_GET=true, TREATY_LIST=true, TREATY_GET=true, BILL_CREATE=true, BILL_EDIT=true, BILL_SET_STAGE=true,
     BILL_OPEN_VOTE=true, BILL_CLOSE=true, BILL_ENACT=true,
+    TREATY_CREATE=true, TREATY_EDIT=true, TREATY_OPEN_SIGNATURE=true, TREATY_ACTIVATE=true, TREATY_TERMINATE=true,
     LAW_CREATE=true, LAW_AMEND=true, LAW_REPEAL=true, LAW_SET_STATUS=true,
     AUDIT_LIST=true
   },
@@ -26,7 +27,7 @@ local permissions = {
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
     CASE_REMOVE_ARTICLE=true, CASE_SET_STATUS=true,
     CASE_ADD_HEARING=true, CASE_SET_HEARING_STATUS=true, CASE_FILE_APPEAL=true,
-    STATE_LIST=true, STATE_GET=true, BILL_LIST=true, BILL_GET=true,
+    STATE_LIST=true, STATE_GET=true, BILL_LIST=true, BILL_GET=true, TREATY_LIST=true, TREATY_GET=true,
     AUDIT_LIST=true
   },
   judge = {
@@ -37,7 +38,7 @@ local permissions = {
     CASE_REMOVE_ARTICLE=true, CASE_ADD_JUDGMENT=true, CASE_SET_STATUS=true, CASE_SET_VISIBILITY=true,
     CASE_ADD_HEARING=true, CASE_SET_HEARING_STATUS=true, CASE_FILE_APPEAL=true, CASE_DECIDE_APPEAL=true,
     CASE_ADD_ORDER=true, CASE_SET_ORDER_STATUS=true,
-    STATE_LIST=true, STATE_GET=true, BILL_LIST=true, BILL_GET=true,
+    STATE_LIST=true, STATE_GET=true, BILL_LIST=true, BILL_GET=true, TREATY_LIST=true, TREATY_GET=true,
     AUDIT_LIST=true
   },
   delegate = {
@@ -45,7 +46,7 @@ local permissions = {
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
-    BILL_LIST=true, BILL_GET=true, BILL_VOTE=true
+    BILL_LIST=true, BILL_GET=true, TREATY_LIST=true, TREATY_GET=true, TREATY_SIGN=true, BILL_VOTE=true
   },
   admin = { ["*"]=true }
 }
@@ -153,6 +154,8 @@ local function freshState()
     nextState = 2,
     bills = {},
     billCounters = {},
+    treaties = {},
+    treatyCounters = {},
     clients = {},
     pairing = nil,
     audit = {}
@@ -175,6 +178,8 @@ local function loadState()
   state.states = state.states or {}
   state.bills = state.bills or {}
   state.billCounters = state.billCounters or {}
+  state.treaties = state.treaties or {}
+  state.treatyCounters = state.treatyCounters or {}
   state.meta = state.meta or {}
 
   if next(state.states)==nil then
