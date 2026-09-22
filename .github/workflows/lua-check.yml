@@ -37,3 +37,15 @@ jobs:
           test "$count" -eq 500
           grep -q '^\{1,' international_code/seed/001.lua
           grep -q '^\{500,' international_code/seed/005.lua
+
+
+      - name: Verify North Coalition national corpus
+        run: |
+          set -e
+          test -f international_code/national/corpus_v2.json
+          count=$(grep -o '"id": "NC-ART-[0-9][0-9][0-9]"' international_code/national/corpus_v2.json | wc -l)
+          echo "North Coalition articles: $count"
+          test "$count" -eq 400
+          grep -q '"category_count": 20' international_code/national/corpus_v2.json
+          grep -q '"founding_phase_account": "NexoFr_"' international_code/national/corpus_v2.json
+          ! grep -q 'Astralium' international_code/national/corpus_v2.json
