@@ -813,6 +813,10 @@ local roleAllows={
   lawWrite={writer=true,admin=true},
   caseWrite={clerk=true,judge=true,admin=true},
   judgment={judge=true,admin=true},
+  orderWrite={judge=true,admin=true},
+  legislature={writer=true,admin=true},
+  delegateVote={delegate=true},
+  institutionAdmin={admin=true},
   audit={writer=true,clerk=true,judge=true,admin=true}
 }
 
