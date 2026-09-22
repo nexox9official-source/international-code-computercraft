@@ -846,6 +846,107 @@ function N.handle(state,actor,action,p,ctx)
     return copy(law)
   end
 
+  if action=="NC_CITIZEN_LIST" then
+    return listCitizens(n,p,canManageCitizens(state,actor))
+  end
+
+  if action=="NC_CITIZEN_GET" then
+    local id=common.trim(p.id):upper()
+    local cit=n.citizens[id] or findCitizenByIdentity(n,p.id)
+    if not cit then return nil,"Citoyen introuvable." end
+    return citizenView(cit,canManageCitizens(state,actor) or cit.id==actor.citizenId)
+  end
+
+  if action=="NC_CITIZEN_CREATE" then
+    if not canManageCitizens(state,actor) then return nil,"Registre civil reserve a la Presidence, l'administration racine ou au Ministere de l'Interieur." end
+    local status=common.trim(p.status)
+    local valid={citizen=true,resident=true,suspended=true,deceased=true}
+    if not valid[status] then status="citizen" end
+    local cit,err,created=createCitizen(n,p.identity,status,identity(actor),p.notes)
+    if not cit then return nil,err end
+    if not created then return nil,"Cette identite existe deja sous "..cit.id.."." end
+    cit.displayName=common.trim(p.displayName)~="" and common.safeName(p.displayName) or cit.identity
+    cit.updatedAt=common.now()
+    noticeAll(ctx,state,n,"Nouvelle identite au registre civil",
+      cit.id.." / "..cit.displayName.." / "..cit.status,
+      "info","nc_citizen",cit.id)
+    mutate(ctx,state,actor,"NC_CITIZEN_CREATE",cit.id,cit.displayName.." / "..cit.status)
+    return copy(cit)
+  end
+
+  if action=="NC_CITIZEN_UPDATE" then
+    if not canManageCitizens(state,actor) then return nil,"Modification du registre civil non autorisee." end
+    local cit=n.citizens[common.trim(p.id):upper()]
+    if not cit then return nil,"Citoyen introuvable." end
+    local newIdentity=p.identity~=nil and common.safeName(p.identity) or cit.identity
+    if newIdentity=="" then return nil,"Identite vide interdite." end
+    local duplicate=findCitizenByIdentity(n,newIdentity)
+    if duplicate and duplicate.id~=cit.id then return nil,"Cette identite appartient deja a "..duplicate.id.."." end
+
+    local valid={citizen=true,resident=true,suspended=true,deceased=true}
+    local newStatus=(p.status~=nil and valid[p.status]) and p.status or cit.status
+
+    if newStatus~="citizen" and cit.status=="citizen" then
+      for _,cl in pairs(state.clients or {}) do
+        if cl.citizenId==cit.id then
+          if cl.clientId==n.meta.presidentClientId then return nil,"Transferez la Presidence avant de retirer le statut citoyen du President." end
+          if cl.ministryCode and cl.ministryCode~="" then return nil,"Retirez d'abord le portefeuille ministeriel lie a cette identite." end
+        end
+      end
+    end
+
+    local old={identity=cit.identity,displayName=cit.displayName,status=cit.status,notes=cit.notes}
+    cit.identity=newIdentity
+    if p.displayName~=nil then cit.displayName=common.trim(p.displayName)~="" and common.safeName(p.displayName) or newIdentity end
+    if p.notes~=nil then cit.notes=common.trim(p.notes) end
+    cit.status=newStatus
+    cit.updatedAt=common.now();cit.updatedBy=identity(actor)
+    cit.history=cit.history or {}
+    local hist={
+      at=cit.updatedAt,by=cit.updatedBy,old=old,
+      new={identity=cit.identity,displayName=cit.displayName,status=cit.status,notes=cit.notes}
+    }
+    hist.seal=seal("NC-CIT-HIST",{cit.id,hist.at,hist.by,hist.old,hist.new,cit.seal})
+    cit.history[#cit.history+1]=hist
+
+    for _,cl in pairs(state.clients or {}) do
+      if cl.citizenId==cit.id then
+        cl.nationalIdentity=cit.identity
+        if cit.status~="citizen" and cl.nationalRole and cl.nationalRole~="public" then cl.nationalRole="public" end
+        if cl.clientId==n.meta.presidentClientId then n.meta.presidentIdentity=cit.identity end
+      end
+    end
+    for _,m in pairs(n.ministries or {}) do
+      if m.holderClientId then
+        local cl=state.clients[m.holderClientId]
+        if cl and cl.citizenId==cit.id then m.holderIdentity=cit.identity end
+      end
+    end
+
+    noticeAll(ctx,state,n,"Registre civil mis a jour",
+      cit.id.." / "..cit.displayName.." / "..cit.status,
+      cit.status=="suspended" and "warning" or "info","nc_citizen",cit.id)
+    mutate(ctx,state,actor,"NC_CITIZEN_UPDATE",cit.id,old.status.." -> "..cit.status.." / "..cit.identity)
+    return copy(cit)
+  end
+
+  if action=="NC_CITIZEN_LINK_CLIENT" then
+    if not canManageCitizens(state,actor) then return nil,"Rattachement de terminal non autorise." end
+    local cit=n.citizens[common.trim(p.citizenId):upper()]
+    if not cit then return nil,"Identite citoyenne introuvable." end
+    local cl=state.clients[common.trim(p.clientId)]
+    if not cl then return nil,"Terminal introuvable." end
+    if cl.clientId==n.meta.presidentClientId and cit.id~=cl.citizenId then return nil,"Le terminal presidentiel ne peut pas etre rattache a une autre identite sans transfert de Presidence." end
+    if (cl.nationalRole=="minister" or cl.ministryCode) and cit.status~="citizen" then return nil,"Un titulaire de fonction doit etre rattache a un citoyen actif." end
+    cl.citizenId=cit.id
+    cl.nationalIdentity=cit.identity
+    cl.stateId=n.meta.stateId
+    if not cl.nationalRole then cl.nationalRole=(cit.status=="citizen") and "citizen" or "public" end
+    if cit.status~="citizen" and cl.nationalRole~="public" then return nil,"Cette identite n'est pas un citoyen actif." end
+    mutate(ctx,state,actor,"NC_CITIZEN_LINK_CLIENT",cit.id,cl.clientId.." / "..cl.label)
+    return {citizen=copy(cit),client=copy(cl)}
+  end
+
   if action=="NC_GOVERNMENT_GET" then
     return {
       meta=copy(n.meta),governmentSystem=copy(n.governmentSystem),
@@ -863,7 +964,7 @@ function N.handle(state,actor,action,p,ctx)
   end
 
   if action=="NC_CLIENT_LIST" then
-    if not isPresident(state,actor) then return nil,"Reserve a la Presidence ou a l'administration." end
+    if not (isPresident(state,actor) or canManageCitizens(state,actor)) then return nil,"Acces au registre des terminaux refuse." end
     local out={}
     for _,cl in pairs(state.clients or {}) do
       out[#out+1]={
