@@ -1908,10 +1908,186 @@ local function citizenRecordScreen(info)
   end
 end
 
+
+local function requestDetails(id,info)
+  while true do
+    local req,err=rpc("NC_REQUEST_GET",{id=id})
+    if not req then message("GUICHET ADMINISTRATIF",err,palette.bad);return end
+    info=rpc("NC_INFO",{}) or info or {}
+    local reviewer=(info.nationalRole=="admin" or info.nationalRole=="president" or
+      (info.nationalRole=="minister" and info.ministryCode==req.targetMinistry))
+    local own=(info.citizenId and info.citizenId==req.applicantCitizenId)
+
+    local actions={{text="Lire la demande complete",id="read"},{text="Imprimer",id="print"}}
+    if req.resultObjectId then actions[#actions+1]={text="Ouvrir l'autorisation / objet cree",id="result"} end
+    if reviewer and req.status=="submitted" then actions[#actions+1]={text="Prendre en instruction",id="review"} end
+    if reviewer and (req.status=="submitted" or req.status=="in_review") then
+      actions[#actions+1]={text="APPROUVER la demande",id="approve"}
+      actions[#actions+1]={text="REJETER la demande",id="reject"}
+    end
+    if own and (req.status=="submitted" or req.status=="in_review") then actions[#actions+1]={text="Retirer ma demande",id="withdraw"} end
+
+    local a=menu(req.id.." - "..req.title,actions,
+      (req.requestType or "").." / "..(req.status or "").." / "..(req.targetMinistry or ""))
+    if not a then return end
+
+    if a.id=="read" then
+      local hist={}
+      for _,h in ipairs(req.history or {}) do hist[#hist+1]=(h.at or "").." / "..(h.event or "").." / "..(h.by or "").."\n"..(h.details or "").."\nSceau: "..(h.seal or "-") end
+      local payload={}
+      if req.requestType=="license" then
+        payload[#payload+1]="Type: "..tostring((req.payload or {}).kind or "")
+        payload[#payload+1]="Titre: "..tostring((req.payload or {}).title or "")
+        payload[#payload+1]="Expiration: "..tostring((req.payload or {}).expiresAt or "-")
+        payload[#payload+1]="Conditions souhaitees: "..tostring((req.payload or {}).conditionsRequested or "-")
+      elseif req.requestType=="organization" then
+        payload[#payload+1]="Nom: "..tostring((req.payload or {}).name or "")
+        payload[#payload+1]="Type: "..tostring((req.payload or {}).kind or "")
+        payload[#payload+1]="Activite: "..tostring((req.payload or {}).activity or "")
+        payload[#payload+1]="Siege: "..tostring((req.payload or {}).registeredAddress or "-")
+      end
+      textPage(req.id,{
+        {label="Type / statut",text=(req.requestType or "").." / "..(req.status or "")},
+        {label="Demandeur",text=(req.applicantCitizenId or "").." / "..(req.applicantIdentity or "")},
+        {label="Administration competente",text=req.targetMinistry or ""},
+        {label="Titre",text=req.title or ""},{label="Objet / motivation",text=req.body or ""},
+        {label="Base legale",text=req.legalBasis or "-"},
+        {label="Details",text=#payload>0 and table.concat(payload,"\n") or "-"},
+        {label="Depot",text=(req.createdAt or "").." / "..(req.createdBy or "")},
+        {label="Sceau de depot",text=req.seal or "-"},
+        {label="Decision",text=(req.decision or "-").." / "..(req.decisionReason or "-")},
+        {label="Objet cree",text=req.resultObjectId or "-"},
+        {label="Sceau de decision",text=req.decisionSeal or "-"},
+        {label="Historique",text=#hist>0 and table.concat(hist,"\n\n") or "Aucun"}
+      })
+
+    elseif a.id=="print" then
+      local ok,pages=printer.request(req)
+      message("IMPRESSION",ok and ("Demande imprimee: "..pages.." page(s).") or pages,ok and palette.accent or palette.bad)
+
+    elseif a.id=="result" then
+      if tostring(req.resultObjectId):find("^NC%-LIC%-") then licenseDetails(req.resultObjectId,info)
+      elseif tostring(req.resultObjectId):find("^NC%-ORG%-") then organizationDetails(req.resultObjectId,info)
+      else message("GUICHET","Objet resultat: "..tostring(req.resultObjectId),palette.info) end
+
+    elseif a.id=="review" then
+      local note=prompt("Note d'instruction")
+      local out,e=rpc("NC_REQUEST_START_REVIEW",{id=req.id,note=note})
+      message("GUICHET",out and "Demande prise en instruction." or e,out and palette.accent or palette.bad)
+
+    elseif a.id=="approve" or a.id=="reject" then
+      local decision=a.id=="approve" and "approved" or "rejected"
+      local reasoning=multi("MOTIVATION DE LA DECISION","")
+      local conditions=""
+      if decision=="approved" and req.requestType=="license" then conditions=multi("CONDITIONS DEFINITIVES DE LA LICENCE",(req.payload or {}).conditionsRequested or "") end
+      local out,e=rpc("NC_REQUEST_DECIDE",{id=req.id,decision=decision,reasoning=reasoning,conditions=conditions})
+      message("DECISION",out and (decision=="approved" and ("APPROUVEE"..(out.resultObjectId and (" / "..out.resultObjectId) or "")) or "REJETEE") or e,
+        out and (decision=="approved" and palette.accent or palette.warn) or palette.bad)
+
+    elseif a.id=="withdraw" then
+      local reason=prompt("Motif du retrait")
+      local out,e=rpc("NC_REQUEST_WITHDRAW",{id=req.id,reason=reason})
+      message("GUICHET",out and "Demande retiree." or e,out and palette.accent or palette.bad)
+    end
+  end
+end
+
+local function requestsScreen(info)
+  local query,status="",""
+  while true do
+    info=rpc("NC_INFO",{}) or info or {}
+    local rows,err=rpc("NC_REQUEST_LIST",{query=query,status=status})
+    if not rows then message("GUICHET ADMINISTRATIF",err,palette.bad);return end
+    local items={}
+    if info.citizenId and info.citizenStatus=="citizen" then items[#items+1]={text="[+] Deposer une nouvelle demande",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
+    if query~="" or status~="" then items[#items+1]={text="[R] Reinitialiser",id="reset"} end
+    for _,req in ipairs(rows) do
+      items[#items+1]={text=req.id.." ["..req.status.."] "..req.title.." / "..req.targetMinistry,request=req}
+    end
+    local p=menu("GUICHET CITOYEN / DEMANDES",items,#rows.." demande(s) visible(s)")
+    if not p then return end
+
+    if p.id=="new" then
+      local typ=menu("TYPE DE DEMANDE",{
+        {text="Demande de licence / permis",v="license"},
+        {text="Immatriculation d'une organisation",v="organization"},
+        {text="Demande administrative libre",v="administrative"}
+      })
+      if typ and typ.v=="license" then
+        local kind=menu("TYPE DE LICENCE",{
+          {text="Commerce / entreprise",v="business"},{text="Banque / finance",v="bank"},
+          {text="Conduite",v="driving"},{text="Vehicule / transport",v="vehicle"},
+          {text="Construction",v="construction"},{text="Securite",v="security"},
+          {text="Armes / port reglemente",v="weapons"},{text="Medical / sante",v="medical"},
+          {text="Cyber / numerique",v="cyber"},{text="Matieres dangereuses",v="hazardous"},
+          {text="Travail / professionnel",v="labor"},{text="Defense",v="defense"},
+          {text="Reconstruction / crise",v="reconstruction"},{text="Affaires etrangeres",v="foreign"}
+        })
+        if kind then
+          local title=prompt("Titre de la demande","Demande de licence "..kind.v)
+          local licenseTitle=prompt("Intitule souhaite de la licence","Licence "..kind.v)
+          local legalBasis=prompt("Base legale NC-ART-... (optionnel)")
+          local expiresAt=prompt("Echeance souhaitee (optionnel)")
+          local conditions=multi("CONDITIONS / JUSTIFICATIFS PROPOSES","")
+          local body=multi("MOTIVATION DE LA DEMANDE","")
+          local out,e=rpc("NC_REQUEST_CREATE",{
+            requestType="license",title=title,body=body,licenseKind=kind.v,
+            licenseTitle=licenseTitle,legalBasis=legalBasis,expiresAt=expiresAt,
+            conditionsRequested=conditions
+          })
+          message("GUICHET",out and ("Deposee: "..out.id.." / "..out.targetMinistry) or e,out and palette.accent or palette.bad)
+        end
+      elseif typ and typ.v=="organization" then
+        local kind=menu("TYPE D'ORGANISATION",{
+          {text="Entreprise",v="company"},{text="Association",v="association"},
+          {text="Organisme public",v="public_body"},{text="Media",v="media"},
+          {text="Banque",v="bank"},{text="Cooperative",v="cooperative"}
+        })
+        if kind then
+          local name=prompt("Nom officiel")
+          local activity=prompt("Activite principale")
+          local address=prompt("Siege / adresse")
+          local title=prompt("Titre de la demande","Immatriculation de "..name)
+          local body=multi("MOTIVATION / PRESENTATION","")
+          local out,e=rpc("NC_REQUEST_CREATE",{
+            requestType="organization",title=title,body=body,organizationKind=kind.v,
+            organizationName=name,activity=activity,registeredAddress=address
+          })
+          message("GUICHET",out and ("Deposee: "..out.id.." / MIN-ECO") or e,out and palette.accent or palette.bad)
+        end
+      elseif typ and typ.v=="administrative" then
+        local ministries=rpc("NC_MINISTRY_LIST",{}) or {}
+        local choices={{text="Presidence de la Coalition",code="PRESIDENCE"}}
+        for _,m in ipairs(ministries) do choices[#choices+1]={text=m.code.." / "..m.name,code=m.code} end
+        local target=menu("ADMINISTRATION DESTINATAIRE",choices)
+        if target then
+          local title=prompt("Titre de la demande")
+          local legalBasis=prompt("Base legale NC-ART-... (optionnel)")
+          local body=multi("DEMANDE / MOTIVATION","")
+          local out,e=rpc("NC_REQUEST_CREATE",{requestType="administrative",targetMinistry=target.code,title=title,legalBasis=legalBasis,body=body})
+          message("GUICHET",out and ("Deposee: "..out.id.." / "..out.targetMinistry) or e,out and palette.accent or palette.bad)
+        end
+      end
+
+    elseif p.id=="search" then query=prompt("Recherche demande",query)
+    elseif p.id=="status" then
+      local st=menu("STATUT",{
+        {text="Tous",v=""},{text="Deposees",v="submitted"},{text="En instruction",v="in_review"},
+        {text="Approuvees",v="approved"},{text="Rejetees",v="rejected"},{text="Retirees",v="withdrawn"}
+      })
+      if st then status=st.v end
+    elseif p.id=="reset" then query="";status=""
+    elseif p.request then requestDetails(p.request.id,info) end
+  end
+end
+
 local function administrationScreen(info)
   while true do
     info=rpc("NC_INFO",{}) or info or {}
     local items={
+      {text="GUICHET CITOYEN / DEMANDES ADMINISTRATIVES",id="requests"},
       {text="REGISTRE DES ORGANISATIONS / ENTREPRISES",id="orgs"},
       {text="LICENCES / AUTORISATIONS / PERMIS",id="licenses"},
       {text="AMENDES / SANCTIONS PECUNIAIRES",id="fines"},
@@ -1920,7 +2096,8 @@ local function administrationScreen(info)
     local p=menu("ADMINISTRATION NATIONALE",items,
       roleLabel(info.nationalRole)..(info.ministryCode and (" / "..info.ministryCode) or ""))
     if not p then return end
-    if p.id=="orgs" then organizationsScreen(info)
+    if p.id=="requests" then requestsScreen(info)
+    elseif p.id=="orgs" then organizationsScreen(info)
     elseif p.id=="licenses" then licensesScreen(info)
     elseif p.id=="fines" then finesScreen(info)
     elseif p.id=="record" then citizenRecordScreen(info) end
@@ -1962,7 +2139,8 @@ local function nationalNotices(info)
       elseif n.objectType=="nc_citizen" then actions[#actions+1]={text="Ouvrir la fiche citoyenne",id="open"}
       elseif n.objectType=="nc_session" then actions[#actions+1]={text="Ouvrir la session",id="open"}
       elseif n.objectType=="nc_license" then actions[#actions+1]={text="Ouvrir la licence",id="open"}
-      elseif n.objectType=="nc_fine" then actions[#actions+1]={text="Ouvrir l'amende",id="open"} end
+      elseif n.objectType=="nc_fine" then actions[#actions+1]={text="Ouvrir l'amende",id="open"}
+      elseif n.objectType=="nc_request" then actions[#actions+1]={text="Ouvrir la demande",id="open"} end
       local a=menu(n.title or n.id,actions,(n.severity or "info").." / "..(n.createdAt or ""))
       if a and a.id=="read" then
         textPage(n.id,{
@@ -1982,7 +2160,8 @@ local function nationalNotices(info)
         elseif n.objectType=="nc_citizen" then citizenDetails(n.objectId,info)
         elseif n.objectType=="nc_session" then sessionDetails(n.objectId,info)
         elseif n.objectType=="nc_license" then licenseDetails(n.objectId,info)
-        elseif n.objectType=="nc_fine" then fineDetails(n.objectId,info) end
+        elseif n.objectType=="nc_fine" then fineDetails(n.objectId,info)
+        elseif n.objectType=="nc_request" then requestDetails(n.objectId,info) end
       end
     end
   end
