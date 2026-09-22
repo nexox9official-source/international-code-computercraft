@@ -420,6 +420,15 @@ local function isVotingCitizen(n,cl)
   return votingKey(n,cl)~=nil
 end
 
+local function migrateClientCitizens(n,state)
+  for _,cl in pairs(state.clients or {}) do
+    if cl.nationalRole and cl.nationalRole~="" and cl.nationalRole~="public" and not cl.citizenId then
+      local citizen=select(1,createCitizen(n,identity(cl),"citizen","migration","Migration automatique des habilitations nationales"))
+      if citizen then cl.citizenId=citizen.id end
+    end
+  end
+end
+
 local function uniqueEligibleIdentities(state,electorate)
   local n=state.national
   local seen,out={},{}
@@ -609,6 +618,33 @@ local function technicalNationalAdmin(actor)
   return actor and actor.role=="admin" and (not actor.nationalRole or actor.nationalRole=="admin")
 end
 
+local function canManageCitizens(state,actor)
+  local r=nationalRole(state,actor)
+  return technicalNationalAdmin(actor) or r=="president" or (r=="minister" and actor.ministryCode=="MIN-INT")
+end
+
+local function citizenView(cit,full)
+  local out=copy(cit)
+  if not full then
+    out.notes=nil
+    out.history=nil
+  end
+  return out
+end
+
+local function listCitizens(n,p,full)
+  p=p or {}
+  local q=common.trim(p.query)
+  local status=common.trim(p.status)
+  local out={}
+  for _,cit in pairs(n.citizens or {}) do
+    local hit=(q=="" or common.contains(cit.id,q) or common.contains(cit.identity,q) or common.contains(cit.displayName,q))
+    if hit and (status=="" or cit.status==status) then out[#out+1]=citizenView(cit,full) end
+  end
+  table.sort(out,function(a,b) return tostring(a.id)<tostring(b.id) end)
+  return out
+end
+
 local function nationalCaseInstitutionalRole(state,actor)
   local r=nationalRole(state,actor)
   return actor and (technicalNationalAdmin(actor) or r=="judge" or r=="prosecutor" or r=="police")
@@ -721,6 +757,7 @@ end
 function N.handle(state,actor,action,p,ctx)
   p=p or {}
   local n=N.ensure(state)
+  migrateClientCitizens(n,state)
 
   if action=="NC_INFO" then
     local ok,err=requireAccess(state,actor)
@@ -730,7 +767,8 @@ function N.handle(state,actor,action,p,ctx)
       status=n.meta.status,stateId=n.meta.stateId,foundingMode=n.meta.foundingMode,
       foundingAccount=n.meta.foundingAccount,presidentIdentity=n.meta.presidentIdentity,
       presidentClientId=n.meta.presidentClientId,nationalRole=nationalRole(state,actor),
-      nationalIdentity=identity(actor),ministryCode=actor.ministryCode,
+      nationalIdentity=identity(actor),citizenId=actor.citizenId,
+      citizenStatus=(citizenForClient(n,actor) or {}).status,ministryCode=actor.ministryCode,
       fallbackNoVoteHours=n.meta.fallbackNoVoteHours
     }
   end
@@ -772,6 +810,11 @@ function N.handle(state,actor,action,p,ctx)
     end
     local ministriesTotal,filled=0,0
     for _,m in pairs(n.ministries) do ministriesTotal=ministriesTotal+1;if m.holderClientId then filled=filled+1 end end
+    local citizens,activeCitizens=0,0
+    for _,cit in pairs(n.citizens or {}) do
+      citizens=citizens+1
+      if cit.status=="citizen" then activeCitizens=activeCitizens+1 end
+    end
     local openElections=0
     for _,e in pairs(n.elections) do if e.stage=="open" then openElections=openElections+1 end end
     local votingBills=0
@@ -787,6 +830,7 @@ function N.handle(state,actor,action,p,ctx)
     return {
       laws=total,activeLaws=active,draftLaws=draft,repealedLaws=repealed,
       categories=#(n.categories or {}),ministries=ministriesTotal,filledMinistries=filled,
+      citizens=citizens,activeCitizens=activeCitizens,
       openElections=openElections,votingBills=votingBills,publishedDecrees=publishedDecrees,
       openCases=openCases,unreadNotices=unreadNational,
       foundingMode=n.meta.foundingMode,presidentIdentity=n.meta.presidentIdentity,
@@ -856,6 +900,7 @@ function N.handle(state,actor,action,p,ctx)
       if target.nationalRole~="public" then
         local citizen,er=createCitizen(n,target.nationalIdentity,"citizen",identity(actor),"Enregistrement automatique lors de l'attribution d'une fonction nationale")
         if not citizen then return nil,er end
+        if citizen.status~="citizen" then return nil,"Cette identite n'a pas le statut de citoyen actif." end
         target.citizenId=citizen.id
       end
     end
