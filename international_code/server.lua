@@ -378,6 +378,54 @@ local function listBills(state,payload)
   return out
 end
 
+local function listTreaties(state,payload)
+  payload=payload or {}
+  local q=common.trim(payload.query)
+  local stage=common.trim(payload.stage)
+  local stateId=common.trim(payload.stateId):upper()
+  local out={}
+  for _,t in pairs(state.treaties or {}) do
+    local hit=(q=="" or common.contains(t.id,q) or common.contains(t.title,q) or common.contains(t.summary,q) or common.contains(t.body,q) or common.contains(t.treatyType,q))
+    local stageHit=(stage=="" or t.stage==stage)
+    local partyHit=(stateId=="")
+    if stateId~="" then
+      for _,id in ipairs(t.parties or {}) do if id==stateId then partyHit=true break end end
+    end
+    if hit and stageHit and partyHit then
+      local copy=common.deepcopy(t)
+      copy.body=nil
+      copy.signatureHistory=nil
+      out[#out+1]=copy
+    end
+  end
+  table.sort(out,function(a,b) return tostring(a.id)>tostring(b.id) end)
+  return out
+end
+
+local function makeTreatyId(state)
+  local year=os.date and os.date("%Y") or "0000"
+  local n=(state.treatyCounters[year] or 0)+1
+  state.treatyCounters[year]=n
+  return string.format("TREATY-%s-%04d",year,n)
+end
+
+local function treatySignatureStatus(state,treaty)
+  local required=0
+  local signed=0
+  local missing={}
+  for _,id in ipairs(treaty.parties or {}) do
+    if state.states[id] then
+      required=required+1
+      if treaty.signatures and treaty.signatures[id] then
+        signed=signed+1
+      else
+        missing[#missing+1]=id
+      end
+    end
+  end
+  return {required=required,signed=signed,missing=missing,complete=required>0 and signed==required}
+end
+
 local function eligibleVotingStates(state)
   local n=0
   for _,st in pairs(state.states or {}) do
