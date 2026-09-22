@@ -1635,7 +1635,8 @@ local function stateDetails(st)
     if not full then message("ETAT",err,palette.bad);return end
 
     local actions={
-      {text="Lire la fiche officielle",id="read"}
+      {text="Lire la fiche officielle",id="read"},
+      {text="Voir les mesures d'execution / sanctions",id="enforcement"}
     }
     if allowed("institutionAdmin") then
       actions[#actions+1]={text="Modifier la fiche",id="edit"}
@@ -1657,6 +1658,9 @@ local function stateDetails(st)
         {label="Notes",text=full.notes or ""},
         {label="Creation / mise a jour",text=(full.createdAt or "").." / "..(full.updatedAt or "")}
       })
+
+    elseif a.id=="enforcement" then
+      enforcementsScreen("","",full.id,"")
 
     elseif a.id=="edit" then
       local government=prompt("Gouvernement",full.government or "")
