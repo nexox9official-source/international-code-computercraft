@@ -4,7 +4,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** destiné au Code interna
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. `North Coalition` est conservé uniquement comme État proposant dans le corpus juridique initial.
 
-## Ce que fait la v0.3
+## Ce que fait la v0.4
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `viewer`, `admin`) ;
@@ -76,7 +76,7 @@ wget run https://raw.githubusercontent.com/nexox9official-source/international-c
 wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua admin
 ```
 
-## Navigation v0.3
+## Navigation v0.4
 
 Le Code n'affiche plus simplement une liste brute de 500 articles. Le terminal propose maintenant :
 
@@ -122,6 +122,84 @@ Les dossiers judiciaires disposent maintenant d'un vrai suivi de procédure :
 
 Un article affiche désormais son **historique de versions**. Une ancienne version peut être relue avec son statut, sa date d'archivage et son auteur d'archivage. Depuis un article, il est également possible d'ouvrir directement les autres articles de son Livre.
 
+## Institutions et Assemblée v0.4
+
+Le réseau gère maintenant une couche institutionnelle complète en plus du Code et de la Cour :
+
+- registre permanent des États `STATE-001`, `STATE-002`, etc. ;
+- **North Coalition** est initialisé comme `STATE-001` dans les nouvelles installations ;
+- statuts : candidat, membre, suspendu, retiré ou exclu ;
+- fiche d'État : nom, gouvernement, représentant et notes officielles ;
+- rôle `delegate` dédié aux représentants des États ;
+- un administrateur rattache chaque terminal délégué à un État précis ;
+- une proposition législative reçoit un identifiant `BILL-AAAA-XXXX` ;
+- proposition de **nouvel article** ou d'**amendement d'un article existant** ;
+- phases `draft`, `debate`, `voting`, puis adoption/rejet ;
+- scrutin **une voix par État**, même si plusieurs terminaux représentent le même État ;
+- choix POUR / CONTRE / ABSTENTION ;
+- corps électoral figé à l'ouverture du scrutin ;
+- quorum automatique d'au moins la moitié des États éligibles ;
+- plusieurs tours possibles lorsqu'un scrutin échoue faute de quorum ;
+- majorité simple, majorité absolue, deux tiers des votes exprimés ou trois quarts de tous les membres ;
+- une proposition adoptée peut être **promulguée directement dans le Code** ;
+- un nouvel article reçoit automatiquement le prochain numéro disponible ;
+- un amendement promulgué crée automatiquement une nouvelle version de l'article et archive l'ancienne.
+
+Les votes restent séparés par État et l'historique des changements de vote est conservé.
+
+## Cour et procédure v0.4
+
+Les dossiers judiciaires disposent désormais de procédures plus proches d'une vraie juridiction :
+
+- visibilité `public`, `restricted` ou `sealed` ;
+- les terminaux publics ne voient que les dossiers publics ;
+- un dossier scellé est réservé aux juges et à l'administration ;
+- audiences programmées avec objet, date/heure, salle et statut ;
+- impression d'un **avis d'audience** ;
+- ordonnances, mandats, mesures provisoires, convocations et ordres de préservation des preuves ;
+- suivi de l'exécution, révocation ou expiration d'une ordonnance ;
+- appels formels avec motifs et demande ;
+- décision d'appel : confirmation, modification, annulation, rejet ou renvoi à une nouvelle audience ;
+- impression séparée de l'acte d'appel ;
+- chronologie automatique enrichie pour toutes ces opérations.
+
+### Sceaux d'intégrité
+
+Les nouveaux actes officiels reçoivent un identifiant de contrôle calculé par le serveur, par exemple :
+
+```text
+CIU-JUG-7A1D9C20
+CIU-ORD-2F84B6A1
+UNS-VOTE-83C29D10
+UNS-PROM-10AB09CE
+```
+
+Le sceau est imprimé sur les jugements, ordonnances, audiences, appels et actes de promulgation. Il s'agit d'un **marqueur d'intégrité applicatif RP**, pas d'une signature cryptographique forte.
+
+## Affichage public sur Monitor
+
+Un terminal client relié à un Monitor peut devenir un registre public automatique :
+
+```text
+ic public
+```
+
+L'écran alterne toutes les quelques secondes entre :
+
+- vue générale de l'Union ;
+- États membres ;
+- scrutins actuellement ouverts ;
+- dossiers judiciaires publics ;
+- derniers articles actifs.
+
+Pour afficher un dossier public précis dans une salle d'audience :
+
+```text
+ic display CASE-2026-0001
+```
+
+Un clic sur le Monitor passe aussi à la page publique suivante.
+
 ## Imprimante
 
 Une imprimante connectée physiquement au terminal est détectée automatiquement. Les articles et dossiers peuvent être imprimés sur plusieurs pages.
@@ -149,10 +227,13 @@ ic setup server
 ic setup writer
 ic setup clerk
 ic setup judge
+ic setup delegate
 ic setup viewer
 ic setup admin
 ic pair <role>
 ic backup
+ic public
+ic display CASE-2026-0001
 ic doctor
 ic update
 ic help
@@ -172,10 +253,11 @@ Le serveur doit être arrêté avant de mettre à jour son code. Relancez ensuit
 
 | Rôle | Droits principaux |
 |---|---|
-| `viewer` | lecture des lois et dossiers |
+| `delegate` | consultation + vote officiel pour l'État auquel le terminal est rattaché |
+| `viewer` | lecture du Code, des États, propositions et dossiers publics |
 | `writer` | lecture + création/modification/abrogation des lois + audit |
-| `clerk` | gestion des dossiers, faits, preuves, articles cités + audit |
-| `judge` | greffe + rédaction des jugements + audit |
+| `clerk` | gestion des dossiers, faits, preuves, articles cités, audiences et appels + audit |
+| `judge` | greffe + jugements + ordonnances + décisions d'appel + audit |
 | `admin` | toutes les opérations |
 
 ## Numérotation et historique
@@ -267,4 +349,4 @@ Les 25 Livres du Code sont automatiquement associés aux articles par groupes de
 
 ## Statut
 
-**v0.3 - navigation avancée, panier juridique, chronologie judiciaire et impressions spécialisées.** Le code Lua est structuré pour être étendu avec audiences, mandats, appels formels, signatures/quorum, réplication vers un second serveur et écran Monitor public.
+**v0.4 - institutions, États membres, Assemblée, votes, audiences, ordonnances, appels, sceaux officiels et affichage public Monitor.** Le code Lua est structuré pour être étendu avec audiences, mandats, appels formels, signatures/quorum, réplication vers un second serveur et écran Monitor public.
