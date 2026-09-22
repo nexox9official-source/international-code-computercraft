@@ -92,6 +92,18 @@ function P.caseFile(case)
     lines[#lines+1] = ""
   end
 
+  if case.timeline and #case.timeline>0 then
+    lines[#lines+1]="CHRONOLOGIE"
+    for i,event in ipairs(case.timeline) do
+      local head=string.format("%d. %s - %s",i,event.at or "",event.title or event.kind or "Evenement")
+      for _,l in ipairs(common.wrap(head,25)) do lines[#lines+1]=l end
+      if event.details and event.details~="" then
+        for _,l in ipairs(common.wrap(event.details,25)) do lines[#lines+1]=l end
+      end
+    end
+    lines[#lines+1]=""
+  end
+
   appendWrapped(lines, "DERNIERE MAJ", case.updatedAt or case.createdAt or "", 25)
   return printLines(case.id or "DOSSIER", lines)
 end
