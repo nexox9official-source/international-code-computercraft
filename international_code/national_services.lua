@@ -76,9 +76,11 @@ local function canManageOrganizations(actor)
   return technicalAdmin(actor) or r=="president" or (r=="minister" and actor.ministryCode=="MIN-ECO")
 end
 
-local function canManageAnyLicense(actor)
+local function canViewLicense(actor,l)
   local r=role(actor)
-  return technicalAdmin(actor) or r=="president" or r=="minister"
+  if technicalAdmin(actor) or r=="president" or r=="judge" or r=="prosecutor" or r=="police" then return true end
+  if r=="minister" then return l and l.authority==actor.ministryCode end
+  return l and l.holderType=="citizen" and isSelfCitizen(actor,l.holderId)
 end
 
 local licenseAuthorities={
@@ -175,10 +177,7 @@ local function listLicenses(n,p,actor)
   local holder=trim(p.holderId):upper()
   local out={}
   for _,l in pairs(n.licenses or {}) do
-    local visible=true
-    if not canManageAnyLicense(actor) and not technicalAdmin(actor) then
-      visible=(l.holderType=="citizen" and isSelfCitizen(actor,l.holderId))
-    end
+    local visible=canViewLicense(actor,l)
     local hit=q=="" or common.contains(l.id,q) or common.contains(l.kind,q) or
       common.contains(l.title,q) or common.contains(l.holderId,q) or common.contains(l.notes,q)
     if visible and hit and (status=="" or l.status==status) and
@@ -359,8 +358,7 @@ function S.handle(state,actor,action,p,ctx)
   if action=="NC_LICENSE_GET" then
     local l=n.licenses[trim(p.id):upper()]
     if not l then return true,nil,"Licence introuvable." end
-    local visible=canManageAnyLicense(actor) or (l.holderType=="citizen" and isSelfCitizen(actor,l.holderId))
-    if not visible then return true,nil,"Acces refuse a cette licence." end
+    if not canViewLicense(actor,l) then return true,nil,"Acces refuse a cette licence." end
     return true,copy(l)
   end
   if action=="NC_LICENSE_ISSUE" then
