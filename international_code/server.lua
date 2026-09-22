@@ -1699,6 +1699,237 @@ local function handleAction(state, actor, action, p)
     local out=common.deepcopy(r);out.tally=billTally(state,r);return out
   end
 
+  if action == "SESSION_LIST" then
+    return listSessions(state,p)
+  end
+
+  if action == "SESSION_GET" then
+    local sess=state.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session introuvable." end
+    return common.deepcopy(sess)
+  end
+
+  if action == "SESSION_CREATE" then
+    local title=common.trim(p.title)
+    if title=="" then return nil,"Titre de session obligatoire." end
+    local validTypes={
+      assembly=true,security_council=true,diplomatic=true,
+      emergency=true,committee=true,other=true
+    }
+    local sessionType=validTypes[p.sessionType] and p.sessionType or "assembly"
+    local id=makeSessionId(state)
+    local sess={
+      id=id,title=title,sessionType=sessionType,
+      description=common.trim(p.description),scheduledFor=common.trim(p.scheduledFor),
+      location=common.trim(p.location),status="scheduled",
+      agenda={},attendance={},minutes="",outcome="",
+      createdAt=common.now(),createdBy=actor.label,updatedAt=common.now()
+    }
+    sess.noticeSeal=officialSeal("UNS-SESSION-NOTICE",{sess.id,sess.title,sess.sessionType,sess.scheduledFor,sess.location,sess.createdAt})
+    state.sessions[id]=sess
+
+    for stateId,st in pairs(state.states or {}) do
+      if st.status=="member" then
+        pushNotice(state,{
+          title="Session convoquee: "..id,
+          body=title.." / "..(sess.scheduledFor~="" and sess.scheduledFor or "date a confirmer")..
+            (sess.location~="" and (" / "..sess.location) or ""),
+          severity="action",objectType="session",objectId=id,targetStateId=stateId
+        })
+      end
+    end
+
+    mutate(state,actor,"SESSION_CREATE",id,title)
+    return common.deepcopy(sess)
+  end
+
+  if action == "SESSION_EDIT" then
+    local sess=state.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session introuvable." end
+    if sess.status~="scheduled" then return nil,"Seule une session programmee peut etre modifiee." end
+    local validTypes={
+      assembly=true,security_council=true,diplomatic=true,
+      emergency=true,committee=true,other=true
+    }
+    if p.title~=nil and common.trim(p.title)~="" then sess.title=common.trim(p.title) end
+    if p.sessionType~=nil and validTypes[p.sessionType] then sess.sessionType=p.sessionType end
+    if p.description~=nil then sess.description=common.trim(p.description) end
+    if p.scheduledFor~=nil then sess.scheduledFor=common.trim(p.scheduledFor) end
+    if p.location~=nil then sess.location=common.trim(p.location) end
+    sess.updatedAt=common.now()
+    sess.updatedBy=actor.label
+    sess.noticeSeal=officialSeal("UNS-SESSION-NOTICE",{sess.id,sess.title,sess.sessionType,sess.scheduledFor,sess.location,sess.updatedAt})
+    mutate(state,actor,"SESSION_EDIT",sess.id,sess.title)
+    return common.deepcopy(sess)
+  end
+
+  if action == "SESSION_ADD_AGENDA" then
+    local sess=state.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session introuvable." end
+    if sess.status=="closed" or sess.status=="cancelled" then return nil,"Ordre du jour verrouille." end
+    local kind=common.trim(p.kind)
+    local ref=common.trim(p.ref):upper()
+    local title=common.trim(p.title)
+    local validKind={bill=true,resolution=true,treaty=true,case=true,law=true,enforcement=true,custom=true}
+    if not validKind[kind] then return nil,"Type d'element d'ordre du jour invalide." end
+
+    if kind~="custom" then
+      local resolved=sessionAgendaReference(state,kind,ref)
+      if not resolved then return nil,"Reference d'ordre du jour introuvable." end
+      if title=="" then title=resolved end
+      if kind=="law" then
+        local n=tonumber(ref:match("(%d+)$"))
+        if n then ref=string.format("UNS-ART-%03d",n) end
+      end
+    else
+      if title=="" then title=common.trim(p.ref) end
+      if title=="" then return nil,"Titre d'element obligatoire." end
+      ref=""
+    end
+
+    local item={
+      id=string.format("ITEM-%03d",#sess.agenda+1),
+      kind=kind,ref=ref,title=title,
+      description=common.trim(p.description),status="pending",
+      notes="",outcome="",addedAt=common.now(),addedBy=actor.label
+    }
+    sess.agenda[#sess.agenda+1]=item
+    sess.updatedAt=common.now()
+    mutate(state,actor,"SESSION_ADD_AGENDA",sess.id,item.id.." / "..kind.." / "..title)
+    return common.deepcopy(sess)
+  end
+
+  if action == "SESSION_REMOVE_AGENDA" then
+    local sess=state.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session introuvable." end
+    if sess.status~="scheduled" then return nil,"Un element ne peut etre retire qu'avant l'ouverture." end
+    local removed=nil
+    for i=#sess.agenda,1,-1 do
+      if sess.agenda[i].id==p.itemId then removed=table.remove(sess.agenda,i) break end
+    end
+    if not removed then return nil,"Element introuvable." end
+    sess.updatedAt=common.now()
+    mutate(state,actor,"SESSION_REMOVE_AGENDA",sess.id,removed.id.." / "..removed.title)
+    return common.deepcopy(sess)
+  end
+
+  if action == "SESSION_OPEN" then
+    local sess=state.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session introuvable." end
+    if sess.status~="scheduled" then return nil,"La session n'est pas programmee." end
+    sess.status="open"
+    sess.openedAt=common.now()
+    sess.openedBy=actor.label
+    sess.openSeal=officialSeal("UNS-SESSION-OPEN",{sess.id,sess.title,sess.scheduledFor,sess.location,sess.agenda,sess.openedAt,sess.openedBy})
+    sess.updatedAt=common.now()
+
+    for stateId,st in pairs(state.states or {}) do
+      if st.status=="member" then
+        pushNotice(state,{
+          title="Session ouverte: "..sess.id,
+          body=sess.title.." / presence possible depuis votre terminal delegue.",
+          severity="action",objectType="session",objectId=sess.id,targetStateId=stateId
+        })
+      end
+    end
+
+    mutate(state,actor,"SESSION_OPEN",sess.id,sess.openSeal)
+    return common.deepcopy(sess)
+  end
+
+  if action == "SESSION_CHECKIN" then
+    local sess=state.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session introuvable." end
+    if sess.status~="open" then return nil,"La session n'est pas ouverte." end
+    local st=getClientState(state,actor)
+    if not st then return nil,"Ce terminal n'est rattache a aucun Etat." end
+    if st.status~="member" then return nil,"Seuls les Etats membres actifs peuvent enregistrer leur presence." end
+
+    sess.attendance=sess.attendance or {}
+    if not sess.attendance[st.id] then
+      sess.attendance[st.id]={
+        stateId=st.id,stateName=st.name,checkedInAt=common.now(),by=actor.label
+      }
+      sess.updatedAt=common.now()
+      mutate(state,actor,"SESSION_CHECKIN",sess.id,st.id.." / "..st.name)
+    else
+      saveState(state)
+    end
+    return common.deepcopy(sess)
+  end
+
+  if action == "SESSION_SET_ITEM_STATUS" then
+    local sess=state.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session introuvable." end
+    if sess.status~="open" then return nil,"La session doit etre ouverte." end
+    local allowed={pending=true,discussing=true,discussed=true,voted=true,postponed=true,withdrawn=true}
+    if not allowed[p.status] then return nil,"Statut d'ordre du jour invalide." end
+    local item=nil
+    for _,x in ipairs(sess.agenda or {}) do if x.id==p.itemId then item=x break end end
+    if not item then return nil,"Element introuvable." end
+
+    item.status=p.status
+    if p.notes~=nil then item.notes=common.trim(p.notes) end
+    if p.outcome~=nil then item.outcome=common.trim(p.outcome) end
+    item.updatedAt=common.now()
+    item.updatedBy=actor.label
+    sess.updatedAt=common.now()
+    mutate(state,actor,"SESSION_SET_ITEM_STATUS",sess.id,item.id.." -> "..item.status)
+    return common.deepcopy(sess)
+  end
+
+  if action == "SESSION_CLOSE" then
+    local sess=state.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session introuvable." end
+    if sess.status~="open" then return nil,"La session doit etre ouverte avant cloture." end
+    local minutes=common.trim(p.minutes)
+    if minutes=="" then return nil,"Proces-verbal de session obligatoire." end
+
+    sess.minutes=minutes
+    sess.outcome=common.trim(p.outcome)
+    sess.status="closed"
+    sess.closedAt=common.now()
+    sess.closedBy=actor.label
+    sess.closeSeal=officialSeal("UNS-SESSION",{
+      sess.id,sess.title,sess.sessionType,sess.scheduledFor,sess.location,
+      sess.agenda,sess.attendance,sess.minutes,sess.outcome,sess.openSeal,
+      sess.closedAt,sess.closedBy
+    })
+    sess.updatedAt=common.now()
+
+    pushNotice(state,{
+      title="Session cloturee: "..sess.id,
+      body=sess.title..(sess.outcome~="" and (" / "..sess.outcome) or ""),
+      severity="info",objectType="session",objectId=sess.id,global=true
+    })
+
+    mutate(state,actor,"SESSION_CLOSE",sess.id,sess.closeSeal)
+    return common.deepcopy(sess)
+  end
+
+  if action == "SESSION_CANCEL" then
+    local sess=state.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session introuvable." end
+    if sess.status=="closed" or sess.status=="cancelled" then return nil,"La session est deja terminee." end
+    local reason=common.trim(p.reason)
+    if reason=="" then return nil,"Motif d'annulation obligatoire." end
+    sess.status="cancelled"
+    sess.cancelReason=reason
+    sess.cancelledAt=common.now()
+    sess.cancelledBy=actor.label
+    sess.cancelSeal=officialSeal("UNS-SESSION-CANCEL",{sess.id,sess.title,reason,sess.cancelledAt,sess.cancelledBy})
+    sess.updatedAt=common.now()
+
+    pushNotice(state,{
+      title="Session annulee: "..sess.id,
+      body=sess.title.." / "..reason,
+      severity="warning",objectType="session",objectId=sess.id,global=true
+    })
+
+    mutate(state,actor,"SESSION_CANCEL",sess.id,reason)
+    return common.deepcopy(sess)
+  end
+
   if action == "TREATY_LIST" then return listTreaties(state,p) end
 
   if action == "TREATY_GET" then
