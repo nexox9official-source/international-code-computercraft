@@ -23,7 +23,7 @@ end
 assert(total==500,"expected 500 seed articles, got "..total)
 for n=1,500 do assert(seen[n],"missing article "..n) end
 
-assert(common.VERSION=="0.22.0","unexpected application version: "..tostring(common.VERSION))
+assert(common.VERSION=="0.23.0","unexpected application version: "..tostring(common.VERSION))
 
 local function readSource(path)
   local h=assert(io.open(path,"r"))
@@ -47,6 +47,13 @@ local nationalNetwork=readSource("international_code/national_network.lua")
 local nationalDemocracy=readSource("international_code/national_democracy.lua")
 local nationalDemocracyClient=readSource("international_code/national_democracy_client.lua")
 local nationalCorpus=readSource("international_code/national/corpus_v2.json")
+local launcher=readSource("international_code/launcher.lua")
+local installer=readSource("install.lua")
+local nationalMeta=readSource("international_code/national/corpus_meta.json")
+local nationalShard1=readSource("international_code/national/articles_001_100.json")
+local nationalShard2=readSource("international_code/national/articles_101_200.json")
+local nationalShard3=readSource("international_code/national/articles_201_300.json")
+local nationalShard4=readSource("international_code/national/articles_301_400.json")
 
 assert(server:find('CONFLICT_CREATE',1,true),"conflict server actions missing")
 assert(server:find('INCIDENT_CREATE',1,true),"incident server actions missing")
@@ -167,6 +174,21 @@ assert(nationalPublic:find('NC-GAZ / actes officiels scelles',1,true),"official 
 assert(nationalPublic:find('FINANCES PUBLIQUES',1,true),"national finance monitor missing")
 assert(nationalPublic:find('DEMOCRATIE NATIONALE',1,true),"national democracy monitor missing")
 assert(cli:find('cmd=="nc%-verify"'),"national seal verification CLI missing")
+assert(cli:find('launcher.lua',1,true),"graphical control center route missing")
+assert(launcher:find('CENTRE DE CONTROLE',1,true),"graphical control center UI missing")
+assert(launcher:find('CONFIGURER CE PC',1,true),"first-run setup UI missing")
+assert(launcher:find('A CONFIGURER',1,true),"missing configuration must be presented as setup state")
+assert(installer:find('h.read(8192)',1,true),"streamed low-memory installer missing")
+assert(installer:find('articles_301_400.json',1,true),"sharded North Coalition install missing")
+assert(national:find('eachCorpusArticle',1,true),"low-memory national corpus loader missing")
+assert(national:find('CORPUS_SHARDS',1,true),"North Coalition shard list missing")
+
+local shardCount=0
+for _,body in ipairs({nationalShard1,nationalShard2,nationalShard3,nationalShard4}) do
+  for _ in body:gmatch('"id"%s*:%s*"NC%-ART%-%d%d%d"') do shardCount=shardCount+1 end
+end
+assert(shardCount==400,"expected 400 North Coalition articles across shards, got "..shardCount)
+assert(nationalMeta:find('"article_count":400',1,true) or nationalMeta:find('"article_count": 400',1,true),"North Coalition shard metadata missing article count")
 
 local ncCount=0
 for _ in nationalCorpus:gmatch('"id"%s*:%s*"NC%-ART%-%d%d%d"') do ncCount=ncCount+1 end
@@ -184,4 +206,4 @@ assert(activeNc>=400,"expected all 400 North Coalition articles active after rat
 local forbiddenServerName="Astra".."lium"
 assert(not nationalCorpus:find(forbiddenServerName,1,true),"forbidden server name leaked into national corpus")
 
-print("Self-test OK: v0.22 / NexoFr permanent North Coalition leadership until voluntary self-relinquishment")
+print("Self-test OK: v0.23 / low-memory sharded corpus + graphical control center + ratified UNS/NC")
