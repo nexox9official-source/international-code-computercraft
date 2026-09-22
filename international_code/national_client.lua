@@ -1493,6 +1493,96 @@ local function verifyNationalSealScreen(initial)
   end
 end
 
+
+local function openGazetteObject(row,info)
+  local kind=row.kind or ""
+  if kind=="law_enactment" then billDetails(row.objectId)
+  elseif kind=="decree" or kind=="decree_repeal" then decreeDetails(row.objectId)
+  elseif kind=="ministry_appointment" or kind=="ministry_end" then ministryDetails(row.objectId)
+  elseif kind=="election_result" then C.electionDetails(row.objectId)
+  elseif kind=="session_minutes" then sessionDetails(row.objectId,info)
+  elseif kind=="judgment" or kind=="appeal_decision" then caseDetails(row.objectId)
+  elseif kind=="founding" then governmentScreen(info)
+  else
+    message("JOURNAL OFFICIEL","Aucun objet navigable pour cette publication.",palette.muted)
+  end
+end
+
+local function gazetteDetails(id,info)
+  while true do
+    local row,err=rpc("NC_GAZETTE_GET",{id=id})
+    if not row then message("JOURNAL OFFICIEL",err,palette.bad);return end
+    local actions={
+      {text="Lire la publication officielle",id="read"},
+      {text="Ouvrir l'acte / objet source",id="source"},
+      {text="Imprimer l'avis du Journal officiel",id="print"},
+      {text="Verifier le sceau de publication",id="verify"}
+    }
+    local a=menu(row.id.." - "..row.title,actions,
+      tostring(row.kind or "").." / "..tostring(row.publishedAt or "").." / "..tostring(row.visibility or "internal"))
+    if not a then return end
+    if a.id=="read" then
+      textPage(row.id,{
+        {label="Nature",text=row.kind or ""},
+        {label="Objet source",text=row.objectId or ""},
+        {label="Titre",text=row.title or ""},
+        {label="Resume officiel",text=row.summary or ""},
+        {label="Visibilite",text=row.visibility or ""},
+        {label="Publication",text=(row.publishedAt or "-").." / "..(row.publishedBy or "-")},
+        {label="Sceau de l'acte source",text=row.sourceSeal or "-"},
+        {label="Sceau du Journal officiel",text=row.seal or "-"}
+      })
+    elseif a.id=="source" then
+      openGazetteObject(row,info)
+    elseif a.id=="print" then
+      local ok,pages=printer.gazette(row)
+      message("IMPRESSION",ok and ("Avis officiel imprime: "..pages.." page(s).") or pages,ok and palette.accent or palette.bad)
+    elseif a.id=="verify" then
+      verifyNationalSealScreen(row.seal or "")
+    end
+  end
+end
+
+local function gazetteScreen(info)
+  local query,kind="",""
+  while true do
+    local rows,err=rpc("NC_GAZETTE_LIST",{query=query,kind=kind})
+    if not rows then message("JOURNAL OFFICIEL",err,palette.bad);return end
+    local items={
+      {text="[?] Rechercher une publication",id="search"},
+      {text="[T] Filtrer par type"..(kind~="" and (" ["..kind.."]") or ""),id="kind"}
+    }
+    if query~="" or kind~="" then items[#items+1]={text="[R] Reinitialiser les filtres",id="reset"} end
+    for _,row in ipairs(rows) do
+      items[#items+1]={
+        text=row.id.." ["..tostring(row.kind or "?").."] "..tostring(row.title or ""),
+        gazette=row
+      }
+    end
+    local p=menu("JOURNAL OFFICIEL NORTH COALITION",items,#rows.." publication(s) visible(s)")
+    if not p then return end
+    if p.id=="search" then
+      query=prompt("Recherche ID / titre / objet",query)
+    elseif p.id=="kind" then
+      local k=menu("TYPE DE PUBLICATION",{
+        {text="Tous",v=""},{text="Promulgations de lois",v="law_enactment"},
+        {text="Decrets",v="decree"},{text="Abrogations de decrets",v="decree_repeal"},
+        {text="Nominations ministerielles",v="ministry_appointment"},
+        {text="Fins de fonctions ministerielles",v="ministry_end"},
+        {text="Resultats electoraux",v="election_result"},
+        {text="Proces-verbaux de session",v="session_minutes"},
+        {text="Jugements",v="judgment"},{text="Decisions d'appel",v="appeal_decision"},
+        {text="Actes fondateurs",v="founding"}
+      })
+      if k then kind=k.v end
+    elseif p.id=="reset" then
+      query="";kind=""
+    elseif p.gazette then
+      gazetteDetails(p.gazette.id,info)
+    end
+  end
+end
+
 local function nationalNotices(info)
   while true do
     local rows,err=rpc("NC_NOTICE_LIST",{})
@@ -1606,6 +1696,7 @@ function C.run()
       {text="GOUVERNEMENT / MINISTERES / FONCTIONS",id="gov"},
       {text="CALENDRIER / SESSIONS / ORDRE DU JOUR",id="sessions"},
       {text="LEGISLATION / PROJETS / VOTES",id="bills"},
+      {text="JOURNAL OFFICIEL / PUBLICATIONS",id="gazette"},
       {text="ELECTIONS MINISTERIELLES",id="elections"},
       {text="DECRETS / REGLEMENTS",id="decrees"},
       {text="JUSTICE / DOSSIERS NATIONAUX",id="cases"},
@@ -1624,6 +1715,7 @@ function C.run()
     elseif p.id=="gov" then governmentScreen(info)
     elseif p.id=="sessions" then sessionsScreen(info)
     elseif p.id=="bills" then billsScreen()
+    elseif p.id=="gazette" then gazetteScreen(info)
     elseif p.id=="elections" then C.electionsScreen()
     elseif p.id=="decrees" then decreesScreen(info)
     elseif p.id=="cases" then casesScreen()
