@@ -96,4 +96,49 @@ function P.caseFile(case)
   return printLines(case.id or "DOSSIER", lines)
 end
 
+
+function P.judgment(case, judgment)
+  if not judgment then return false, "Aucun jugement selectionne." end
+  local lines={}
+  appendWrapped(lines, "ARRET / JUGEMENT", case.id or "-", 25)
+  appendWrapped(lines, "AFFAIRE", case.title or "Dossier sans titre", 25)
+  appendWrapped(lines, "DEMANDEUR", case.complainant or "-", 25)
+  appendWrapped(lines, "MIS EN CAUSE", case.accused or "-", 25)
+  appendWrapped(lines, "JUGE", judgment.judge or "-", 25)
+  appendWrapped(lines, "DATE", judgment.date or "-", 25)
+  appendWrapped(lines, "DECISION", judgment.verdict or "", 25)
+  appendWrapped(lines, "MOTIVATION", judgment.reasoning or "", 25)
+  appendWrapped(lines, "SANCTIONS / REPARATIONS", judgment.sanctions or "", 25)
+
+  local refs={}
+  if judgment.articleSnapshot and #judgment.articleSnapshot>0 then
+    for _,a in ipairs(judgment.articleSnapshot) do
+      local suffix=a.version and (" v"..tostring(a.version)) or ""
+      refs[#refs+1]=(a.ref or "?")..suffix.." "..(a.title or "")
+    end
+  else
+    for _,ref in ipairs(judgment.citedArticles or {}) do refs[#refs+1]=ref end
+  end
+  appendWrapped(lines, "ARTICLES APPLIQUES", table.concat(refs,"\n"), 25)
+  appendWrapped(lines, "CARACTERE", judgment.final and "Decision finale" or "Decision intermediaire", 25)
+  return printLines((case.id or "DOSSIER").."-J"..tostring(judgment.id or 1), lines)
+end
+
+function P.timeline(case)
+  local lines={}
+  appendWrapped(lines, "CHRONOLOGIE", case.id or "-", 25)
+  appendWrapped(lines, "AFFAIRE", case.title or "Dossier sans titre", 25)
+  for i,event in ipairs(case.timeline or {}) do
+    local head=string.format("%d. %s / %s",i,event.at or "",event.title or event.kind or "Evenement")
+    for _,l in ipairs(common.wrap(head,25)) do lines[#lines+1]=l end
+    local meta=(event.by or "?").." ["..(event.role or "?").."]"
+    for _,l in ipairs(common.wrap(meta,25)) do lines[#lines+1]=l end
+    if event.details and event.details~="" then
+      for _,l in ipairs(common.wrap(event.details,25)) do lines[#lines+1]=l end
+    end
+    lines[#lines+1]=""
+  end
+  return printLines((case.id or "DOSSIER").."-CHRONO",lines)
+end
+
 return P
