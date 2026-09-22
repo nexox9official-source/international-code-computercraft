@@ -7,7 +7,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** avec deux espaces juridi
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. Les données nationales de North Coalition sont isolées logiquement des registres internationaux et soumises à leur propre contrôle d'accès.
 
-### Statut juridique v0.22
+### Statut juridique v0.23
 
 Les deux corpus initiaux sont désormais **adoptés et ratifiés** :
 
@@ -16,7 +16,7 @@ Les deux corpus initiaux sont désormais **adoptés et ratifiés** :
 
 Dans North Coalition, **NexoFr_** est enregistré comme **dirigeant permanent**, Président de la Coalition et autorité souveraine nationale avec habilitation cumulative sur l'ensemble des compétences internes : législation, réglementation, gouvernement, justice, sécurité, défense, diplomatie, finances et administration. Son statut n'a aucune limite de durée : aucun vote, aucune élection, motion, juridiction, ministre ou autre autorité nationale ne peut le remplacer ou le destituer. La direction ne peut prendre fin que si **NexoFr_ lui-même** enregistre une renonciation volontaire explicite et scellée. Cette habilitation est uniquement nationale : elle ne donne à North Coalition aucun privilège institutionnel particulier dans l'UNS.
 
-## Ce que fait la v0.22
+## Ce que fait la v0.23
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
@@ -32,7 +32,7 @@ Dans North Coalition, **NexoFr_** est enregistré comme **dirigeant permanent**,
 - impression multi-pages des articles et dossiers via une **Printer ComputerCraft** ;
 - interface terminal claire, navigable au clavier et à la souris.
 
-## Intranet national North Coalition v0.22
+## Intranet national North Coalition v0.23
 
 La v0.19 fournit un deuxième espace complet, **interne à North Coalition**, sans transformer les 400 lois nationales en articles UNS.
 
@@ -526,59 +526,57 @@ Le même PC serveur assure les sauvegardes, mais les actions nationales passent 
 
 ## Installation
 
-### 1. PC serveur
+### Installation recommandée : une seule commande
 
-Connectez un modem, puis :
-
-```text
-wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua server
-```
-
-Après configuration, lancez :
+Sur n'importe quel nouveau PC ComputerCraft disposant de HTTP :
 
 ```text
-ic server
+wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua
 ```
 
-Sur l'écran serveur, appuyez sur **P** pour générer un code d'appairage à usage unique et choisissez le rôle du futur terminal.
+L'installateur télécharge les fichiers en **streaming faible mémoire**, puis ouvre automatiquement le **Centre de contrôle**.
 
-### 2. PC de rédaction des lois
-
-Sur le PC qui doit pouvoir créer, modifier, suspendre ou abroger des articles :
+Il n'est plus nécessaire de retenir une série de commandes de configuration. Depuis l'interface, choisissez simplement :
 
 ```text
-wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua writer
+CONFIGURER CE PC
+  -> SERVEUR CENTRAL / UNS + NORTH COALITION
+  -> MON PC NexoFr_ / AUTORITE NORTH COALITION
+  -> PC INTERNATIONAL OU NATIONAL / choisir un role
+  -> DIAGNOSTIC
 ```
 
-Entrez le code affiché par le serveur. Le poste reçoit son identité et son jeton local.
-
-### 3. PC du greffe
+Une fois configuré, un simple :
 
 ```text
-wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua clerk
+ic
 ```
 
-Le greffe peut ouvrir les dossiers, ajouter des faits, des preuves, le contexte, les articles cités et changer le statut d'une procédure.
+ouvre le Centre de contrôle avec des boutons pour l'UNS, North Coalition, les notifications, le diagnostic, l'appairage et les mises à jour.
 
-### 4. PC du juge
+### Serveur
 
-```text
-wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua judge
-```
+Choisissez **SERVEUR CENTRAL / UNS + NORTH COALITION** dans le Centre de contrôle. Le même serveur stocke les espaces UNS et North Coalition tout en conservant leurs contrôles d'accès séparés.
 
-Le juge dispose des fonctions du greffe et peut en plus enregistrer un jugement motivé, les sanctions et rendre la décision finale.
+Après redémarrage du PC serveur, le script de démarrage lance automatiquement le serveur. Depuis le Centre de contrôle, il reste possible de créer un code d'appairage, effectuer un backup ou lancer le diagnostic.
 
-### 5. Consultation seule
+### PC NexoFr_
 
-```text
-wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua viewer
-```
+Choisissez **MON PC NexoFr_ / AUTORITE NORTH COALITION**. Le poste est appairé comme administrateur puis ouvre l'intranet national afin d'enregistrer le terminal de l'autorité souveraine lorsqu'il s'agit de la première initialisation.
 
-### 6. Administration
+### Autres PC
 
-```text
-wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua admin
-```
+Choisissez **PC INTERNATIONAL OU NATIONAL**, puis le rôle d'appairage : administrateur, rédaction, greffe, juge, délégué ou lecteur/poste standard.
+
+Les habilitations North Coalition restent ensuite attribuées séparément dans l'intranet national.
+
+### Diagnostic faible mémoire
+
+Le bouton **DIAGNOSTIC** vérifie les fichiers, la configuration, le modem, les fragments du corpus et l'espace disque sans charger les centaines d'articles en mémoire. Sur un PC neuf, **Configuration : A CONFIGURER** est un état normal et propose directement de lancer l'assistant.
+
+### Commandes de secours
+
+Les commandes historiques `ic setup ...`, `ic server`, `ic doctor`, `ic nc`, etc. restent disponibles, mais l'utilisation normale passe désormais par le Centre de contrôle `ic`.
 
 ## Navigation v0.15
 
