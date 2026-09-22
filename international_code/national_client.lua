@@ -2707,6 +2707,51 @@ local function auditScreen()
 end
 
 
+local function portalSearchScreen(info)
+  local query=""
+  while true do
+    if query=="" then
+      query=prompt("Recherche nationale: loi, ministere, acte, dossier")
+      if query=="" then return end
+    end
+
+    local rows,err=rpc("NC_PORTAL_SEARCH",{query=query})
+    if not rows then message("RECHERCHE NATIONALE",err,palette.bad);return end
+
+    local labels={
+      law="LOI",gazette="JO",ministry="MIN",bill="PROJET",decree="DECRET",
+      session="SESSION",case="JUSTICE",citizen="CITOYEN"
+    }
+    local items={
+      {text="[?] Nouvelle recherche",id="search"}
+    }
+    for _,row in ipairs(rows) do
+      items[#items+1]={
+        text="["..tostring(labels[row.kind] or row.kind or "?").."] "..tostring(row.title or row.id)..
+          (row.meta and row.meta~="" and (" / "..row.meta) or ""),
+        result=row
+      }
+    end
+
+    local p=menu("RECHERCHE NATIONALE",items,#rows.." resultat(s) pour \""..query.."\"")
+    if not p then return end
+    if p.id=="search" then
+      query=prompt("Nouvelle recherche",query)
+    elseif p.result then
+      local row=p.result
+      if row.kind=="law" then lawDetails(row.id)
+      elseif row.kind=="gazette" then gazetteDetails(row.id,info)
+      elseif row.kind=="ministry" then ministryDetails(row.id)
+      elseif row.kind=="bill" then billDetails(row.id)
+      elseif row.kind=="decree" then decreeDetails(row.id)
+      elseif row.kind=="session" then sessionDetails(row.id,info)
+      elseif row.kind=="case" then caseDetails(row.id)
+      elseif row.kind=="citizen" then citizenDetails(row.id,info)
+      else message("RECHERCHE","Type de resultat non navigable: "..tostring(row.kind),palette.warn) end
+    end
+  end
+end
+
 local function portalMySpace(info,dash)
   while true do
     info=rpc("NC_INFO",{}) or info or {}
@@ -2912,6 +2957,7 @@ function C.run()
     if (dash.unreadNotices or 0)>0 then
       items[#items+1]={text="[!] NOTIFICATIONS PRIORITAIRES ("..tostring(dash.unreadNotices)..")",id="notices"}
     end
+    items[#items+1]={text="[?] RECHERCHE NATIONALE / LOIS / ACTES / INSTITUTIONS",id="search"}
     items[#items+1]={text="MON ESPACE / IDENTITE / DEMANDES / VOTE",id="my"}
     items[#items+1]={text="DROIT / CODE NATIONAL / JOURNAL OFFICIEL",id="law"}
     items[#items+1]={text="INSTITUTIONS / GOUVERNEMENT / ELECTIONS",id="institutions"}
@@ -2932,6 +2978,7 @@ function C.run()
     local p=menu("PORTAIL NATIONAL NORTH COALITION",items,subtitle)
     if not p or p.id=="back" then clear();return end
     if p.id=="notices" then nationalNotices(info)
+    elseif p.id=="search" then portalSearchScreen(info)
     elseif p.id=="my" then portalMySpace(info,dash)
     elseif p.id=="law" then portalLawHub(info,dash)
     elseif p.id=="institutions" then portalInstitutionsHub(info,dash)
