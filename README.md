@@ -7,7 +7,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** avec deux espaces juridi
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. Les données nationales de North Coalition sont isolées logiquement des registres internationaux et soumises à leur propre contrôle d'accès.
 
-## Ce que fait la v0.15
+## Ce que fait la v0.16
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
@@ -23,9 +23,9 @@ Le projet ne contient aucune référence au nom du serveur Minecraft. Les donné
 - impression multi-pages des articles et dossiers via une **Printer ComputerCraft** ;
 - interface terminal claire, navigable au clavier et à la souris.
 
-## Intranet national North Coalition v0.15
+## Intranet national North Coalition v0.16
 
-La v0.15 fournit un deuxième espace complet, **interne à North Coalition**, sans transformer les 400 lois nationales en articles UNS.
+La v0.16 fournit un deuxième espace complet, **interne à North Coalition**, sans transformer les 400 lois nationales en articles UNS.
 
 Depuis un terminal autorisé :
 
@@ -147,6 +147,75 @@ ou un point libre
 ```
 
 Le corps des participants dépend du type de session. Un Conseil n'accepte par exemple que la Présidence et les membres du Conseil, tandis qu'un Cabinet accueille la Présidence et les ministres.
+
+### Administration nationale v0.16
+
+L'intranet gère désormais les services administratifs de terrain, sans mélanger ces registres avec le Code ou la justice.
+
+#### Organisations et entreprises
+
+Le registre économique utilise des identifiants permanents :
+
+```text
+NC-ORG-0001
+NC-ORG-0002
+...
+```
+
+Types pris en charge : entreprise, association, organisme public, média, banque et coopérative.
+
+Chaque fiche conserve le nom officiel, l'activité, le siège, les citoyens titulaires/propriétaires, le statut, l'immatriculation, l'historique et les sceaux. L'immatriculation et les changements importants de statut alimentent le Journal officiel.
+
+La gestion est réservée à la Présidence, à l'administration technique de secours et au **MIN-ECO**.
+
+#### Licences, permis et autorisations
+
+Les licences utilisent des références `NC-LIC-AAAA-XXXX`.
+
+Elles peuvent viser un citoyen ou une organisation et sont automatiquement rattachées au ministère compétent :
+
+- commerce, banque, entreprise -> `MIN-ECO` ;
+- conduite, véhicules, transport, construction -> `MIN-INF` ;
+- sécurité et autorisations d'armes RP -> `MIN-INT` ;
+- santé -> `MIN-SAN` ;
+- numérique/cyber -> `MIN-DIG` ;
+- matières dangereuses/environnement -> `MIN-ENV` ;
+- travail -> `MIN-TRA` ;
+- défense -> `MIN-DEF` ;
+- reconstruction/crise -> `MIN-REC` ;
+- affaires étrangères -> `MIN-EXT`.
+
+Une licence contient sa base légale `NC-ART`, ses conditions, son échéance RP, son statut et son sceau. Un ministre ne peut administrer que les licences relevant de son propre portefeuille. La police, le parquet et les juges peuvent les consulter pour les contrôles et procédures.
+
+#### Amendes et contestations
+
+Les sanctions pécuniaires nationales utilisent `NC-FINE-AAAA-XXXX`.
+
+Une amende doit obligatoirement citer un article national et enregistre la **version de l'article au moment du procès-verbal**. Le montant de référence est exprimé en **unités de pénalité (UP)**, avec un champ libre pour l'équivalent économique RP.
+
+Workflow :
+
+```text
+issued
+  -> contested -> upheld -> issued
+  -> contested -> void
+  -> paid
+  -> void
+```
+
+La police, le parquet ou la justice peuvent émettre une amende. Le citoyen concerné peut la contester depuis un terminal rattaché à son `NC-CIT`. Le parquet ou un juge tranche la contestation. L'enregistrement d'un paiement peut être effectué par la justice, le parquet, l'administration de secours ou le `MIN-ECO`.
+
+#### Dossier individuel
+
+Le système calcule également une synthèse par citoyen regroupant :
+
+- identité civile ;
+- licences ;
+- amendes ;
+- organisations liées ;
+- jugements définitifs dans lesquels cette identité est mise en cause.
+
+Le citoyen peut consulter son propre dossier. La police, le parquet et les juges disposent de l'accès institutionnel nécessaire à leurs fonctions.
 
 ### Journal officiel national
 
