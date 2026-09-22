@@ -683,12 +683,16 @@ end
 lawBasketBrowser=function(initial)
   local selected={}
   local order={}
+  local inOrder={}
 
   local function addLaw(law)
     if not law or not law.ref then return end
     if not selected[law.ref] then
       selected[law.ref]={ref=law.ref,title=law.title or law.ref,status=law.status,book=law.book}
-      order[#order+1]=law.ref
+      if not inOrder[law.ref] then
+        order[#order+1]=law.ref
+        inOrder[law.ref]=true
+      end
     else
       selected[law.ref].title=law.title or selected[law.ref].title
       selected[law.ref].status=law.status or selected[law.ref].status
@@ -796,6 +800,7 @@ lawBasketBrowser=function(initial)
     elseif p.id=="clear" then
       selected={}
       order={}
+      inOrder={}
 
     elseif p.id=="done" then
       return selectedList()
