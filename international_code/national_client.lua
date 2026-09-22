@@ -456,7 +456,7 @@ local function ministryDetails(code)
     local m,err=rpc("NC_MINISTRY_GET",{code=code})
     if not m then message("MINISTERE",err,palette.bad);return end
     local info=rpc("NC_INFO",{}) or {}
-    local canPresident=(info.nationalRole=="admin" or info.nationalRole=="president")
+    local canPresident=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president")
     local actions={{text="Lire la fiche du ministere",id="read"},{text="Imprimer la fiche",id="print"}}
     if not m.holderClientId then
       actions[#actions+1]={text="Scrutins concernant ce ministere",id="elections"}
@@ -513,7 +513,7 @@ local function governmentScreen(info)
       {text="Ministeres et portefeuille ("..filled.."/"..#(gov.ministries or {})..")",id="ministries"},
       {text="Scrutins ministeriels",id="elections"}
     }
-    if info.nationalRole=="admin" or info.nationalRole=="president" then
+    if info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" then
       items[#items+1]={text="Gestion des terminaux / fonctions",id="clients"}
       if gov.meta.foundingMode then items[#items+1]={text="[!] Clore la phase fondatrice",id="closefounding"} end
     end
@@ -571,7 +571,7 @@ function C.electionDetails(id)
     local e,err=rpc("NC_ELECTION_GET",{id=id})
     if not e then message("SCRUTIN",err,palette.bad);return end
     local info=rpc("NC_INFO",{}) or {}
-    local canPresident=(info.nationalRole=="admin" or info.nationalRole=="president")
+    local canPresident=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president")
     local actions={{text="Lire le scrutin",id="read"},{text="Imprimer le scrutin",id="print"}}
     if e.stage=="draft" and canPresident then
       actions[#actions+1]={text="Ajouter un candidat",id="candidate"}
@@ -633,7 +633,7 @@ function C.electionsScreen()
     if not rows then message("SCRUTINS",err,palette.bad);return end
     local info=rpc("NC_INFO",{}) or {}
     local items={}
-    if info.nationalRole=="admin" or info.nationalRole=="president" then
+    if info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" then
       items[#items+1]={text="[+] Ouvrir une procedure ministerielle",id="new"}
     end
     for _,e in ipairs(rows) do items[#items+1]={text=e.id.." "..e.ministryCode.." ["..e.stage.."] "..e.title,election=e} end
@@ -659,8 +659,8 @@ local function billDetails(id)
     local b,err=rpc("NC_BILL_GET",{id=id})
     if not b then message("PROJET DE LOI",err,palette.bad);return end
     local info=rpc("NC_INFO",{}) or {}
-    local canCouncil=(info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council")
-    local canPresident=(info.nationalRole=="admin" or info.nationalRole=="president")
+    local canCouncil=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council")
+    local canPresident=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president")
     local actions={{text="Lire le projet",id="read"},{text="Imprimer",id="print"}}
     if (b.stage=="draft" or b.stage=="debate" or b.stage=="no_quorum") and canCouncil then actions[#actions+1]={text="Ouvrir le vote",id="open"} end
     if b.stage=="voting" then
@@ -764,7 +764,7 @@ local function billsScreen()
     if not rows then message("LEGISLATION",err,palette.bad);return end
     local info=rpc("NC_INFO",{}) or {}
     local items={}
-    if info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council" or info.nationalRole=="minister" then
+    if info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council" or info.nationalRole=="minister" then
       items[#items+1]={text="[+] Deposer un projet de loi",id="new"}
     end
     for _,b in ipairs(rows) do items[#items+1]={text=b.id.." ["..b.stage.."] "..b.title,bill=b} end
@@ -807,7 +807,7 @@ local function decreesScreen(info)
     local rows,err=rpc("NC_DECREE_LIST",{})
     if not rows then message("DECRETS",err,palette.bad);return end
     local items={}
-    if info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="minister" then
+    if info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="minister" then
       items[#items+1]={text="[+] Rediger un decret",id="new"}
     end
     for _,d in ipairs(rows) do items[#items+1]={text=d.id.." ["..d.status.."] "..d.title.." / "..(d.ministryCode~="" and d.ministryCode or "NATIONAL"),decree=d} end
@@ -858,7 +858,7 @@ local function caseDetails(id)
     local case,err=rpc("NC_CASE_GET",{id=id})
     if not case then message("DOSSIER NATIONAL",err,palette.bad);return end
     local info=rpc("NC_INFO",{}) or {}
-    local role=info.nationalRole
+    local role=info.sovereignAuthority and "admin" or info.nationalRole
     local investigator=(role=="admin" or role=="judge" or role=="prosecutor" or role=="police")
     local judicial=(role=="admin" or role=="judge")
     local prosecutor=(role=="admin" or role=="judge" or role=="prosecutor")
@@ -1143,7 +1143,7 @@ local function casesScreen()
     local rows,err=rpc("NC_CASE_LIST",{query=query,status=status})
     if not rows then message("JUSTICE NATIONALE",err,palette.bad);return end
     local info=rpc("NC_INFO",{}) or {}
-    local role=info.nationalRole
+    local role=info.sovereignAuthority and "admin" or info.nationalRole
     local canCreate=(role=="admin" or role=="judge" or role=="prosecutor" or role=="police")
     local items={}
     if canCreate then items[#items+1]={text="[+] Ouvrir un dossier national",id="new"} end
@@ -1194,7 +1194,7 @@ local function citizenDetails(id,info)
   while true do
     local cit,err=rpc("NC_CITIZEN_GET",{id=id})
     if not cit then message("REGISTRE CIVIL",err,palette.bad);return end
-    local canManage=(info.nationalRole=="admin" or info.nationalRole=="president" or
+    local canManage=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or
       (info.nationalRole=="minister" and info.ministryCode=="MIN-INT"))
     local actions={{text="Lire la fiche d'identite",id="read"}}
     if canManage then
@@ -1258,7 +1258,7 @@ local function citizensScreen(info)
   while true do
     local rows,err=rpc("NC_CITIZEN_LIST",{query=query,status=status})
     if not rows then message("REGISTRE CIVIL",err,palette.bad);return end
-    local canManage=(info.nationalRole=="admin" or info.nationalRole=="president" or
+    local canManage=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or
       (info.nationalRole=="minister" and info.ministryCode=="MIN-INT"))
     local items={}
     if canManage then items[#items+1]={text="[+] Enregistrer une identite",id="new"} end
@@ -1373,7 +1373,7 @@ local function sessionDetails(id,info)
     local sess,err=rpc("NC_SESSION_GET",{id=id})
     if not sess then message("SESSION NATIONALE",err,palette.bad);return end
     info=rpc("NC_INFO",{}) or info or {}
-    local manager=(info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council")
+    local manager=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council")
     local attendanceCount=0;for _ in pairs(sess.attendance or {}) do attendanceCount=attendanceCount+1 end
 
     local actions={
@@ -1522,7 +1522,7 @@ local function sessionsScreen(info)
     local rows,err=rpc("NC_SESSION_LIST",{query=query,status=status})
     if not rows then message("SESSIONS",err,palette.bad);return end
     info=rpc("NC_INFO",{}) or info or {}
-    local manager=(info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council")
+    local manager=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council")
     local items={}
     if manager then items[#items+1]={text="[+] Convoquer une session",id="new"} end
     items[#items+1]={text="[?] Rechercher",id="search"}
@@ -1728,7 +1728,7 @@ local function organizationDetails(id,info)
   while true do
     local o,err=rpc("NC_ORG_GET",{id=id})
     if not o then message("ORGANISATION",err,palette.bad);return end
-    local canManage=(info.nationalRole=="admin" or info.nationalRole=="president" or
+    local canManage=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or
       (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
     local actions={{text="Lire la fiche",id="read"},{text="Imprimer",id="print"}}
     if canManage then actions[#actions+1]={text="Modifier / suspendre / dissoudre",id="edit"} end
@@ -1767,7 +1767,7 @@ local function organizationsScreen(info)
   while true do
     local rows,err=rpc("NC_ORG_LIST",{query=query,status=status})
     if not rows then message("ORGANISATIONS",err,palette.bad);return end
-    local canManage=(info.nationalRole=="admin" or info.nationalRole=="president" or
+    local canManage=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or
       (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
     local items={}
     if canManage then items[#items+1]={text="[+] Immatriculer une organisation",id="new"} end
@@ -1813,7 +1813,7 @@ local function licenseDetails(id,info)
     local l,err=rpc("NC_LICENSE_GET",{id=id})
     if not l then message("LICENCE",err,palette.bad);return end
     local isMinister=info.nationalRole=="minister"
-    local canManage=(info.nationalRole=="admin" or info.nationalRole=="president" or isMinister)
+    local canManage=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or isMinister)
     local actions={{text="Lire la licence",id="read"},{text="Imprimer",id="print"}}
     if canManage then actions[#actions+1]={text="Modifier le statut",id="status"} end
     local a=menu(l.id.." - "..l.title,actions,(l.kind or "").." / "..(l.status or "").." / "..(l.holderName or l.holderId or ""))
@@ -1852,7 +1852,7 @@ local function licensesScreen(info)
   while true do
     local rows,err=rpc("NC_LICENSE_LIST",{query=query,status=status})
     if not rows then message("LICENCES",err,palette.bad);return end
-    local canIssue=(info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="minister")
+    local canIssue=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="minister")
     local items={}
     if canIssue then items[#items+1]={text="[+] Delivrer une licence / autorisation",id="new"} end
     items[#items+1]={text="[?] Rechercher",id="search"}
@@ -1904,8 +1904,8 @@ local function fineDetails(id,info)
   while true do
     local fine,err=rpc("NC_FINE_GET",{id=id})
     if not fine then message("AMENDE",err,palette.bad);return end
-    local judicial=(info.nationalRole=="admin" or info.nationalRole=="judge" or info.nationalRole=="prosecutor")
-    local finance=(info.nationalRole=="admin" or info.nationalRole=="judge" or info.nationalRole=="prosecutor" or
+    local judicial=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="judge" or info.nationalRole=="prosecutor")
+    local finance=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="judge" or info.nationalRole=="prosecutor" or
       (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
     local own=(info.citizenId and info.citizenId==fine.citizenId)
     local actions={{text="Lire l'amende",id="read"},{text="Imprimer",id="print"}}
@@ -1961,7 +1961,7 @@ local function finesScreen(info)
   while true do
     local rows,err=rpc("NC_FINE_LIST",{query=query,status=status})
     if not rows then message("AMENDES",err,palette.bad);return end
-    local canIssue=(info.nationalRole=="admin" or info.nationalRole=="judge" or info.nationalRole=="prosecutor" or info.nationalRole=="police")
+    local canIssue=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="judge" or info.nationalRole=="prosecutor" or info.nationalRole=="police")
     local items={}
     if canIssue then items[#items+1]={text="[+] Emettre une amende",id="new"} end
     items[#items+1]={text="[?] Rechercher",id="search"}
@@ -1995,7 +1995,7 @@ end
 
 local function citizenRecordScreen(info)
   local citizenId=info.citizenId
-  if info.nationalRole=="admin" or info.nationalRole=="judge" or info.nationalRole=="prosecutor" or info.nationalRole=="police" then
+  if info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="judge" or info.nationalRole=="prosecutor" or info.nationalRole=="police" then
     local cit=chooseCitizen("DOSSIER INDIVIDUEL")
     if not cit then return end
     citizenId=cit.id
@@ -2033,7 +2033,7 @@ local function requestDetails(id,info)
     local req,err=rpc("NC_REQUEST_GET",{id=id})
     if not req then message("GUICHET ADMINISTRATIF",err,palette.bad);return end
     info=rpc("NC_INFO",{}) or info or {}
-    local reviewer=(info.nationalRole=="admin" or info.nationalRole=="president" or
+    local reviewer=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or
       (info.nationalRole=="minister" and info.ministryCode==req.targetMinistry))
     local own=(info.citizenId and info.citizenId==req.applicantCitizenId)
 
@@ -2233,10 +2233,10 @@ local function budgetDetails(id,info)
     local b,err=rpc("NC_BUDGET_GET",{id=id})
     if not b then message("BUDGET",err,palette.bad);return end
     info=rpc("NC_INFO",{}) or info or {}
-    local financeManager=(info.nationalRole=="admin" or info.nationalRole=="president" or
+    local financeManager=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or
       (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
-    local voteManager=(info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council")
-    local president=(info.nationalRole=="admin" or info.nationalRole=="president")
+    local voteManager=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council")
+    local president=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president")
     local unit=(rpc("NC_TREASURY_DASHBOARD",{}) or {}).unit or "UB"
 
     local actions={{text="Lire le budget complet",id="read"},{text="Imprimer le budget",id="print"}}
@@ -2320,7 +2320,7 @@ local function budgetsScreen(info)
     info=rpc("NC_INFO",{}) or info or {}
     local rows,err=rpc("NC_BUDGET_LIST",{})
     if not rows then message("BUDGETS",err,palette.bad);return end
-    local canCreate=(info.nationalRole=="admin" or info.nationalRole=="president" or
+    local canCreate=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or
       (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
     local items={}
     if canCreate then items[#items+1]={text="[+] Preparer un nouveau budget",id="new"} end
@@ -2370,7 +2370,7 @@ local function revenuesScreen(info)
     info=rpc("NC_INFO",{}) or info or {}
     local rows,err=rpc("NC_REVENUE_LIST",{query=query})
     if not rows then message("RECETTES",err,palette.bad);return end
-    local canCreate=(info.nationalRole=="admin" or info.nationalRole=="president" or
+    local canCreate=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or
       (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
     local items={}
     if canCreate then items[#items+1]={text="[+] Enregistrer une recette",id="new"} end
@@ -2403,9 +2403,9 @@ local function expenseDetails(id,info)
     local e,err=rpc("NC_EXPENSE_GET",{id=id})
     if not e then message("DEPENSE",err,palette.bad);return end
     info=rpc("NC_INFO",{}) or info or {}
-    local finance=(info.nationalRole=="admin" or info.nationalRole=="president" or
+    local finance=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or
       (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
-    local president=(info.nationalRole=="admin" or info.nationalRole=="president")
+    local president=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president")
     local actions={{text="Lire la demande de depense",id="read"},{text="Imprimer la depense",id="print"}}
     if e.status=="requested" and finance then
       actions[#actions+1]={text="Valider par les Finances",id="finance_yes"}
@@ -2460,7 +2460,7 @@ local function expensesScreen(info)
     info=rpc("NC_INFO",{}) or info or {}
     local rows,err=rpc("NC_EXPENSE_LIST",{query=query,status=status})
     if not rows then message("DEPENSES",err,palette.bad);return end
-    local canRequest=(info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="minister")
+    local canRequest=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="minister")
     local items={}
     if canRequest then items[#items+1]={text="[+] Nouvelle demande de depense",id="new"} end
     items[#items+1]={text="[?] Rechercher",id="search"}
@@ -2514,7 +2514,7 @@ local function contractDetails(id,info)
     local row,err=rpc("NC_CONTRACT_GET",{id=id})
     if not row then message("MARCHE PUBLIC",err,palette.bad);return end
     info=rpc("NC_INFO",{}) or info or {}
-    local finance=(info.nationalRole=="admin" or info.nationalRole=="president" or
+    local finance=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or
       (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
     local manager=finance or (info.nationalRole=="minister" and info.ministryCode==row.ministryCode)
     local actions={{text="Lire le marche",id="read"},{text="Imprimer le marche",id="print"}}
@@ -2557,7 +2557,7 @@ local function contractsScreen(info)
     info=rpc("NC_INFO",{}) or info or {}
     local rows,err=rpc("NC_CONTRACT_LIST",{query=query})
     if not rows then message("MARCHES PUBLICS",err,palette.bad);return end
-    local canCreate=(info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="minister")
+    local canCreate=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="minister")
     local items={}
     if canCreate then items[#items+1]={text="[+] Preparer un marche public",id="new"} end
     items[#items+1]={text="[?] Rechercher",id="search"}
@@ -2662,7 +2662,7 @@ local function bulletinDetails(id,info)
     if not row then message("BULLETIN INTERNE",err,palette.bad);return end
     info=rpc("NC_INFO",{}) or info or {}
 
-    local manager=(info.nationalRole=="admin" or info.nationalRole=="president" or
+    local manager=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or
       (info.nationalRole=="minister" and info.ministryCode==row.ministryCode) or
       (row.createdByClientId and cfg and cfg.clientId==row.createdByClientId))
     local actions={{text="Lire le bulletin complet",id="read"}}
@@ -2732,7 +2732,7 @@ local function bulletinsScreen(info)
     info=rpc("NC_INFO",{}) or info or {}
     local rows,err=rpc("NC_NET_BULLETIN_LIST",{query=query,status=status})
     if not rows then message("BULLETINS INTERNES",err,palette.bad);return end
-    local canCreate=(info.nationalRole=="admin" or info.nationalRole=="president" or
+    local canCreate=(info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or
       info.nationalRole=="council" or info.nationalRole=="minister")
     local items={}
     if canCreate then items[#items+1]={text="[+] Rediger un bulletin officiel",id="new"} end
@@ -2898,6 +2898,20 @@ local function portalSearchScreen(info,initialQuery)
   end
 end
 
+local function sovereignAuthorityScreen(info)
+  info=rpc("NC_INFO",{}) or info or {}
+  local powers={}
+  for _,p in ipairs(info.sovereignAuthorityPowers or {}) do powers[#powers+1]="- "..tostring(p) end
+  textPage("AUTORITE SOUVERAINE - NexoFr_",{
+    {label="Identite officielle",text=tostring(info.sovereignAuthorityIdentity or "NexoFr_")},
+    {label="Titre",text=tostring(info.sovereignAuthorityTitle or "Dirigeant de North Coalition et President de la Coalition")},
+    {label="Statut du Corpus",text="RATIFIE ET ADOPTE / en vigueur depuis "..tostring(info.ratifiedAt or "2026-09-22")},
+    {label="Portee",text="Habilitation cumulative sur l'ensemble des competences nationales de North Coalition."},
+    {label="Pouvoirs enregistres",text=#powers>0 and table.concat(powers,"\n") or "Toutes les competences nationales."},
+    {label="Limite internationale",text="Cette habilitation est interne a North Coalition et ne confere aucun privilege particulier dans l'Union des Nations Souveraines."}
+  })
+end
+
 local function portalMySpace(info,dash)
   while true do
     info=rpc("NC_INFO",{}) or info or {}
@@ -3043,7 +3057,7 @@ local function portalInternalHub(info,dash)
       {text="REGISTRE CIVIL / TERMINAUX / IDENTITES",id="citizens"},
       {text="SESSIONS INSTITUTIONNELLES",id="sessions"}
     }
-    if info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council" or info.nationalRole=="judge" then
+    if info.sovereignAuthority or info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council" or info.nationalRole=="judge" then
       items[#items+1]={text="JOURNAL D'AUDIT NATIONAL",id="audit"}
     end
     local p=menu("RESEAU INTERNE / ACCES RESTREINT",items,
@@ -3095,7 +3109,8 @@ function C.run()
     if not dash then message("INTRANET NATIONAL",e,palette.bad);return end
     info=rpc("NC_INFO",{}) or info
 
-    local subtitle=roleLabel(dash.nationalRole).." / "..tostring(dash.nationalIdentity)..
+    local subtitle=(dash.sovereignAuthority and "AUTORITE SOUVERAINE / " or "")..
+      roleLabel(dash.nationalRole).." / "..tostring(dash.nationalIdentity)..
       (dash.ministryCode and (" / "..dash.ministryCode) or "")..
       " | "..tostring(dash.unreadNotices or 0).." notif. / "..
       tostring(dash.pendingRequests or 0).." demande(s) / "..
@@ -3104,6 +3119,9 @@ function C.run()
     local items={}
     if (dash.unreadNotices or 0)>0 then
       items[#items+1]={text="[!] NOTIFICATIONS PRIORITAIRES ("..tostring(dash.unreadNotices)..")",id="notices"}
+    end
+    if dash.sovereignAuthority then
+      items[#items+1]={text="[★] NexoFr_ / AUTORITE SOUVERAINE / TOUS DROITS NATIONAUX",id="sovereign"}
     end
     items[#items+1]={text="[?] RECHERCHE NATIONALE / LOIS / ACTES / INSTITUTIONS",id="search"}
     items[#items+1]={text="COMMUNICATIONS OFFICIELLES / BULLETINS NORTHNET",id="bulletins"}
@@ -3127,6 +3145,7 @@ function C.run()
     local p=menu("PORTAIL NATIONAL NORTH COALITION",items,subtitle)
     if not p or p.id=="back" then clear();return end
     if p.id=="notices" then nationalNotices(info)
+    elseif p.id=="sovereign" then sovereignAuthorityScreen(info)
     elseif p.id=="search" then portalSearchScreen(info)
     elseif p.id=="bulletins" then bulletinsScreen(info)
     elseif p.id=="my" then portalMySpace(info,dash)
