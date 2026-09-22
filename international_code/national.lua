@@ -594,7 +594,13 @@ local function appointMinister(state,n,ctx,actor,ministry,target,mode,sourceId,r
     "success","nc_ministry",ministry.code)
   notice(ctx,state,{title="Vous etes nomme ministre",body=ministry.name.." / "..ministry.code,
     severity="success",objectType="nc_ministry",objectId=ministry.code,targetClientId=target.clientId})
-  mutate(ctx,state,actor,"NC_MINISTER_APPOINT",ministry.code,ministry.holderIdentity.." / "..mode)
+  local gaz=publishGazette(n,actor,"ministry_appointment",ministry.code,
+    "Nomination - "..ministry.name,
+    ministry.holderIdentity.." est nomme titulaire par "..mode..
+      (sourceId and (" / source "..sourceId) or "")..".",
+    ministry.appointmentSeal,"internal")
+  ministry.lastGazetteId=gaz.id
+  mutate(ctx,state,actor,"NC_MINISTER_APPOINT",ministry.code,ministry.holderIdentity.." / "..mode.." / "..gaz.id)
   return copy(ministry)
 end
 
@@ -937,6 +943,15 @@ function N.handle(state,actor,action,p,ctx)
       return result("founding","NORTH-COALITION","Cloture de la phase fondatrice",n.meta.foundingClosedAt,n.meta.foundingClosedBy,false)
     end
 
+    for _,gaz in pairs(n.gazette or {}) do
+      if tostring(gaz.seal or ""):upper()==wanted then
+        if gazetteVisibilityAllowed(state,actor,gaz) then
+          return result("gazette",gaz.id,gaz.title,gaz.publishedAt,gaz.publishedBy,false)
+        end
+        return result("gazette_confidential",gaz.id,"Publication officielle restreinte",nil,nil,true)
+      end
+    end
+
     for _,cit in pairs(n.citizens or {}) do
       if tostring(cit.seal or ""):upper()==wanted then
         return result("citizen",cit.id,cit.displayName or cit.identity,cit.createdAt,cit.createdBy,false)
@@ -1175,6 +1190,17 @@ function N.handle(state,actor,action,p,ctx)
     return {citizen=copy(cit),client=copy(cl)}
   end
 
+  if action=="NC_GAZETTE_LIST" then
+    return listGazette(n,p,state,actor)
+  end
+
+  if action=="NC_GAZETTE_GET" then
+    local row=n.gazette[common.trim(p.id):upper()]
+    if not row then return nil,"Publication du Journal officiel introuvable." end
+    if not gazetteVisibilityAllowed(state,actor,row) then return nil,"Acces refuse a cette publication." end
+    return copy(row)
+  end
+
   if action=="NC_GOVERNMENT_GET" then
     return {
       meta=copy(n.meta),governmentSystem=copy(n.governmentSystem),
@@ -1257,7 +1283,12 @@ function N.handle(state,actor,action,p,ctx)
     noticeAll(ctx,state,n,"Fin de la phase fondatrice",
       "Les regles ordinaires de nomination, delais et scrutins sont maintenant applicables.",
       "warning","nc_government","FOUNDING")
-    mutate(ctx,state,actor,"NC_FOUNDING_CLOSE","NORTH-COALITION",n.meta.foundingSeal)
+    local gaz=publishGazette(n,actor,"founding","NORTH-COALITION",
+      "Cloture de la phase fondatrice",
+      "Passage au regime ordinaire de nomination, de scrutin et de fonctionnement institutionnel.",
+      n.meta.foundingSeal,"public")
+    n.meta.foundingGazetteId=gaz.id
+    mutate(ctx,state,actor,"NC_FOUNDING_CLOSE","NORTH-COALITION",n.meta.foundingSeal.." / "..gaz.id)
     return {foundingMode=false,seal=n.meta.foundingSeal}
   end
 
@@ -1296,7 +1327,12 @@ function N.handle(state,actor,action,p,ctx)
       "warning","nc_ministry",m.code)
     notice(ctx,state,{title="Fin de fonction ministerielle",body=m.name.." / "..reason,
       severity="warning",objectType="nc_ministry",objectId=m.code,targetClientId=oldId})
-    mutate(ctx,state,actor,"NC_MINISTER_REMOVE",m.code,oldIdentity.." / "..reason)
+    local gaz=publishGazette(n,actor,"ministry_end",m.code,
+      "Fin de fonction - "..m.name,
+      tostring(oldIdentity).." quitte ses fonctions. Motif: "..reason,
+      row.seal,"internal")
+    row.gazetteId=gaz.id
+    mutate(ctx,state,actor,"NC_MINISTER_REMOVE",m.code,oldIdentity.." / "..reason.." / "..gaz.id)
     return copy(m)
   end
 
@@ -1407,17 +1443,23 @@ function N.handle(state,actor,action,p,ctx)
     noticeAll(ctx,state,n,"Resultat du scrutin "..e.id,
       e.result=="elected" and ("Candidat elu: "..tostring(e.winnerIdentity or e.winnerClientId)) or ("Scrutin non concluant: "..tostring(e.result)),
       e.result=="elected" and "success" or "warning","nc_election",e.id)
+    local gaz=publishGazette(n,actor,"election_result",e.id,
+      "Resultat du scrutin ministeriel "..e.id,
+      e.result=="elected" and ("Elu: "..tostring(e.winnerIdentity or e.winnerClientId).." / "..e.ministryCode)
+        or ("Scrutin non concluant: "..tostring(e.result).." / "..e.ministryCode),
+      e.resultSeal,"internal")
+    e.gazetteId=gaz.id
     if e.stage=="elected" then
       local target=state.clients[e.winnerClientId]
       if not target then return nil,"Candidat elu introuvable au moment de la nomination." end
-      nationalAudit(state,actor,"NC_ELECTION_CLOSE",e.id,e.result.." / "..e.resultSeal)
+      nationalAudit(state,actor,"NC_ELECTION_CLOSE",e.id,e.result.." / "..e.resultSeal.." / "..gaz.id)
       local appointed,err=appointMinister(state,n,ctx,actor,ministry,target,"elected",e.id,"Election reguliere")
       if not appointed then return nil,err end
       e.appointmentSeal=appointed.appointmentSeal
       -- appointMinister already persisted, but the election fields above are part of the same state table.
       return {election=copy(e),ministry=appointed,tally=tally}
     end
-    mutate(ctx,state,actor,"NC_ELECTION_CLOSE",e.id,e.result.." / "..e.resultSeal)
+    mutate(ctx,state,actor,"NC_ELECTION_CLOSE",e.id,e.result.." / "..e.resultSeal.." / "..gaz.id)
     return {election=copy(e),ministry=copy(ministry),tally=tally}
   end
 
@@ -1588,7 +1630,12 @@ function N.handle(state,actor,action,p,ctx)
     noticeAll(ctx,state,n,"Promulgation nationale",
       b.id.." promulgue par "..b.enactedBy.." / articles: "..table.concat(enacted,", "),
       "success","nc_bill",b.id)
-    mutate(ctx,state,actor,"NC_BILL_ENACT",b.id,table.concat(enacted,",").." / "..b.enactmentSeal)
+    local gaz=publishGazette(n,actor,"law_enactment",b.id,
+      "Promulgation - "..b.title,
+      "Articles concernes: "..table.concat(enacted,", ")..".",
+      b.enactmentSeal,"public")
+    b.gazetteId=gaz.id
+    mutate(ctx,state,actor,"NC_BILL_ENACT",b.id,table.concat(enacted,",").." / "..b.enactmentSeal.." / "..gaz.id)
     return copy(b)
   end
 
@@ -1642,7 +1689,13 @@ function N.handle(state,actor,action,p,ctx)
     noticeAll(ctx,state,n,"Decret publie",
       d.id.." / "..d.title..(d.ministryCode~="" and (" / "..d.ministryCode) or ""),
       "info","nc_decree",d.id)
-    mutate(ctx,state,actor,"NC_DECREE_PUBLISH",d.id,d.seal)
+    local gaz=publishGazette(n,actor,"decree",d.id,
+      "Decret - "..d.title,
+      (d.scope=="ministry" and ("Acte du "..d.ministryCode..".") or "Acte de portee nationale.")..
+        (d.legalBasis~="" and (" Base legale: "..d.legalBasis..".") or ""),
+      d.seal,"public")
+    d.gazetteId=gaz.id
+    mutate(ctx,state,actor,"NC_DECREE_PUBLISH",d.id,d.seal.." / "..gaz.id)
     return copy(d)
   end
 
@@ -1659,7 +1712,12 @@ function N.handle(state,actor,action,p,ctx)
     noticeAll(ctx,state,n,"Decret abroge",
       d.id.." / "..d.title.." / "..reason,
       "warning","nc_decree",d.id)
-    mutate(ctx,state,actor,"NC_DECREE_REPEAL",d.id,reason.." / "..d.repealSeal)
+    local gaz=publishGazette(n,actor,"decree_repeal",d.id,
+      "Abrogation - "..d.title,
+      "Motif: "..reason,
+      d.repealSeal,"public")
+    d.repealGazetteId=gaz.id
+    mutate(ctx,state,actor,"NC_DECREE_REPEAL",d.id,reason.." / "..d.repealSeal.." / "..gaz.id)
     return copy(d)
   end
 
@@ -1794,7 +1852,13 @@ function N.handle(state,actor,action,p,ctx)
     sess.closeSeal=seal("NC-SESSION-CLOSE",{sess.id,sess.openSeal,sess.attendance,sess.agenda,sess.minutes,sess.conclusions,sess.closedAt,sess.closedBy})
     sess.updatedAt=common.now()
     noticeAll(ctx,state,n,"Session nationale cloturee",sess.id.." / "..sess.title,"info","nc_session",sess.id)
-    mutate(ctx,state,actor,"NC_SESSION_CLOSE",sess.id,sess.closeSeal)
+    local gazVisibility=sess.visibility=="public" and "public" or (sess.visibility=="restricted" and "restricted" or "internal")
+    local gaz=publishGazette(n,actor,"session_minutes",sess.id,
+      "Proces-verbal - "..sess.title,
+      common.trim(sess.conclusions)~="" and sess.conclusions or "Session cloturee sans conclusion additionnelle.",
+      sess.closeSeal,gazVisibility)
+    sess.gazetteId=gaz.id
+    mutate(ctx,state,actor,"NC_SESSION_CLOSE",sess.id,sess.closeSeal.." / "..gaz.id)
     return copy(sess)
   end
 
@@ -2060,7 +2124,15 @@ function N.handle(state,actor,action,p,ctx)
     case.updatedAt=common.now()
     addNationalCaseTimeline(case,"judgment","Jugement enregistre",row.id.." / "..verdict,actor)
     notifyNationalCase(ctx,state,case,"Jugement national rendu",case.id.." / "..verdict,row.final and "warning" or "info")
-    mutate(ctx,state,actor,"NC_CASE_ADD_JUDGMENT",case.id,row.id.." / "..row.seal)
+    if row.final then
+      local visibility=case.visibility=="public" and "public" or "judicial"
+      local gaz=publishGazette(n,actor,"judgment",case.id,
+        case.visibility=="public" and ("Jugement - "..case.title) or ("Decision judiciaire - "..case.id),
+        case.visibility=="public" and verdict or "Decision rendue; contenu reserve au circuit judiciaire.",
+        row.seal,visibility)
+      row.gazetteId=gaz.id
+    end
+    mutate(ctx,state,actor,"NC_CASE_ADD_JUDGMENT",case.id,row.id.." / "..row.seal..(row.gazetteId and (" / "..row.gazetteId) or ""))
     return copy(case)
   end
 
@@ -2108,7 +2180,13 @@ function N.handle(state,actor,action,p,ctx)
     case.updatedAt=common.now()
     addNationalCaseTimeline(case,"appeal_decision","Appel tranche",appeal.id.." / "..appeal.result,actor)
     notifyNationalCase(ctx,state,case,"Decision d'appel",case.id.." / "..appeal.result,"info")
-    mutate(ctx,state,actor,"NC_CASE_DECIDE_APPEAL",case.id,appeal.id.." / "..appeal.result)
+    local visibility=case.visibility=="public" and "public" or "judicial"
+    local gaz=publishGazette(n,actor,"appeal_decision",case.id,
+      case.visibility=="public" and ("Decision d'appel - "..case.title) or ("Decision d'appel - "..case.id),
+      case.visibility=="public" and appeal.result or "Decision d'appel rendue; contenu reserve au circuit judiciaire.",
+      appeal.decisionSeal,visibility)
+    appeal.gazetteId=gaz.id
+    mutate(ctx,state,actor,"NC_CASE_DECIDE_APPEAL",case.id,appeal.id.." / "..appeal.result.." / "..gaz.id)
     return copy(case)
   end
 
