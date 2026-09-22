@@ -149,13 +149,36 @@ local function diagnostic()
   local cfg=common.loadConfig()
   while true do
     local modemCount=common.openModems()
-    local programFiles={
-      "/ic.lua","/international_code/common.lua","/international_code/launcher.lua",
-      "/international_code/server.lua","/international_code/client.lua",
-      "/international_code/national.lua","/international_code/national_client.lua"
-    }
+    local isServer=cfg and cfg.role=="server"
+    local statePresent=fs.exists(common.STATE)
+
+    local programFiles
+    if isServer then
+      programFiles={
+        "/ic.lua","/international_code/common.lua","/international_code/launcher.lua",
+        "/international_code/server.lua","/international_code/national.lua",
+        "/international_code/national_democracy.lua","/international_code/national_services.lua",
+        "/international_code/national_finance.lua","/international_code/national_network.lua",
+        "/international_code/national/corpus_meta.json"
+      }
+    else
+      programFiles={
+        "/ic.lua","/international_code/common.lua","/international_code/launcher.lua",
+        "/international_code/client.lua","/international_code/printer.lua",
+        "/international_code/public.lua","/international_code/national_client.lua",
+        "/international_code/national_democracy_client.lua",
+        "/international_code/national_printer.lua","/international_code/national_public.lua"
+      }
+    end
+
     local missing=0
-    for _,p in ipairs(programFiles) do if not fs.exists(p) then missing=missing+1 end end
+    local missingNames={}
+    for _,path in ipairs(programFiles) do
+      if not fs.exists(path) then
+        missing=missing+1
+        missingNames[#missingNames+1]=fs.getName(path)
+      end
+    end
 
     local seedFiles=0
     for i=1,5 do
@@ -169,27 +192,59 @@ local function diagnostic()
     local configText=cfg and ((cfg.role or "?").." / "..(cfg.label or cfg.serverName or "")) or "A CONFIGURER"
     local items={
       {text="Configuration : "..configText,id="config"},
-      {text="Programme : "..(missing==0 and "OK" or (missing.." fichier(s) manquant(s)")),id="program"},
-      {text="Corpus UNS : "..seedFiles.."/5 fragments",id="uns"},
-      {text="Corpus North Coalition : "..ncFiles.."/5 fragments",id="nc"},
-      {text="Modem : "..(modemCount>0 and ("OK / "..modemCount) or "ABSENT"),id="modem"},
-      {text="Espace disque libre : "..tostring(fs.getFreeSpace("/")).." octets",id="disk"}
+      {text="Programme "..(isServer and "serveur" or "client").." : "..(missing==0 and "OK" or (missing.." fichier(s) manquant(s)")),id="program"}
     }
-    if cfg and cfg.role=="server" then
-      items[#items+1]={text="Base serveur : "..(fs.exists(common.STATE) and "presente" or "a initialiser"),id="state"}
+
+    if isServer then
+      if statePresent then
+        items[#items+1]={text="Base serveur : OK / "..tostring(fs.getSize(common.STATE) or 0).." octets",id="state"}
+        items[#items+1]={text="Corpus UNS : INTEGRE DANS LA BASE",id="uns"}
+        items[#items+1]={text="Corpus North Coalition : INTEGRE DANS LA BASE",id="nc"}
+      else
+        items[#items+1]={text="[!] Base serveur : A INITIALISER",id="state"}
+        items[#items+1]={text="Sources UNS temporaires : "..seedFiles.."/5",id="uns"}
+        items[#items+1]={text="Sources NC temporaires : "..ncFiles.."/5",id="nc"}
+        items[#items+1]={text="[+] INITIALISER / REPARER LA BASE SERVEUR",id="repair_state"}
+      end
+    else
+      items[#items+1]={text="Corpus : fourni par le serveur central",id="corpus_remote"}
     end
+
+    items[#items+1]={text="Modem : "..(modemCount>0 and ("OK / "..modemCount) or "ABSENT"),id="modem"}
+    items[#items+1]={text="Espace disque libre : "..tostring(fs.getFreeSpace("/")).." octets",id="disk"}
     if not cfg then items[#items+1]={text="[+] CONFIGURER CE PC MAINTENANT",id="setup"} end
     items[#items+1]={text="Retour",id="back"}
 
-    local p=menu("DIAGNOSTIC",items,"Aucun gros corpus n'est charge en RAM pendant ce diagnostic.")
+    local subtitle=isServer
+      and "Serveur: les corpus source sont supprimes apres integration dans state.tbl."
+      or "Client: les corpus sont stockes sur le serveur central."
+    local p=menu("DIAGNOSTIC",items,subtitle)
     if not p or p.id=="back" then return end
     if p.id=="config" and not cfg then return "setup" end
     if p.id=="setup" then return "setup" end
-    if p.id=="nc" and ncFiles<5 then
-      message("CORPUS NORTH COALITION",{
-        "Installation incomplete ou ancienne.",
-        "Utilisez le bouton Mettre a jour depuis le centre de controle.",
-        "Le nouveau format fragmente evite le pic memoire du corpus de 740 Ko."
+
+    if p.id=="repair_state" then
+      fill();header("REPARATION SERVEUR")
+      term.setCursorPos(2,4);term.setTextColor(palette.text)
+      term.write("Telechargement temporaire des corpus et creation de la base...")
+      local ok,err=runRemoteInstaller("update")
+      if ok then
+        cfg=common.loadConfig()
+        message("REPARATION SERVEUR","Base serveur initialisee/reparee. Relancez le diagnostic.",palette.ok)
+      else
+        message("REPARATION SERVEUR","Echec: "..tostring(err or "inconnu"),palette.bad)
+      end
+    elseif p.id=="program" and missing>0 then
+      message("PROGRAMME",{
+        tostring(missing).." fichier(s) requis manquant(s):",
+        table.concat(missingNames,", "),
+        "Utilisez METTRE A JOUR / REPARER."
+      },palette.warn)
+    elseif p.id=="state" and isServer and not statePresent then
+      message("BASE SERVEUR",{
+        "La configuration serveur existe, mais state.tbl est absent.",
+        "Choisissez INITIALISER / REPARER LA BASE SERVEUR.",
+        "Les 500 articles UNS et 400 articles North Coalition seront integres automatiquement."
       },palette.warn)
     elseif p.id=="modem" and modemCount==0 then
       message("MODEM","Connectez un modem filaire ou sans-fil au PC puis relancez le diagnostic.",palette.warn)
@@ -242,16 +297,25 @@ end
 
 local function serverMenu(cfg)
   while true do
-    local p=menu("CENTRE SERVEUR",{
-      {text="LANCER LE SERVEUR",id="run"},
-      {text="CREER UN CODE D'APPAIRAGE",id="pair"},
-      {text="SAUVEGARDE MANUELLE",id="backup"},
-      {text="DIAGNOSTIC",id="doctor"},
-      {text="METTRE A JOUR",id="update"},
-      {text="QUITTER",id="quit"}
-    },"PC #"..os.getComputerID().." / "..tostring(cfg.serverName or "UNS-Code").." / v"..common.VERSION)
+    local serverItems={}
+    if not fs.exists(common.STATE) then
+      serverItems[#serverItems+1]={text="[!] INITIALISER / REPARER LA BASE SERVEUR",id="repair_state"}
+    else
+      serverItems[#serverItems+1]={text="LANCER LE SERVEUR",id="run"}
+      serverItems[#serverItems+1]={text="CREER UN CODE D'APPAIRAGE",id="pair"}
+      serverItems[#serverItems+1]={text="SAUVEGARDE MANUELLE",id="backup"}
+    end
+    serverItems[#serverItems+1]={text="DIAGNOSTIC",id="doctor"}
+    serverItems[#serverItems+1]={text="METTRE A JOUR",id="update"}
+    serverItems[#serverItems+1]={text="QUITTER",id="quit"}
+    local p=menu("CENTRE SERVEUR",serverItems,
+      "PC #"..os.getComputerID().." / "..tostring(cfg.serverName or "UNS-Code").." / v"..common.VERSION)
     if not p or p.id=="quit" then return end
-    if p.id=="run" then return runFile("/ic.lua","server")
+    if p.id=="repair_state" then
+      local ok,err=runRemoteInstaller("update")
+      if ok then message("SERVEUR","Base serveur initialisee/reparee.",palette.ok)
+      else message("SERVEUR","Echec: "..tostring(err or "inconnu"),palette.bad) end
+    elseif p.id=="run" then return runFile("/ic.lua","server")
     elseif p.id=="pair" then
       local role=chooseRole()
       if role then
