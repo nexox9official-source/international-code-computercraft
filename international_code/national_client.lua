@@ -2706,6 +2706,164 @@ local function auditScreen()
   textPage("JOURNAL NATIONAL",{{label="Dernieres operations",text=table.concat(lines,"\n\n")}})
 end
 
+
+local function portalMySpace(info,dash)
+  while true do
+    info=rpc("NC_INFO",{}) or info or {}
+    local items={}
+    if info.citizenId then
+      items[#items+1]={text="MA FICHE CITOYENNE / "..tostring(info.citizenId),id="citizen"}
+      items[#items+1]={text="MON DOSSIER INDIVIDUEL / LICENCES / AMENDES",id="record"}
+    else
+      items[#items+1]={text="[!] AUCUNE IDENTITE CITOYENNE RATTACHEE",id="noidentity"}
+    end
+    items[#items+1]={text="MES DEMANDES / GUICHET ADMINISTRATIF",id="requests"}
+    items[#items+1]={text="NOTIFICATIONS NATIONALES"..(((dash and dash.unreadNotices) or 0)>0 and (" ("..tostring(dash.unreadNotices)..")") or ""),id="notices"}
+    items[#items+1]={text="ELECTIONS NATIONALES / CANDIDATURE / VOTE",id="democracy"}
+    items[#items+1]={text="CONSULTER LE CODE NATIONAL",id="code"}
+    local p=menu("MON ESPACE NORTH COALITION",items,
+      roleLabel(info.nationalRole).." / "..tostring(info.nationalIdentity or "-")..
+      (info.ministryCode and (" / "..info.ministryCode) or ""))
+    if not p then return end
+    if p.id=="citizen" then citizenDetails(info.citizenId,info)
+    elseif p.id=="record" then citizenRecordScreen(info)
+    elseif p.id=="requests" then requestsScreen(info)
+    elseif p.id=="notices" then nationalNotices(info)
+    elseif p.id=="democracy" then dofile("/international_code/national_democracy_client.lua").run()
+    elseif p.id=="code" then codeScreen()
+    elseif p.id=="noidentity" then
+      message("IDENTITE NATIONALE","Ce terminal doit etre rattache a une fiche NC-CIT par l'administration competente.",palette.warn)
+    end
+  end
+end
+
+local function portalLawHub(info,dash)
+  while true do
+    local items={
+      {text="CODE NATIONAL / 20 CATEGORIES / RECHERCHE",id="code"},
+      {text="LEGISLATION / PROJETS DE LOI / VOTES",id="bills"},
+      {text="DECRETS / REGLEMENTS",id="decrees"},
+      {text="JOURNAL OFFICIEL / PUBLICATIONS",id="gazette"},
+      {text="VERIFIER UN SCEAU OFFICIEL NORTH COALITION",id="verify"}
+    }
+    local p=menu("DROIT ET PUBLICATIONS",items,
+      tostring((dash and dash.activeLaws) or 0).." loi(s) en vigueur / "..
+      tostring((dash and dash.votingBills) or 0).." projet(s) en vote")
+    if not p then return end
+    if p.id=="code" then codeScreen()
+    elseif p.id=="bills" then billsScreen()
+    elseif p.id=="decrees" then decreesScreen(info)
+    elseif p.id=="gazette" then gazetteScreen(info)
+    elseif p.id=="verify" then verifyNationalSealScreen("") end
+  end
+end
+
+local function portalInstitutionsHub(info,dash)
+  while true do
+    local items={
+      {text="GOUVERNEMENT / PRESIDENCE / MINISTERES",id="gov"},
+      {text="DEMOCRATIE NATIONALE / PRESIDENCE / CONSEIL",id="democracy"},
+      {text="SCRUTINS MINISTERIELS",id="elections"},
+      {text="SESSIONS / CONSEIL / CABINET / ORDRE DU JOUR",id="sessions"},
+      {text="JOURNAL OFFICIEL INSTITUTIONNEL",id="gazette"}
+    }
+    local p=menu("INSTITUTIONS NATIONALES",items,
+      "President: "..tostring((dash and dash.presidentIdentity) or "-")..
+      " / "..tostring((dash and dash.filledMinistries) or 0).."/"..tostring((dash and dash.ministries) or 0).." ministere(s)")
+    if not p then return end
+    if p.id=="gov" then governmentScreen(info)
+    elseif p.id=="democracy" then dofile("/international_code/national_democracy_client.lua").run()
+    elseif p.id=="elections" then C.electionsScreen()
+    elseif p.id=="sessions" then sessionsScreen(info)
+    elseif p.id=="gazette" then gazetteScreen(info) end
+  end
+end
+
+local function portalServicesHub(info,dash)
+  while true do
+    local items={
+      {text="GUICHET CITOYEN / DEMANDES",id="requests"},
+      {text="REGISTRE CIVIL / CITOYENS / IDENTITES",id="citizens"},
+      {text="ORGANISATIONS / ENTREPRISES / ASSOCIATIONS",id="orgs"},
+      {text="LICENCES / AUTORISATIONS / PERMIS",id="licenses"},
+      {text="AMENDES / SANCTIONS PECUNIAIRES",id="fines"},
+      {text="DOSSIER INDIVIDUEL",id="record"}
+    }
+    local p=menu("SERVICES PUBLICS",items,
+      tostring((dash and dash.pendingRequests) or 0).." demande(s) en cours / "..
+      tostring((dash and dash.activeCitizens) or 0).." citoyen(s)")
+    if not p then return end
+    if p.id=="requests" then requestsScreen(info)
+    elseif p.id=="citizens" then citizensScreen(info)
+    elseif p.id=="orgs" then organizationsScreen(info)
+    elseif p.id=="licenses" then licensesScreen(info)
+    elseif p.id=="fines" then finesScreen(info)
+    elseif p.id=="record" then citizenRecordScreen(info) end
+  end
+end
+
+local function portalJusticeHub(info,dash)
+  while true do
+    local items={
+      {text="JUSTICE / DOSSIERS NATIONAUX",id="cases"},
+      {text="AMENDES / CONTESTATIONS / DECISIONS",id="fines"},
+      {text="DOSSIER INDIVIDUEL / SYNTHESE",id="record"},
+      {text="CODE NATIONAL / RECHERCHE JURIDIQUE",id="code"},
+      {text="VERIFIER UN SCEAU / ACTE / PREUVE",id="verify"}
+    }
+    local p=menu("JUSTICE ET SECURITE",items,
+      tostring((dash and dash.openCases) or 0).." dossier(s) judiciaire(s) ouvert(s)")
+    if not p then return end
+    if p.id=="cases" then casesScreen()
+    elseif p.id=="fines" then finesScreen(info)
+    elseif p.id=="record" then citizenRecordScreen(info)
+    elseif p.id=="code" then codeScreen()
+    elseif p.id=="verify" then verifyNationalSealScreen("") end
+  end
+end
+
+local function portalEconomyHub(info,dash)
+  while true do
+    local items={
+      {text="FINANCES PUBLIQUES / TRESORERIE / BUDGET",id="finance"},
+      {text="ORGANISATIONS / ENTREPRISES / BANQUES",id="orgs"},
+      {text="LICENCES ECONOMIQUES ET PROFESSIONNELLES",id="licenses"},
+      {text="JOURNAL OFFICIEL / MARCHES ET ACTES",id="gazette"}
+    }
+    local p=menu("ECONOMIE ET FINANCES",items,
+      "Tresorerie: "..money((dash and dash.treasuryBalanceUB) or 0,(dash and dash.treasuryUnit) or "UB")..
+      " / budget "..tostring((dash and dash.currentBudgetId) or "aucun"))
+    if not p then return end
+    if p.id=="finance" then financeScreen(info)
+    elseif p.id=="orgs" then organizationsScreen(info)
+    elseif p.id=="licenses" then licensesScreen(info)
+    elseif p.id=="gazette" then gazetteScreen(info) end
+  end
+end
+
+local function portalInternalHub(info,dash)
+  while true do
+    info=rpc("NC_INFO",{}) or info or {}
+    local items={
+      {text="ADMINISTRATION NATIONALE COMPLETE",id="adminservices"},
+      {text="GOUVERNEMENT / GESTION DES FONCTIONS",id="gov"},
+      {text="REGISTRE CIVIL / TERMINAUX / IDENTITES",id="citizens"},
+      {text="SESSIONS INSTITUTIONNELLES",id="sessions"}
+    }
+    if info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council" or info.nationalRole=="judge" then
+      items[#items+1]={text="JOURNAL D'AUDIT NATIONAL",id="audit"}
+    end
+    local p=menu("RESEAU INTERNE / ACCES RESTREINT",items,
+      "Habilitation: "..roleLabel(info.nationalRole)..(info.ministryCode and (" / "..info.ministryCode) or ""))
+    if not p then return end
+    if p.id=="adminservices" then administrationScreen(info)
+    elseif p.id=="gov" then governmentScreen(info)
+    elseif p.id=="citizens" then citizensScreen(info)
+    elseif p.id=="sessions" then sessionsScreen(info)
+    elseif p.id=="audit" then auditScreen() end
+  end
+end
+
 function C.run()
   cfg=common.loadConfig()
   if not cfg or cfg.role=="server" then error("Terminal client requis.",0) end
@@ -2743,49 +2901,44 @@ function C.run()
     local dash,e=rpc("NC_DASHBOARD",{})
     if not dash then message("INTRANET NATIONAL",e,palette.bad);return end
     info=rpc("NC_INFO",{}) or info
+
     local subtitle=roleLabel(dash.nationalRole).." / "..tostring(dash.nationalIdentity)..
       (dash.ministryCode and (" / "..dash.ministryCode) or "")..
-      " | "..tostring(dash.activeCitizens or 0).." citoyen(s) / solde "..money(dash.treasuryBalanceUB,dash.treasuryUnit)..
-      " / "..tostring(dash.pendingRequests or 0).." demande(s) / "..tostring(dash.openCases or 0).." dossier(s) / "..tostring(dash.unreadNotices or 0).." notif."
+      " | "..tostring(dash.unreadNotices or 0).." notif. / "..
+      tostring(dash.pendingRequests or 0).." demande(s) / "..
+      tostring(dash.openCases or 0).." dossier(s)"
 
-    local items={
-      {text=(dash.unreadNotices or 0)>0 and ("[!] NOTIFICATIONS NATIONALES ("..dash.unreadNotices..")") or "NOTIFICATIONS NATIONALES",id="notices"},
-      {text="CODE NATIONAL / CATEGORIES / RECHERCHE",id="code"},
-      {text="REGISTRE CIVIL / CITOYENS / IDENTITES",id="citizens"},
-      {text="ADMINISTRATION / ORGANISATIONS / LICENCES / AMENDES",id="adminservices"},
-      {text="FINANCES PUBLIQUES / BUDGET / TRESORERIE",id="finance"},
-      {text="GOUVERNEMENT / MINISTERES / FONCTIONS",id="gov"},
-      {text="CALENDRIER / SESSIONS / ORDRE DU JOUR",id="sessions"},
-      {text="LEGISLATION / PROJETS / VOTES",id="bills"},
-      {text="JOURNAL OFFICIEL / PUBLICATIONS",id="gazette"},
-      {text=(dash.nationalElections or 0)>0 and ("[!] ELECTIONS NATIONALES ("..dash.nationalElections..")") or "ELECTIONS NATIONALES / PRESIDENCE / CONSEIL",id="democracy"},
-      {text="ELECTIONS MINISTERIELLES",id="elections"},
-      {text="DECRETS / REGLEMENTS",id="decrees"},
-      {text="JUSTICE / DOSSIERS NATIONAUX",id="cases"},
-      {text="VERIFIER UN SCEAU NATIONAL",id="verify"}
-    }
-    if dash.nationalRole=="admin" or dash.nationalRole=="president" or dash.nationalRole=="council" or dash.nationalRole=="judge" then
-      items[#items+1]={text="JOURNAL D'AUDIT NATIONAL",id="audit"}
+    local items={}
+    if (dash.unreadNotices or 0)>0 then
+      items[#items+1]={text="[!] NOTIFICATIONS PRIORITAIRES ("..tostring(dash.unreadNotices)..")",id="notices"}
     end
-    items[#items+1]={text="RETOUR AU SYSTEME INTERNATIONAL",id="back"}
+    items[#items+1]={text="MON ESPACE / IDENTITE / DEMANDES / VOTE",id="my"}
+    items[#items+1]={text="DROIT / CODE NATIONAL / JOURNAL OFFICIEL",id="law"}
+    items[#items+1]={text="INSTITUTIONS / GOUVERNEMENT / ELECTIONS",id="institutions"}
+    items[#items+1]={text="SERVICES PUBLICS / GUICHET / REGISTRES",id="services"}
+    items[#items+1]={text="JUSTICE / SECURITE / DOSSIERS",id="justice"}
+    items[#items+1]={text="ECONOMIE / FINANCES / ORGANISATIONS",id="economy"}
 
-    local p=menu("INTRANET NATIONAL",items,subtitle)
+    local restricted=(dash.nationalRole=="admin" or dash.nationalRole=="president" or
+      dash.nationalRole=="council" or dash.nationalRole=="minister" or
+      dash.nationalRole=="judge" or dash.nationalRole=="prosecutor" or
+      dash.nationalRole=="police" or dash.nationalRole=="civil_servant")
+    if restricted then
+      items[#items+1]={text="RESEAU INTERNE / OUTILS INSTITUTIONNELS",id="internal"}
+    end
+
+    items[#items+1]={text="RETOUR A L'UNION DES NATIONS SOUVERAINES",id="back"}
+
+    local p=menu("PORTAIL NATIONAL NORTH COALITION",items,subtitle)
     if not p or p.id=="back" then clear();return end
     if p.id=="notices" then nationalNotices(info)
-    elseif p.id=="code" then codeScreen()
-    elseif p.id=="citizens" then citizensScreen(info)
-    elseif p.id=="adminservices" then administrationScreen(info)
-    elseif p.id=="finance" then financeScreen(info)
-    elseif p.id=="gov" then governmentScreen(info)
-    elseif p.id=="sessions" then sessionsScreen(info)
-    elseif p.id=="bills" then billsScreen()
-    elseif p.id=="gazette" then gazetteScreen(info)
-    elseif p.id=="democracy" then dofile("/international_code/national_democracy_client.lua").run()
-    elseif p.id=="elections" then C.electionsScreen()
-    elseif p.id=="decrees" then decreesScreen(info)
-    elseif p.id=="cases" then casesScreen()
-    elseif p.id=="verify" then verifyNationalSealScreen("")
-    elseif p.id=="audit" then auditScreen() end
+    elseif p.id=="my" then portalMySpace(info,dash)
+    elseif p.id=="law" then portalLawHub(info,dash)
+    elseif p.id=="institutions" then portalInstitutionsHub(info,dash)
+    elseif p.id=="services" then portalServicesHub(info,dash)
+    elseif p.id=="justice" then portalJusticeHub(info,dash)
+    elseif p.id=="economy" then portalEconomyHub(info,dash)
+    elseif p.id=="internal" then portalInternalHub(info,dash) end
   end
 end
 
