@@ -5,6 +5,7 @@ local files={
   "international_code/server.lua",
   "international_code/client.lua",
   "international_code/printer.lua",
+  "international_code/public.lua",
   "international_code/seed/001.lua",
   "international_code/seed/002.lua",
   "international_code/seed/003.lua",
@@ -43,7 +44,7 @@ print("")
 print("Installation terminee.")
 if role then
   if role=="server" then shell.run("ic","setup","server")
-  elseif role=="writer" or role=="clerk" or role=="judge" or role=="viewer" or role=="admin" then shell.run("ic","setup",role)
+  elseif role=="writer" or role=="clerk" or role=="judge" or role=="delegate" or role=="viewer" or role=="admin" then shell.run("ic","setup",role)
   else print("Role inconnu: "..role);print("Utilisez ensuite: ic help") end
 else
   print("Lancez: ic help")
