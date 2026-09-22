@@ -9,6 +9,7 @@ local permissions = {
     SESSION_LIST=true, SESSION_GET=true,
     MISSION_LIST=true, MISSION_GET=true,
     INCIDENT_LIST=true, INCIDENT_GET=true, SITUATION_GET=true,
+    CONFLICT_LIST=true, CONFLICT_GET=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
@@ -21,6 +22,7 @@ local permissions = {
     SESSION_LIST=true, SESSION_GET=true,
     MISSION_LIST=true, MISSION_GET=true,
     INCIDENT_LIST=true, INCIDENT_GET=true, SITUATION_GET=true,
+    CONFLICT_LIST=true, CONFLICT_GET=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
@@ -30,6 +32,7 @@ local permissions = {
     SESSION_CREATE=true, SESSION_EDIT=true, SESSION_ADD_AGENDA=true, SESSION_REMOVE_AGENDA=true, SESSION_OPEN=true, SESSION_SET_ITEM_STATUS=true, SESSION_CLOSE=true, SESSION_CANCEL=true,
     MISSION_CREATE=true, MISSION_EDIT=true, MISSION_SET_STATUS=true, MISSION_ADD_REPORT=true,
     INCIDENT_CREATE=true, INCIDENT_EDIT=true, INCIDENT_SET_STATUS=true, INCIDENT_ADD_REPORT=true,
+    CONFLICT_CREATE=true, CONFLICT_EDIT=true, CONFLICT_SET_STATUS=true, CONFLICT_ADD_ZONE=true, CONFLICT_UPDATE_ZONE=true,
     TREATY_CREATE=true, TREATY_EDIT=true, TREATY_OPEN_SIGNATURE=true, TREATY_ACTIVATE=true, TREATY_TERMINATE=true,
     LAW_CREATE=true, LAW_AMEND=true, LAW_REPEAL=true, LAW_SET_STATUS=true,
     AUDIT_LIST=true
@@ -40,7 +43,8 @@ local permissions = {
     ENFORCEMENT_LIST=true, ENFORCEMENT_GET=true,
     SESSION_LIST=true, SESSION_GET=true,
     MISSION_LIST=true, MISSION_GET=true,
-    INCIDENT_LIST=true, INCIDENT_GET=true, SITUATION_GET=true, INCIDENT_CREATE=true, INCIDENT_ADD_REPORT=true, MISSION_ADD_REPORT=true,
+    INCIDENT_LIST=true, INCIDENT_GET=true, SITUATION_GET=true,
+    CONFLICT_LIST=true, CONFLICT_GET=true, INCIDENT_CREATE=true, INCIDENT_ADD_REPORT=true, MISSION_ADD_REPORT=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
@@ -56,7 +60,8 @@ local permissions = {
     ENFORCEMENT_LIST=true, ENFORCEMENT_GET=true,
     SESSION_LIST=true, SESSION_GET=true,
     MISSION_LIST=true, MISSION_GET=true,
-    INCIDENT_LIST=true, INCIDENT_GET=true, SITUATION_GET=true, INCIDENT_CREATE=true, INCIDENT_ADD_REPORT=true, MISSION_ADD_REPORT=true,
+    INCIDENT_LIST=true, INCIDENT_GET=true, SITUATION_GET=true,
+    CONFLICT_LIST=true, CONFLICT_GET=true, INCIDENT_CREATE=true, INCIDENT_ADD_REPORT=true, MISSION_ADD_REPORT=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
@@ -73,7 +78,8 @@ local permissions = {
     ENFORCEMENT_LIST=true, ENFORCEMENT_GET=true,
     SESSION_LIST=true, SESSION_GET=true,
     MISSION_LIST=true, MISSION_GET=true,
-    INCIDENT_LIST=true, INCIDENT_GET=true, SITUATION_GET=true, INCIDENT_CREATE=true, INCIDENT_ADD_REPORT=true,
+    INCIDENT_LIST=true, INCIDENT_GET=true, SITUATION_GET=true,
+    CONFLICT_LIST=true, CONFLICT_GET=true, INCIDENT_CREATE=true, INCIDENT_ADD_REPORT=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
@@ -193,6 +199,8 @@ local function freshState()
     missionCounters = {},
     incidents = {},
     incidentCounters = {},
+    conflicts = {},
+    conflictCounters = {},
     treaties = {},
     treatyCounters = {},
     enforcements = {},
@@ -229,6 +237,8 @@ local function loadState()
   state.missionCounters = state.missionCounters or {}
   state.incidents = state.incidents or {}
   state.incidentCounters = state.incidentCounters or {}
+  state.conflicts = state.conflicts or {}
+  state.conflictCounters = state.conflictCounters or {}
   state.treaties = state.treaties or {}
   state.treatyCounters = state.treatyCounters or {}
   state.enforcements = state.enforcements or {}
@@ -261,7 +271,7 @@ local function loadState()
   end
 
   state.meta.version = common.VERSION
-  state.meta.schema = math.max(tonumber(state.meta.schema) or 1,7)
+  state.meta.schema = math.max(tonumber(state.meta.schema) or 1,8)
   return state
 end
 
