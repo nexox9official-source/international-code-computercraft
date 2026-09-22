@@ -436,6 +436,65 @@ local function listResolutions(state,payload)
   return out
 end
 
+local function listSessions(state,payload)
+  payload=payload or {}
+  local q=common.trim(payload.query)
+  local status=common.trim(payload.status)
+  local sessionType=common.trim(payload.sessionType)
+  local out={}
+  for _,sess in pairs(state.sessions or {}) do
+    local hit=(q=="" or common.contains(sess.id,q) or common.contains(sess.title,q) or common.contains(sess.description,q) or common.contains(sess.location,q))
+    local statusHit=(status=="" or sess.status==status)
+    local typeHit=(sessionType=="" or sess.sessionType==sessionType)
+    if hit and statusHit and typeHit then
+      local copy=common.deepcopy(sess)
+      copy.minutes=nil
+      out[#out+1]=copy
+    end
+  end
+  table.sort(out,function(a,b)
+    local da=tostring(a.scheduledFor or "")
+    local db=tostring(b.scheduledFor or "")
+    if da~=db then return da>db end
+    return tostring(a.id)>tostring(b.id)
+  end)
+  return out
+end
+
+local function makeSessionId(state)
+  local year=os.date and os.date("%Y") or "0000"
+  local n=(state.sessionCounters[year] or 0)+1
+  state.sessionCounters[year]=n
+  return string.format("SESSION-%s-%04d",year,n)
+end
+
+local function sessionAgendaReference(state,kind,ref)
+  kind=common.trim(kind)
+  ref=common.trim(ref):upper()
+  if kind=="bill" then
+    local x=state.bills[ref]
+    return x and x.title or nil
+  elseif kind=="resolution" then
+    local x=state.resolutions[ref]
+    return x and x.title or nil
+  elseif kind=="treaty" then
+    local x=state.treaties[ref]
+    return x and x.title or nil
+  elseif kind=="case" then
+    local x=state.cases[ref]
+    return x and x.title or nil
+  elseif kind=="law" then
+    local law=state.laws[normalizeArticleRef(ref)]
+    return law and law.title or nil
+  elseif kind=="enforcement" then
+    local x=state.enforcements[ref]
+    return x and (x.summary~="" and x.summary or x.targetName) or nil
+  elseif kind=="custom" then
+    return ref~="" and ref or nil
+  end
+  return nil
+end
+
 local function listTreaties(state,payload)
   payload=payload or {}
   local q=common.trim(payload.query)
