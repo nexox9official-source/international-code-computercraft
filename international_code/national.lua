@@ -34,6 +34,13 @@ local function identity(actor)
   return common.trim(actor and (actor.nationalIdentity or actor.label or actor.clientId) or "")
 end
 
+local function isSovereignAuthority(state,actor)
+  if not actor then return false end
+  local meta=state and state.national and state.national.meta or {}
+  local expected=common.trim(meta.sovereignAuthorityIdentity or "NexoFr_")
+  return expected~="" and common.normalizeSearch(identity(actor))==common.normalizeSearch(expected)
+end
+
 local function nationalRole(state,actor)
   if not actor then return nil end
   if actor.role=="admin" then return actor.nationalRole or "admin" end
@@ -42,27 +49,29 @@ local function nationalRole(state,actor)
 end
 
 local function hasAccess(state,actor)
-  return nationalRole(state,actor)~=nil
+  return isSovereignAuthority(state,actor) or nationalRole(state,actor)~=nil
 end
 
 local function isNationalMember(state,actor)
   if not actor then return false end
+  if isSovereignAuthority(state,actor) then return true end
   if actor.role=="admin" and (actor.nationalRole=="admin" or not actor.nationalRole) then return true end
   return actor.nationalRole~=nil and actor.nationalRole~=""
 end
 
 local function roleIs(state,actor,...)
+  if actor and actor.nationalRoot then return true end
   local r=nationalRole(state,actor)
   for i=1,select("#",...) do if r==select(i,...) then return true end end
   return false
 end
 
 local function isPresident(state,actor)
-  return actor and (actor.role=="admin" or nationalRole(state,actor)=="president")
+  return actor and (actor.nationalRoot==true or actor.role=="admin" or nationalRole(state,actor)=="president")
 end
 
 local function isCouncil(state,actor)
-  return actor and (actor.role=="admin" or nationalRole(state,actor)=="president" or nationalRole(state,actor)=="council")
+  return actor and (actor.nationalRoot==true or actor.role=="admin" or nationalRole(state,actor)=="president" or nationalRole(state,actor)=="council")
 end
 
 local function isMinister(state,actor)
@@ -164,6 +173,12 @@ function N.newState()
       projectAuthor=corpus.project_author or "NexoFr_",
       foundingAccount=((corpus.government_system or {}).founding_phase_account or "NexoFr_"),
       presidentIdentity=((corpus.government_system or {}).founding_phase_account or "NexoFr_"),
+      sovereignAuthorityIdentity=((corpus.government_system or {}).sovereign_authority_account or "NexoFr_"),
+      sovereignAuthorityTitle=((corpus.government_system or {}).sovereign_authority_title or "Dirigeant de North Coalition"),
+      sovereignAuthorityPowers=copy((corpus.government_system or {}).sovereign_authority_powers or {}),
+      ratifiedAt=((corpus.ratification or {}).ratified_at),
+      ratifiedBy=((corpus.ratification or {}).promulgated_by or "NexoFr_"),
+      corpusRatificationApplied=(corpus.status=="ratified"),
       presidentClientId=nil,
       stateId=NORTH_STATE_ID,
       foundingMode=true,
@@ -206,6 +221,9 @@ function N.ensure(state)
   n.meta.stateId=n.meta.stateId or NORTH_STATE_ID
   n.meta.foundingAccount=n.meta.foundingAccount or "NexoFr_"
   n.meta.presidentIdentity=n.meta.presidentIdentity or "NexoFr_"
+  n.meta.sovereignAuthorityIdentity=n.meta.sovereignAuthorityIdentity or "NexoFr_"
+  n.meta.sovereignAuthorityTitle=n.meta.sovereignAuthorityTitle or "Dirigeant de North Coalition"
+  n.meta.sovereignAuthorityPowers=n.meta.sovereignAuthorityPowers or {}
   if n.meta.foundingMode==nil then n.meta.foundingMode=true end
   n.meta.fallbackNoVoteHours=n.meta.fallbackNoVoteHours or 48
   n.laws=n.laws or {}
@@ -240,9 +258,17 @@ function N.ensure(state)
   if corpus then
     if #n.categories==0 then n.categories=copy(corpus.categories or {}) end
     n.governmentSystem=n.governmentSystem or copy(corpus.government_system or {})
-    n.meta.corpusId=n.meta.corpusId or corpus.corpus_id
-    n.meta.corpusVersion=n.meta.corpusVersion or corpus.version
-    n.meta.projectAuthor=n.meta.projectAuthor or corpus.project_author
+    for k,v in pairs(corpus.government_system or {}) do
+      if k=="sovereign_authority_powers" then n.governmentSystem[k]=copy(v)
+      else n.governmentSystem[k]=v end
+    end
+    n.meta.corpusId=corpus.corpus_id or n.meta.corpusId
+    n.meta.corpusVersion=corpus.version or n.meta.corpusVersion
+    n.meta.projectAuthor=corpus.project_author or n.meta.projectAuthor
+    n.meta.status=corpus.status or n.meta.status
+    n.meta.sovereignAuthorityIdentity=((corpus.government_system or {}).sovereign_authority_account or n.meta.sovereignAuthorityIdentity or "NexoFr_")
+    n.meta.sovereignAuthorityTitle=((corpus.government_system or {}).sovereign_authority_title or n.meta.sovereignAuthorityTitle)
+    n.meta.sovereignAuthorityPowers=copy((corpus.government_system or {}).sovereign_authority_powers or n.meta.sovereignAuthorityPowers or {})
     local maxN=tonumber(n.nextArticle or 1)-1
     for _,seed in ipairs(corpus.articles or {}) do
       if not n.laws[seed.id] then n.laws[seed.id]=makeLaw(seed) end
@@ -251,6 +277,27 @@ function N.ensure(state)
     n.nextArticle=math.max(tonumber(n.nextArticle) or 1,maxN+1)
     for _,m in ipairs(corpus.ministries or {}) do
       if not n.ministries[m.code] then n.ministries[m.code]=makeMinistry(m) end
+    end
+
+    if corpus.status=="ratified" and n.meta.corpusRatificationApplied~=true then
+      for _,seed in ipairs(corpus.articles or {}) do
+        local law=n.laws[seed.id]
+        if law then
+          law.title=seed.title
+          law.text=seed.text
+          law.status=seed.status or "active"
+          law.version=seed.version or law.version
+          law.effective_at=seed.effective_at
+          law.repealed_at=seed.repealed_at
+          law.history=copy(seed.history or law.history or {})
+          law.updatedAt=common.now()
+        end
+      end
+      n.meta.status="ratified"
+      n.meta.ratifiedAt=((corpus.ratification or {}).ratified_at or common.now())
+      n.meta.ratifiedBy=((corpus.ratification or {}).promulgated_by or "NexoFr_")
+      n.meta.corpusRatificationApplied=true
+      n.meta.updatedAt=common.now()
     end
   end
 
@@ -680,7 +727,8 @@ local function ministryScopeAllowed(state,actor,ministryCode)
 end
 
 local function technicalNationalAdmin(actor)
-  return actor and actor.role=="admin" and (not actor.nationalRole or actor.nationalRole=="admin")
+  return actor and (actor.nationalRoot==true or
+    (actor.role=="admin" and (not actor.nationalRole or actor.nationalRole=="admin")))
 end
 
 local function canManageCitizens(state,actor)
@@ -904,6 +952,25 @@ function N.handle(state,actor,action,p,ctx)
   local n=N.ensure(state)
   migrateClientCitizens(n,state)
 
+  if actor and isSovereignAuthority(state,actor) then
+    actor.nationalRoot=true
+    actor.nationalIdentity=n.meta.sovereignAuthorityIdentity or "NexoFr_"
+    actor.nationalRole=actor.nationalRole or "president"
+    actor.stateId=n.meta.stateId
+    if not actor.citizenId then
+      local founder=select(1,createCitizen(n,actor.nationalIdentity,"citizen",actor.nationalIdentity,
+        "Autorite souveraine nationale de North Coalition"))
+      actor.citizenId=founder and founder.id or actor.citizenId
+    end
+    if not n.meta.presidentClientId then
+      n.meta.presidentClientId=actor.clientId
+      n.meta.presidentCitizenId=actor.citizenId
+      n.meta.presidentIdentity=actor.nationalIdentity
+    end
+  elseif actor then
+    actor.nationalRoot=false
+  end
+
   if action=="NC_INFO" then
     local ok,err=requireAccess(state,actor)
     if not ok then return nil,err end
@@ -916,7 +983,12 @@ function N.handle(state,actor,action,p,ctx)
       nationalRole=nationalRole(state,actor),
       nationalIdentity=identity(actor),citizenId=actor.citizenId,
       citizenStatus=(citizenForClient(n,actor) or {}).status,ministryCode=actor.ministryCode,
-      fallbackNoVoteHours=n.meta.fallbackNoVoteHours
+      fallbackNoVoteHours=n.meta.fallbackNoVoteHours,
+      sovereignAuthority=actor and actor.nationalRoot==true or false,
+      sovereignAuthorityIdentity=n.meta.sovereignAuthorityIdentity,
+      sovereignAuthorityTitle=n.meta.sovereignAuthorityTitle,
+      sovereignAuthorityPowers=copy(n.meta.sovereignAuthorityPowers or {}),
+      ratifiedAt=n.meta.ratifiedAt,ratifiedBy=n.meta.ratifiedBy
     }
   end
 
@@ -1259,7 +1331,10 @@ function N.handle(state,actor,action,p,ctx)
       treasuryBalanceUB=finSummary.balanceUB,treasuryUnit=finSummary.unit,
       currentBudgetId=finSummary.currentBudgetId,pendingExpenses=finSummary.pendingExpenses,
       foundingMode=n.meta.foundingMode,presidentIdentity=n.meta.presidentIdentity,
-      nationalRole=nationalRole(state,actor),nationalIdentity=identity(actor),ministryCode=actor.ministryCode
+      nationalRole=nationalRole(state,actor),nationalIdentity=identity(actor),ministryCode=actor.ministryCode,
+      sovereignAuthority=actor and actor.nationalRoot==true or false,
+      sovereignAuthorityIdentity=n.meta.sovereignAuthorityIdentity,
+      ratifiedAt=n.meta.ratifiedAt
     }
   end
 
