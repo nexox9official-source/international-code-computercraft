@@ -4,7 +4,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** destiné au Code interna
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. `North Coalition` est conservé uniquement comme État proposant dans le corpus juridique initial.
 
-## Ce que fait la v0.6
+## Ce que fait la v0.7
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
@@ -76,7 +76,7 @@ wget run https://raw.githubusercontent.com/nexox9official-source/international-c
 wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua admin
 ```
 
-## Navigation v0.6
+## Navigation v0.7
 
 Le Code n'affiche plus simplement une liste brute de 500 articles. Le terminal propose maintenant :
 
@@ -208,6 +208,39 @@ ic assembly BILL-2026-0001
 ```
 
 Le tableau actualise toutes les trois secondes les voix POUR/CONTRE/ABSTENTION, la participation, le quorum et les votes des États. Un clic sur le Monitor du registre public passe à la page suivante.
+
+## Résolutions de l'Union v0.7
+
+Le système distingue maintenant clairement **la loi** d'une **décision institutionnelle** :
+
+- un `BILL-...` sert à créer, modifier ou ratifier des articles du Code ;
+- une `RES-...` sert à prendre une décision de l'Union sans réécrire le Code.
+
+Les résolutions peuvent concerner la paix et la sécurité, les sanctions, l'adhésion ou le statut d'un État, l'aide humanitaire, une urgence internationale, une enquête, un cessez-le-feu, une mission d'observation, une mesure économique ou une décision générale.
+
+Une résolution suit le même niveau de sérieux que le système législatif :
+
+```text
+draft -> debate -> voting -> adopted -> executed
+                    |           |
+                    |           +-> création éventuelle d'une mesure ENF
+                    +-> rejected
+                    +-> no_quorum -> nouveau tour possible
+```
+
+Le corps électoral est figé à chaque tour, le quorum est contrôlé par le serveur et chaque État ne possède qu'une voix. Les règles de majorité disponibles sont les mêmes que pour les propositions de loi.
+
+Une résolution adoptée peut rester une décision déclaratoire ou **créer automatiquement une mesure d'exécution**. Par exemple, une résolution de sanctions visant un État peut générer un `ENF-...` avec embargo, gel d'avoirs, restriction commerciale, inspection, échéance et conditions d'exécution.
+
+Le scrutin reçoit un sceau `UNS-RESVOTE-...` et son exécution un sceau `UNS-RES-...`.
+
+Pour suivre une résolution sur un Monitor :
+
+```text
+ic resolution RES-2026-0001
+```
+
+Le tableau LIVE affiche POUR / CONTRE / ABSTENTION, participation, quorum, cible et éventuelle mesure d'exécution.
 
 ## Traités et diplomatie v0.5
 
@@ -350,8 +383,11 @@ ic backup
 ic public
 ic display CASE-2026-0001
 ic assembly BILL-2026-0001
+ic resolution RES-2026-0001
 ic treaty TREATY-2026-0001
 ic verify CIU-JUG-XXXXXXXX
+ic inbox
+ic enforcement ENF-2026-0001
 ic doctor
 ic update
 ic help
@@ -381,11 +417,11 @@ Le serveur doit être arrêté avant de mettre à jour son code. Relancez ensuit
 
 | Rôle | Droits principaux |
 |---|---|
-| `delegate` | consultation + vote officiel pour l'État auquel le terminal est rattaché |
+| `delegate` | consultation + vote officiel sur les lois/résolutions + signature des traités pour l'État rattaché |
 | `viewer` | lecture du Code, des États, propositions et dossiers publics |
-| `writer` | lecture + création/modification/abrogation des lois + audit |
-| `clerk` | gestion des dossiers, faits, preuves, articles cités, audiences et appels + audit |
-| `judge` | greffe + jugements + ordonnances + décisions d'appel + audit |
+| `writer` | lois, propositions, ratifications, résolutions, traités, scrutins et promulgation + audit |
+| `clerk` | dossiers, faits, preuves, audiences, procès-verbaux, appels et suivi d'exécution + audit |
+| `judge` | greffe + jugements + ordonnances + appels + sanctions/exécution + audit |
 | `admin` | toutes les opérations |
 
 ## Numérotation et historique
