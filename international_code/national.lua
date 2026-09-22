@@ -1523,6 +1523,157 @@ function N.handle(state,actor,action,p,ctx)
     return copy(d)
   end
 
+  if action=="NC_SESSION_LIST" then
+    return listNationalSessions(n,p,state,actor)
+  end
+
+  if action=="NC_SESSION_GET" then
+    local sess=n.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session nationale introuvable." end
+    if not canViewNationalSession(state,actor,sess) then return nil,"Acces refuse a cette session." end
+    return copy(sess)
+  end
+
+  if action=="NC_SESSION_CREATE" then
+    if not nationalSessionManager(state,actor) then return nil,"Creation de session reservee a la Presidence ou au Conseil." end
+    local title=common.trim(p.title)
+    if title=="" then return nil,"Titre de session obligatoire." end
+    local validTypes={council=true,cabinet=true,emergency=true,committee=true,public_hearing=true}
+    local sessionType=validTypes[p.sessionType] and p.sessionType or "council"
+    local visibility=(p.visibility=="public" or p.visibility=="restricted") and p.visibility or "internal"
+    local id=nextId(n.sessionCounters,"NC-SESSION")
+    local sess={
+      id=id,title=title,sessionType=sessionType,status="scheduled",visibility=visibility,
+      scheduledFor=common.trim(p.scheduledFor),location=common.trim(p.location),
+      description=common.trim(p.description),agenda={},attendance={},
+      createdAt=common.now(),createdBy=identity(actor),updatedAt=common.now()
+    }
+    sess.convocationSeal=seal("NC-SESSION",{sess.id,sess.title,sess.sessionType,sess.scheduledFor,sess.location,sess.description,sess.visibility,sess.createdAt,sess.createdBy})
+    n.sessions[id]=sess
+    noticeAll(ctx,state,n,"Session nationale convoquee",
+      id.." / "..title.." / "..(sess.scheduledFor~="" and sess.scheduledFor or "horaire a confirmer"),
+      sessionType=="emergency" and "warning" or "info","nc_session",id)
+    mutate(ctx,state,actor,"NC_SESSION_CREATE",id,title.." / "..sessionType)
+    return copy(sess)
+  end
+
+  if action=="NC_SESSION_ADD_AGENDA" then
+    if not nationalSessionManager(state,actor) then return nil,"Ordre du jour reserve a la Presidence ou au Conseil." end
+    local sess=n.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session introuvable." end
+    if sess.status~="scheduled" then return nil,"L'ordre du jour est verrouille apres ouverture." end
+    local valid={law=true,bill=true,election=true,decree=true,case=true,ministry=true,citizen=true,custom=true}
+    local kind=valid[p.kind] and p.kind or nil
+    if not kind then return nil,"Type de point invalide." end
+    local ref=common.trim(p.ref)
+    local title=agendaObjectTitle(n,state,actor,kind,ref)
+    if not title then return nil,"Objet d'ordre du jour introuvable ou inaccessible." end
+    local row={
+      id=string.format("ITEM-%03d",#sess.agenda+1),kind=kind,ref=ref,
+      title=common.trim(p.title)~="" and common.trim(p.title) or title,
+      notes=common.trim(p.notes),status="pending",addedAt=common.now(),addedBy=identity(actor)
+    }
+    sess.agenda[#sess.agenda+1]=row
+    sess.updatedAt=common.now()
+    mutate(ctx,state,actor,"NC_SESSION_ADD_AGENDA",sess.id,row.id.." / "..kind.." / "..ref)
+    return copy(sess)
+  end
+
+  if action=="NC_SESSION_REMOVE_AGENDA" then
+    if not nationalSessionManager(state,actor) then return nil,"Modification de l'ordre du jour non autorisee." end
+    local sess=n.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session introuvable." end
+    if sess.status~="scheduled" then return nil,"Ordre du jour verrouille." end
+    local removed=nil
+    for i=#sess.agenda,1,-1 do
+      if sess.agenda[i].id==p.itemId then removed=table.remove(sess.agenda,i) break end
+    end
+    if not removed then return nil,"Point introuvable." end
+    sess.updatedAt=common.now()
+    mutate(ctx,state,actor,"NC_SESSION_REMOVE_AGENDA",sess.id,removed.id.." / "..removed.title)
+    return copy(sess)
+  end
+
+  if action=="NC_SESSION_OPEN" then
+    if not nationalSessionManager(state,actor) then return nil,"Ouverture reservee a la Presidence ou au Conseil." end
+    local sess=n.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session introuvable." end
+    if sess.status~="scheduled" then return nil,"Session non ouvrable." end
+    sess.status="open";sess.openedAt=common.now();sess.openedBy=identity(actor)
+    sess.openSeal=seal("NC-SESSION-OPEN",{sess.id,sess.convocationSeal,sess.openedAt,sess.openedBy,sess.agenda})
+    noticeAll(ctx,state,n,"Session nationale ouverte",sess.id.." / "..sess.title,"warning","nc_session",sess.id)
+    mutate(ctx,state,actor,"NC_SESSION_OPEN",sess.id,sess.openSeal)
+    return copy(sess)
+  end
+
+  if action=="NC_SESSION_CHECKIN" then
+    local sess=n.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session introuvable." end
+    if sess.status~="open" then return nil,"La session n'est pas ouverte." end
+    if not nationalSessionEligible(n,state,actor,sess) then return nil,"Vous ne faites pas partie des participants autorises." end
+    local key=votingKey(n,actor)
+    if not key then return nil,"Identite citoyenne active requise." end
+    sess.attendance[key]={
+      citizenId=key,identity=identity(actor),role=nationalRole(state,actor),
+      ministryCode=actor.ministryCode,checkedInAt=common.now(),clientId=actor.clientId
+    }
+    sess.updatedAt=common.now()
+    mutate(ctx,state,actor,"NC_SESSION_CHECKIN",sess.id,key.." / "..identity(actor))
+    return copy(sess)
+  end
+
+  if action=="NC_SESSION_SET_ITEM_STATUS" then
+    if not nationalSessionManager(state,actor) then return nil,"Gestion de seance non autorisee." end
+    local sess=n.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session introuvable." end
+    if sess.status~="open" then return nil,"La session doit etre ouverte." end
+    local item=nil
+    for _,x in ipairs(sess.agenda or {}) do if x.id==p.itemId then item=x break end end
+    if not item then return nil,"Point d'ordre du jour introuvable." end
+    local valid={pending=true,discussing=true,discussed=true,voted=true,postponed=true,withdrawn=true}
+    if not valid[p.status] then return nil,"Statut de point invalide." end
+    local old=item.status
+    item.status=p.status
+    if p.notes~=nil then item.sessionNotes=common.trim(p.notes) end
+    item.updatedAt=common.now();item.updatedBy=identity(actor)
+    sess.updatedAt=common.now()
+    mutate(ctx,state,actor,"NC_SESSION_SET_ITEM_STATUS",sess.id,item.id.." / "..old.." -> "..item.status)
+    return copy(sess)
+  end
+
+  if action=="NC_SESSION_CLOSE" then
+    if not nationalSessionManager(state,actor) then return nil,"Cloture reservee a la Presidence ou au Conseil." end
+    local sess=n.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session introuvable." end
+    if sess.status~="open" then return nil,"Session non ouverte." end
+    local minutes=common.trim(p.minutes)
+    local conclusions=common.trim(p.conclusions)
+    if minutes=="" then return nil,"Proces-verbal obligatoire." end
+    sess.status="closed";sess.minutes=minutes;sess.conclusions=conclusions
+    sess.closedAt=common.now();sess.closedBy=identity(actor)
+    sess.closeSeal=seal("NC-SESSION-CLOSE",{sess.id,sess.openSeal,sess.attendance,sess.agenda,sess.minutes,sess.conclusions,sess.closedAt,sess.closedBy})
+    sess.updatedAt=common.now()
+    noticeAll(ctx,state,n,"Session nationale cloturee",sess.id.." / "..sess.title,"info","nc_session",sess.id)
+    mutate(ctx,state,actor,"NC_SESSION_CLOSE",sess.id,sess.closeSeal)
+    return copy(sess)
+  end
+
+  if action=="NC_SESSION_CANCEL" then
+    if not nationalSessionManager(state,actor) then return nil,"Annulation non autorisee." end
+    local sess=n.sessions[common.trim(p.id):upper()]
+    if not sess then return nil,"Session introuvable." end
+    if sess.status=="closed" or sess.status=="cancelled" then return nil,"Session deja terminee." end
+    local reason=common.trim(p.reason)
+    if reason=="" then return nil,"Motif d'annulation obligatoire." end
+    sess.status="cancelled";sess.cancelReason=reason
+    sess.cancelledAt=common.now();sess.cancelledBy=identity(actor)
+    sess.cancelSeal=seal("NC-SESSION-CANCEL",{sess.id,reason,sess.cancelledAt,sess.cancelledBy,sess.convocationSeal})
+    sess.updatedAt=common.now()
+    noticeAll(ctx,state,n,"Session nationale annulee",sess.id.." / "..reason,"warning","nc_session",sess.id)
+    mutate(ctx,state,actor,"NC_SESSION_CANCEL",sess.id,reason.." / "..sess.cancelSeal)
+    return copy(sess)
+  end
+
   if action=="NC_CASE_LIST" then
     return listNationalCases(n,p,state,actor)
   end
