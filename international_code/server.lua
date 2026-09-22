@@ -600,29 +600,49 @@ local function handleAction(state, actor, action, p)
 
   if action == "BILL_CREATE" then
     local title=common.trim(p.title)
-    local proposalType=p.proposalType=="amendment" and "amendment" or "new_law"
+    local validTypes={new_law=true,amendment=true,ratification_bundle=true}
+    local proposalType=validTypes[p.proposalType] and p.proposalType or "new_law"
     if title=="" then return nil,"Titre obligatoire." end
+
+    local targetRef=""
+    local targetRefs={}
     if proposalType=="amendment" then
-      local ref=normalizeArticleRef(p.targetRef)
-      if not state.laws[ref] then return nil,"Article cible introuvable." end
+      targetRef=normalizeArticleRef(p.targetRef)
+      if not state.laws[targetRef] then return nil,"Article cible introuvable." end
+    elseif proposalType=="ratification_bundle" then
+      local seen={}
+      for _,raw in ipairs(type(p.targetRefs)=="table" and p.targetRefs or {}) do
+        local ref=normalizeArticleRef(raw)
+        if state.laws[ref] and not seen[ref] then
+          seen[ref]=true
+          targetRefs[#targetRefs+1]=ref
+        end
+      end
+      table.sort(targetRefs,function(a,b)
+        return (state.laws[a].number or 0)<(state.laws[b].number or 0)
+      end)
+      if #targetRefs==0 then return nil,"Selection d'articles a ratifier vide." end
     end
+
     local id=makeBillId(state)
     local threshold=p.threshold or "simple_cast"
     local validThreshold={simple_cast=true,absolute_members=true,two_thirds_cast=true,three_quarters_members=true}
     if not validThreshold[threshold] then threshold="simple_cast" end
     local bill={
       id=id,title=title,summary=common.trim(p.summary),proposalType=proposalType,
-      targetRef=proposalType=="amendment" and normalizeArticleRef(p.targetRef) or "",
+      targetRef=targetRef,targetRefs=targetRefs,
       proposedTitle=common.trim(p.proposedTitle),proposedBody=common.trim(p.proposedBody),
       proposedBook=common.trim(p.proposedBook),proposedSection=common.trim(p.proposedSection),
       stage="draft",threshold=threshold,votes={},voteHistory={},voteRounds={},
       eligibleStateIds={},votingRound=0,
       createdAt=common.now(),updatedAt=common.now(),createdBy=actor.label,
-      result=nil,enactedRef=nil
+      result=nil,enactedRef=nil,enactedRefs={}
     }
-    if bill.proposedTitle=="" or bill.proposedBody=="" then return nil,"Titre et texte proposes obligatoires." end
+    if proposalType~="ratification_bundle" and (bill.proposedTitle=="" or bill.proposedBody=="") then
+      return nil,"Titre et texte proposes obligatoires."
+    end
     state.bills[id]=bill
-    mutate(state,actor,"BILL_CREATE",id,bill.title)
+    mutate(state,actor,"BILL_CREATE",id,bill.title.." / "..proposalType)
     return common.deepcopy(bill)
   end
 
@@ -741,7 +761,10 @@ local function handleAction(state, actor, action, p)
     local bill=state.bills[common.trim(p.id):upper()]
     if not bill then return nil,"Proposition introuvable." end
     if bill.stage~="adopted" then return nil,"La proposition doit etre adoptee avant promulgation." end
+
     local enactedRef=nil
+    local enactedRefs={}
+
     if bill.proposalType=="new_law" then
       local n=state.nextArticle
       state.nextArticle=n+1
@@ -752,7 +775,9 @@ local function handleAction(state, actor, action, p)
         version=1,createdAt=common.now(),updatedAt=common.now(),history={},
         lastChangedBy=actor.label,lastChangeReason="Promulgue depuis "..bill.id
       }
-    else
+      enactedRefs[1]=enactedRef
+
+    elseif bill.proposalType=="amendment" then
       enactedRef=bill.targetRef
       local law=state.laws[enactedRef]
       if not law then return nil,"Article cible introuvable au moment de la promulgation." end
@@ -770,14 +795,40 @@ local function handleAction(state, actor, action, p)
       law.updatedAt=common.now()
       law.lastChangedBy=actor.label
       law.lastChangeReason="Promulgue depuis "..bill.id
+      enactedRefs[1]=enactedRef
+
+    elseif bill.proposalType=="ratification_bundle" then
+      for _,ref in ipairs(bill.targetRefs or {}) do
+        local law=state.laws[ref]
+        if law then
+          law.history=law.history or {}
+          law.history[#law.history+1]={
+            version=law.version,title=law.title,body=law.body,book=law.book,section=law.section,status=law.status,
+            archivedAt=common.now(),archivedBy=actor.label,supersededByReason="Ratification par "..bill.id
+          }
+          law.version=(law.version or 1)+1
+          law.status="active"
+          law.updatedAt=common.now()
+          law.lastChangedBy=actor.label
+          law.lastChangeReason="Ratification par "..bill.id
+          enactedRefs[#enactedRefs+1]=ref
+        end
+      end
+      if #enactedRefs==0 then return nil,"Aucun article du lot n'existe encore." end
+      enactedRef=enactedRefs[1]
+
+    else
+      return nil,"Type de proposition inconnu."
     end
+
     bill.stage="enacted"
     bill.enactedRef=enactedRef
+    bill.enactedRefs=enactedRefs
     bill.enactedAt=common.now()
     bill.enactedBy=actor.label
-    bill.enactmentSeal=officialSeal("UNS-PROM",{bill.id,enactedRef,bill.enactedAt,bill.enactedBy,bill.resultSeal})
+    bill.enactmentSeal=officialSeal("UNS-PROM",{bill.id,enactedRefs,bill.enactedAt,bill.enactedBy,bill.resultSeal})
     bill.updatedAt=common.now()
-    mutate(state,actor,"BILL_ENACT",bill.id,enactedRef)
+    mutate(state,actor,"BILL_ENACT",bill.id,table.concat(enactedRefs,","))
     local out=common.deepcopy(bill); out.tally=billTally(state,bill); return out
   end
 
