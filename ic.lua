@@ -5,9 +5,10 @@ local args={...}
 local cmd=args[1]
 
 local function help()
-  print("UNS International Code / ComputerCraft v"..common.VERSION)
+  print("UNS + North Coalition Legal Network / ComputerCraft v"..common.VERSION)
   print("")
-  print("ic                         Ouvrir le bureau")
+  print("ic                         Ouvrir le bureau international")
+  print("ic nc                      Ouvrir l'intranet national North Coalition")
   print("ic server                  Lancer le serveur de stockage")
   print("ic setup server            Configurer ce PC comme serveur")
   print("ic setup writer            Appairer un poste de redaction")
@@ -44,6 +45,7 @@ if cmd=="setup" then
   error("Role inconnu. Utilisez: server, writer, clerk, judge, delegate, viewer, admin",0)
 end
 if cmd=="server" then dofile(ROOT.."/server.lua").run();return end
+if cmd=="nc" or cmd=="national" then dofile(ROOT.."/national_client.lua").run();return end
 if cmd=="pair" then dofile(ROOT.."/server.lua").manualPair(args[2] or "viewer");return end
 if cmd=="backup" then dofile(ROOT.."/server.lua").backupNow();return end
 if cmd=="public" then dofile(ROOT.."/public.lua").run();return end
