@@ -1,4 +1,4 @@
-# Architecture v0.7
+# Architecture v0.8
 
 ## Topologie
 
@@ -64,6 +64,7 @@ Le serveur central contient désormais quatre ensembles principaux :
 - `states` : États et statuts d'adhésion ;
 - `bills` : propositions législatives, ratifications, tours de scrutin et votes par État ;
 - `resolutions` : décisions institutionnelles, scrutins et éventuelle exécution automatique ;
+- `sessions` : calendrier, ordres du jour, présences et procès-verbaux institutionnels ;
 - `treaties` : projets de traités, versions, États parties, signatures et entrée en vigueur ;
 - `cases` : dossiers, preuves, audiences, procès-verbaux, ordonnances, appels et jugements ;
 - `enforcements` : sanctions, réparations et suivi de conformité ;
@@ -76,6 +77,26 @@ Les dossiers disposent de trois niveaux de visibilité. `public` est accessible 
 ## Sceaux applicatifs
 
 Les actes sensibles reçoivent un sceau calculé par le serveur à partir de leur contenu et de leurs métadonnées. Ces sceaux servent à détecter visuellement une incohérence RP et à identifier une version imprimée. Ils ne constituent pas une primitive cryptographique de sécurité.
+
+## Sessions et ordre du jour
+
+Les sessions sont séparées des votes et des textes juridiques. Une session ne change donc pas directement l'état d'un `BILL`, d'une `RES`, d'un traité ou d'un dossier : elle **référence** ces objets dans son ordre du jour puis conserve ce qui a été discuté et décidé pendant la réunion.
+
+```text
+SESSION
+  |
+  +-- agenda[] ------> BILL / RES / TREATY / CASE / LAW / ENF
+  |
+  +-- attendance{} --> STATE
+  |
+  +-- minutes
+  +-- outcome
+  +-- seals
+```
+
+La présence est indexée par `STATE-...`, pas par terminal. Le même État ne peut donc pas apparaître plusieurs fois simplement parce qu'il possède plusieurs délégués.
+
+Le sceau d'ouverture fige la convocation et l'ordre du jour au moment où la séance débute. Le sceau de clôture couvre l'ordre du jour final, les présences, le procès-verbal et les conclusions.
 
 ## Cycle de vie d'une résolution
 
@@ -143,7 +164,6 @@ Un changement de statut ne réécrit jamais l'état antérieur : une nouvelle en
 
 ## Évolution prévue
 
-- calendrier institutionnel global et ordre du jour des sessions ;
 - missions internationales et observateurs avec mandat, durée et rapports ;
 - table de peines / sanctions paramétrable ;
 - registre de pièces avec empreintes et chaîne de conservation renforcée ;
