@@ -656,6 +656,20 @@ local function handleAction(state, actor, action, p)
     if p.proposedBody~=nil and common.trim(p.proposedBody)~="" then bill.proposedBody=common.trim(p.proposedBody) end
     if p.proposedBook~=nil then bill.proposedBook=common.trim(p.proposedBook) end
     if p.proposedSection~=nil then bill.proposedSection=common.trim(p.proposedSection) end
+    if bill.proposalType=="ratification_bundle" and type(p.targetRefs)=="table" then
+      local seen={}
+      local refs={}
+      for _,raw in ipairs(p.targetRefs) do
+        local ref=normalizeArticleRef(raw)
+        if state.laws[ref] and not seen[ref] then
+          seen[ref]=true
+          refs[#refs+1]=ref
+        end
+      end
+      table.sort(refs,function(a,b) return (state.laws[a].number or 0)<(state.laws[b].number or 0) end)
+      if #refs==0 then return nil,"Le lot de ratification ne peut pas etre vide." end
+      bill.targetRefs=refs
+    end
     if p.threshold~=nil then
       local valid={simple_cast=true,absolute_members=true,two_thirds_cast=true,three_quarters_members=true}
       if valid[p.threshold] then bill.threshold=p.threshold end
