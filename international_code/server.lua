@@ -1500,6 +1500,40 @@ local function handleAction(state, actor, action, p)
       end
     end
 
+    for _,incident in pairs(state.incidents or {}) do
+      if tostring(incident.seal or ""):upper()==seal then
+        local visible=canViewIncident(actor,incident)
+        return {
+          valid=true,kind="incident",seal=seal,parentId=incident.id,
+          title=visible and incident.title or "Incident international confidentiel",
+          reference=incident.id,status=incident.status,issuedAt=incident.createdAt,
+          issuedBy=visible and incident.createdBy or nil,confidential=not visible
+        }
+      end
+      for _,report in ipairs(incident.reports or {}) do
+        if tostring(report.seal or ""):upper()==seal then
+          local visible=report.classification~="restricted" or incidentFullAccess(actor,incident)
+          return {
+            valid=true,kind="incident_sitrep",seal=seal,parentId=incident.id,
+            title=visible and report.title or "Rapport de situation confidentiel",
+            reference=report.id,status=incident.status,issuedAt=report.at,
+            issuedBy=visible and report.by or nil,confidential=not visible
+          }
+        end
+      end
+      for i,row in ipairs(incident.statusHistory or {}) do
+        if tostring(row.seal or ""):upper()==seal then
+          local visible=canViewIncident(actor,incident)
+          return {
+            valid=true,kind="incident_status",seal=seal,parentId=incident.id,
+            title=visible and ("Statut incident "..tostring(row.from).." -> "..tostring(row.to)) or "Incident confidentiel",
+            reference=tostring(i),status=row.to,issuedAt=row.at,
+            issuedBy=visible and row.by or nil,confidential=not visible
+          }
+        end
+      end
+    end
+
     for _,m in pairs(state.missions or {}) do
       if tostring(m.mandateSeal or ""):upper()==seal then
         return {valid=true,kind="mission_mandate",seal=seal,parentId=m.id,title=m.title,status=m.status,issuedAt=m.updatedAt or m.createdAt,issuedBy=m.updatedBy or m.createdBy}
@@ -1607,7 +1641,7 @@ local function handleAction(state, actor, action, p)
     return { meta=state.meta, clientsCount=(function() local n=0 for _ in pairs(state.clients) do n=n+1 end return n end)() }
   end
   if action == "DASHBOARD" then
-    local lc, cc, openCases, activeLaws, sc, votingBills, votingResolutions, openSessions, scheduledSessions, activeMissions, activeTreaties, signingTreaties, activeEnforcements = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    local lc, cc, openCases, activeLaws, sc, votingBills, votingResolutions, openSessions, scheduledSessions, activeMissions, activeIncidents, criticalIncidents, activeTreaties, signingTreaties, activeEnforcements = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     for _,law in pairs(state.laws) do lc=lc+1 if law.status=="active" then activeLaws=activeLaws+1 end end
     for _,c in pairs(state.cases) do
       if canViewCase(actor,c) then
@@ -1625,6 +1659,12 @@ local function handleAction(state, actor, action, p)
     for _,m in pairs(state.missions or {}) do
       if canViewMission(actor,m) and m.status=="active" then activeMissions=activeMissions+1 end
     end
+    for _,incident in pairs(state.incidents or {}) do
+      if canViewIncident(actor,incident) and (incident.status=="open" or incident.status=="investigating" or incident.status=="contained") then
+        activeIncidents=activeIncidents+1
+        if incident.severity=="critical" then criticalIncidents=criticalIncidents+1 end
+      end
+    end
     for _,t in pairs(state.treaties or {}) do
       if t.stage=="in_force" then activeTreaties=activeTreaties+1 end
       if t.stage=="signing" or t.stage=="ready" then signingTreaties=signingTreaties+1 end
@@ -1638,6 +1678,7 @@ local function handleAction(state, actor, action, p)
       laws=lc, activeLaws=activeLaws, cases=cc, openCases=openCases,
       states=sc, votingBills=votingBills, votingResolutions=votingResolutions,
       openSessions=openSessions, scheduledSessions=scheduledSessions, activeMissions=activeMissions,
+      activeIncidents=activeIncidents, criticalIncidents=criticalIncidents,
       activeTreaties=activeTreaties, signingTreaties=signingTreaties,
       activeEnforcements=activeEnforcements, unreadNotices=countUnreadNotices(state,actor),
       stateId=actor.stateId,
@@ -2517,7 +2558,8 @@ local function handleAction(state, actor, action, p)
     local id=makeMissionId(state)
     local m={
       id=id,title=title,missionType=missionType,mandate=mandate,
-      area=common.trim(p.area),startAt=common.trim(p.startAt),endAt=common.trim(p.endAt),
+      area=common.trim(p.area),position=incidentPosition(p,nil),
+      startAt=common.trim(p.startAt),endAt=common.trim(p.endAt),
       resolutionId=resolutionId,treatyId=treatyId,caseId=caseId,
       participatingStates=participants,leadStateId=leadStateId,
       commander=common.trim(p.commander),status="planned",
@@ -2525,7 +2567,7 @@ local function handleAction(state, actor, action, p)
       reports={},createdAt=common.now(),createdBy=actor.label,updatedAt=common.now()
     }
     m.mandateSeal=officialSeal("UNS-MISSION-MANDATE",{
-      m.id,m.title,m.missionType,m.mandate,m.area,m.startAt,m.endAt,
+      m.id,m.title,m.missionType,m.mandate,m.area,m.position,m.startAt,m.endAt,
       m.resolutionId,m.treatyId,m.caseId,m.participatingStates,m.leadStateId,m.commander,m.createdAt
     })
     state.missions[id]=m
@@ -2555,6 +2597,9 @@ local function handleAction(state, actor, action, p)
     if p.missionType~=nil and validTypes[p.missionType] then m.missionType=p.missionType end
     if p.mandate~=nil and common.trim(p.mandate)~="" then m.mandate=common.trim(p.mandate) end
     if p.area~=nil then m.area=common.trim(p.area) end
+    if p.dimension~=nil or p.x~=nil or p.y~=nil or p.z~=nil or p.radius~=nil then
+      m.position=incidentPosition(p,m.position)
+    end
     if p.startAt~=nil then m.startAt=common.trim(p.startAt) end
     if p.endAt~=nil then m.endAt=common.trim(p.endAt) end
     if p.commander~=nil then m.commander=common.trim(p.commander) end
@@ -2585,7 +2630,7 @@ local function handleAction(state, actor, action, p)
     m.updatedAt=common.now()
     m.updatedBy=actor.label
     m.mandateSeal=officialSeal("UNS-MISSION-MANDATE",{
-      m.id,m.title,m.missionType,m.mandate,m.area,m.startAt,m.endAt,
+      m.id,m.title,m.missionType,m.mandate,m.area,m.position,m.startAt,m.endAt,
       m.resolutionId,m.treatyId,m.caseId,m.participatingStates,m.leadStateId,m.commander,m.updatedAt
     })
     mutate(state,actor,"MISSION_EDIT",m.id,m.title)
@@ -2648,14 +2693,17 @@ local function handleAction(state, actor, action, p)
     local body=common.trim(p.body)
     if body=="" then return nil,"Rapport vide." end
 
+    local incidentId=common.trim(p.incidentId):upper()
+    if incidentId~="" and not state.incidents[incidentId] then return nil,"Incident lie introuvable." end
     local report={
       id=string.format("REPORT-%03d",#(m.reports or {})+1),
       title=common.trim(p.title),body=body,
       classification=p.classification=="restricted" and "restricted" or "public",
-      at=common.now(),by=actor.label,role=actor.role
+      incidentId=incidentId,position=incidentPosition(p,m.position),
+      at=common.now(),by=actor.label,role=actor.role,stateId=actor.stateId
     }
     if report.title=="" then report.title="Rapport "..report.id end
-    report.seal=officialSeal("UNS-MISREP",{m.id,report.id,report.title,report.body,report.classification,report.at,report.by})
+    report.seal=officialSeal("UNS-MISREP",{m.id,report.id,report.title,report.body,report.classification,report.incidentId,report.position,report.at,report.by,report.stateId})
     m.reports=m.reports or {}
     m.reports[#m.reports+1]=report
     m.updatedAt=common.now()
