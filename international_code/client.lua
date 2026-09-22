@@ -843,6 +843,8 @@ local roleAllows={
   enforcementWrite={judge=true,admin=true},
   enforcementProgress={clerk=true,judge=true,admin=true},
   legislature={writer=true,admin=true},
+  resolutionWrite={writer=true,admin=true},
+  resolutionVote={delegate=true},
   diplomacy={writer=true,admin=true},
   treatySign={delegate=true},
   delegateVote={delegate=true},
