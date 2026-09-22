@@ -4,7 +4,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** destiné au Code interna
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. `North Coalition` est conservé uniquement comme État proposant dans le corpus juridique initial.
 
-## Ce que fait la v0.7
+## Ce que fait la v0.8
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
@@ -76,7 +76,7 @@ wget run https://raw.githubusercontent.com/nexox9official-source/international-c
 wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua admin
 ```
 
-## Navigation v0.7
+## Navigation v0.8
 
 Le Code n'affiche plus simplement une liste brute de 500 articles. Le terminal propose maintenant :
 
@@ -242,6 +242,61 @@ ic resolution RES-2026-0001
 
 Le tableau LIVE affiche POUR / CONTRE / ABSTENTION, participation, quorum, cible et éventuelle mesure d'exécution.
 
+## Calendrier et sessions institutionnelles v0.8
+
+Le réseau possède maintenant un vrai **calendrier de sessions** avec identifiants permanents `SESSION-AAAA-XXXX`.
+
+Une session peut représenter :
+
+- l'Assemblée des États ;
+- le Conseil de paix et de sécurité ;
+- une réunion diplomatique ;
+- une session extraordinaire / d'urgence ;
+- une commission ou un comité ;
+- une autre réunion institutionnelle.
+
+Le cycle d'une session est :
+
+```text
+scheduled -> open -> closed
+     |
+     +-> cancelled
+```
+
+Chaque convocation enregistre une date/heure, un lieu, une description et un sceau officiel. L'ordre du jour peut ensuite contenir directement des références vers :
+
+- une proposition `BILL-...` ;
+- une résolution `RES-...` ;
+- un traité `TREATY-...` ;
+- un dossier `CASE-...` ;
+- un article `UNS-ART-...` ;
+- une mesure d'exécution `ENF-...` ;
+- ou un point libre.
+
+Pendant une session ouverte, les terminaux `delegate` peuvent **enregistrer la présence de leur État**. Plusieurs joueurs du même État ne créent pas plusieurs voix de présence : le registre reste indexé par `STATE-...`.
+
+Chaque point de l'ordre du jour peut passer par `pending`, `discussing`, `discussed`, `voted`, `postponed` ou `withdrawn`, avec notes et issue propres.
+
+À la clôture, le responsable rédige le **procès-verbal final de session**. Le serveur fige alors :
+
+- l'ordre du jour et l'état de chaque point ;
+- les États présents ;
+- le compte rendu ;
+- les conclusions ;
+- l'heure de clôture ;
+- le responsable ;
+- un sceau `UNS-SESSION-...`.
+
+Les délégations reçoivent automatiquement une notification lors d'une convocation et lors de l'ouverture de la session.
+
+Pour afficher une réunion en direct dans une salle de conférence :
+
+```text
+ic session SESSION-2026-0001
+```
+
+Le Monitor affiche le statut, la salle, le nombre d'États présents et l'avancement de l'ordre du jour en temps réel.
+
 ## Traités et diplomatie v0.5
 
 Le système gère maintenant les accords internationaux sous forme de documents officiels `TREATY-AAAA-XXXX`.
@@ -384,6 +439,7 @@ ic public
 ic display CASE-2026-0001
 ic assembly BILL-2026-0001
 ic resolution RES-2026-0001
+ic session SESSION-2026-0001
 ic treaty TREATY-2026-0001
 ic verify CIU-JUG-XXXXXXXX
 ic inbox
