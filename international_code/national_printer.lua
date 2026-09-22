@@ -536,4 +536,59 @@ function P.contract(c,unit)
   return printLines(c.id or "NC-CONTRACT",lines)
 end
 
+
+function P.generalElection(e)
+  if not e then return false,"Election introuvable." end
+  local lines={}
+  append(lines,"ELECTION NATIONALE",e.id.." / "..(e.title or ""),25)
+  append(lines,"OFFICE",e.office=="president" and "Presidence de la Coalition" or "Conseil de la Coalition",25)
+  append(lines,"STATUT",e.stage or "-",25)
+  append(lines,"SIEGES",tostring(e.seats or 1),25)
+  append(lines,"MANDAT",e.termLabel or "-",25)
+  append(lines,"DESCRIPTION",e.description or "",25)
+  local cand={}
+  for _,id in ipairs(e.candidates or {}) do
+    cand[#cand+1]=id.." / "..tostring((e.candidateNames or {})[id] or id)
+  end
+  append(lines,"CANDIDATS",#cand>0 and table.concat(cand,"\n") or "Aucun",25)
+  local ta=e.tally or {}
+  if ta.eligible then
+    append(lines,"PARTICIPATION",tostring(ta.participation or 0).."/"..tostring(ta.eligible or 0)..
+      " / quorum "..tostring(ta.quorumRequired or 0),25)
+    local results={}
+    for _,row in ipairs(ta.ranking or {}) do
+      results[#results+1]=tostring((e.candidateNames or e.runoffCandidateNames or {})[row.citizenId] or row.citizenId).." = "..tostring(row.votes or 0)
+    end
+    append(lines,"RESULTATS",#results>0 and table.concat(results,"\n") or "Aucun suffrage valide",25)
+  end
+  local winners={}
+  for _,id in ipairs(e.winners or {}) do winners[#winners+1]=tostring((e.winnerNames or {})[id] or id) end
+  append(lines,"ELU(S)",#winners>0 and table.concat(winners,"\n") or "-",25)
+  append(lines,"RESULTAT",e.result or "-",25)
+  append(lines,"SCEAUX",(e.seal or "-").."\n"..(e.candidacySeal or "-").."\n"..(e.voteOpenSeal or "-")..
+    "\n"..(e.runoffOpenSeal or "-").."\n"..(e.resultSeal or e.cancelSeal or "-"),25)
+  append(lines,"JOURNAL OFFICIEL",e.gazetteId or "-",25)
+  return printLines(e.id or "NC-GE",lines)
+end
+
+function P.mandate(m)
+  if not m then return false,"Mandat introuvable." end
+  local lines={}
+  append(lines,"MANDAT NATIONAL",m.id.." / "..(m.office or ""),25)
+  append(lines,"TITULAIRE",(m.identity or "-").." / "..(m.citizenId or "-"),25)
+  append(lines,"SIEGE",m.seat and tostring(m.seat) or "-",25)
+  append(lines,"ELECTION",m.electionId or "-",25)
+  append(lines,"PERIODE RP",m.termLabel or "-",25)
+  append(lines,"STATUT",m.status or "-",25)
+  append(lines,"DEBUT",m.startedAt or "-",25)
+  append(lines,"SCEAU",m.seal or "-",25)
+  if m.status=="ended" then
+    append(lines,"FIN",(m.endedAt or "-").." / "..(m.endedBy or "-"),25)
+    append(lines,"MOTIF",m.endReason or "-",25)
+    append(lines,"SCEAU DE FIN",m.endSeal or "-",25)
+  end
+  append(lines,"JOURNAL OFFICIEL",m.gazetteId or "-",25)
+  return printLines(m.id or "NC-MANDATE",lines)
+end
+
 return P
