@@ -307,20 +307,114 @@ local function listBooks(state)
   return out
 end
 
-local function listCases(state, payload)
+local function canViewCase(actor,c)
+  if not c then return false end
+  local role=actor and actor.role or "viewer"
+  if role=="admin" or role=="judge" or role=="clerk" then return true end
+  return (c.visibility or "restricted")=="public"
+end
+
+local function listCases(state, payload, actor)
   payload = payload or {}
   local q = common.trim(payload.query)
   local status = common.trim(payload.status)
+  local visibility = common.trim(payload.visibility)
   local items = {}
   for _, c in pairs(state.cases) do
     local hit = (q == "" or common.contains(c.id, q) or common.contains(c.title, q) or common.contains(c.accused, q) or common.contains(c.complainant, q))
     local statusHit = (status == "" or c.status == status)
-    if hit and statusHit then
-      items[#items+1] = { id=c.id, title=c.title, status=c.status, accused=c.accused, complainant=c.complainant, updatedAt=c.updatedAt }
+    local visibilityHit = (visibility=="" or (c.visibility or "restricted")==visibility)
+    if hit and statusHit and visibilityHit and canViewCase(actor,c) then
+      items[#items+1] = {
+        id=c.id, title=c.title, status=c.status, visibility=c.visibility or "restricted",
+        accused=c.accused, complainant=c.complainant, updatedAt=c.updatedAt
+      }
     end
   end
   table.sort(items, function(a,b) return tostring(a.id) > tostring(b.id) end)
   return items
+end
+
+local function listStates(state,payload)
+  payload=payload or {}
+  local q=common.trim(payload.query)
+  local status=common.trim(payload.status)
+  local out={}
+  for _,st in pairs(state.states or {}) do
+    local hit=(q=="" or common.contains(st.id,q) or common.contains(st.name,q) or common.contains(st.shortName,q) or common.contains(st.representative,q))
+    local statusHit=(status=="" or st.status==status)
+    if hit and statusHit then
+      out[#out+1]=common.deepcopy(st)
+    end
+  end
+  table.sort(out,function(a,b) return tostring(a.id)<tostring(b.id) end)
+  return out
+end
+
+local function listBills(state,payload)
+  payload=payload or {}
+  local q=common.trim(payload.query)
+  local stage=common.trim(payload.stage)
+  local out={}
+  for _,bill in pairs(state.bills or {}) do
+    local hit=(q=="" or common.contains(bill.id,q) or common.contains(bill.title,q) or common.contains(bill.summary,q) or common.contains(bill.targetRef,q))
+    local stageHit=(stage=="" or bill.stage==stage)
+    if hit and stageHit then
+      local copy=common.deepcopy(bill)
+      copy.votes=nil
+      copy.voteHistory=nil
+      out[#out+1]=copy
+    end
+  end
+  table.sort(out,function(a,b) return tostring(a.id)>tostring(b.id) end)
+  return out
+end
+
+local function eligibleVotingStates(state)
+  local n=0
+  for _,st in pairs(state.states or {}) do
+    if st.status=="member" then n=n+1 end
+  end
+  return n
+end
+
+local function billTally(state,bill)
+  local yes,no,abstain=0,0,0
+  for stateId,v in pairs(bill.votes or {}) do
+    local st=state.states[stateId]
+    if st and st.status=="member" then
+      if v.choice=="yes" then yes=yes+1
+      elseif v.choice=="no" then no=no+1
+      else abstain=abstain+1 end
+    end
+  end
+  local eligible=eligibleVotingStates(state)
+  local cast=yes+no
+  local threshold=bill.threshold or "simple_cast"
+  local adopted=false
+  if threshold=="simple_cast" then
+    adopted=cast>0 and yes>no
+  elseif threshold=="absolute_members" then
+    adopted=yes>(eligible/2)
+  elseif threshold=="two_thirds_cast" then
+    adopted=cast>0 and yes*3>=cast*2
+  elseif threshold=="three_quarters_members" then
+    adopted=eligible>0 and yes*4>=eligible*3
+  end
+  return {yes=yes,no=no,abstain=abstain,eligible=eligible,cast=cast,threshold=threshold,adopted=adopted}
+end
+
+local function makeBillId(state)
+  local year=os.date and os.date("%Y") or "0000"
+  local n=(state.billCounters[year] or 0)+1
+  state.billCounters[year]=n
+  return string.format("BILL-%s-%04d",year,n)
+end
+
+local function getClientState(state,actor)
+  if not actor then return nil end
+  if actor.stateId and state.states[actor.stateId] then return state.states[actor.stateId] end
+  return nil
 end
 
 local function normalizeArticleRef(s)
@@ -343,6 +437,9 @@ local function ensureCaseShape(c)
   c.citedArticles = c.citedArticles or {}
   c.judgments = c.judgments or {}
   c.timeline = c.timeline or {}
+  c.hearings = c.hearings or {}
+  c.orders = c.orders or {}
+  c.visibility = c.visibility or "restricted"
   return c
 end
 
@@ -366,13 +463,21 @@ local function handleAction(state, actor, action, p)
     return { meta=state.meta, clientsCount=(function() local n=0 for _ in pairs(state.clients) do n=n+1 end return n end)() }
   end
   if action == "DASHBOARD" then
-    local lc, cc, openCases, activeLaws = 0, 0, 0, 0
+    local lc, cc, openCases, activeLaws, sc, votingBills = 0, 0, 0, 0, 0, 0
     for _,law in pairs(state.laws) do lc=lc+1 if law.status=="active" then activeLaws=activeLaws+1 end end
     for _,c in pairs(state.cases) do
-      cc=cc+1
-      if c.status~="closed" and c.status~="archived" then openCases=openCases+1 end
+      if canViewCase(actor,c) then
+        cc=cc+1
+        if c.status~="closed" and c.status~="archived" then openCases=openCases+1 end
+      end
     end
-    return { laws=lc, activeLaws=activeLaws, cases=cc, openCases=openCases, revision=state.meta.revision, codeStatus=state.meta.codeStatus }
+    for _,st in pairs(state.states or {}) do if st.status=="member" then sc=sc+1 end end
+    for _,bill in pairs(state.bills or {}) do if bill.stage=="voting" then votingBills=votingBills+1 end end
+    return {
+      laws=lc, activeLaws=activeLaws, cases=cc, openCases=openCases,
+      states=sc, votingBills=votingBills,
+      revision=state.meta.revision, codeStatus=state.meta.codeStatus
+    }
   end
   if action == "LAW_BOOKS" then return listBooks(state) end
   if action == "LAW_LIST" then return listLaws(state, p) end
@@ -453,10 +558,11 @@ local function handleAction(state, actor, action, p)
     return common.deepcopy(law)
   end
 
-  if action == "CASE_LIST" then return listCases(state, p) end
+  if action == "CASE_LIST" then return listCases(state, p, actor) end
   if action == "CASE_GET" then
     local c=state.cases[common.trim(p.id):upper()]
     if c then ensureCaseShape(c) end
+    if c and not canViewCase(actor,c) then return nil,"Dossier non public ou acces refuse." end
     return common.deepcopy(c)
   end
 
@@ -464,7 +570,7 @@ local function handleAction(state, actor, action, p)
     local id = makeCaseId(state)
     local c = {
       id=id, title=common.trim(p.title), complainant=common.trim(p.complainant), accused=common.trim(p.accused),
-      summary=common.trim(p.summary), status="open", facts={}, evidence={}, citedArticles={}, judgments={}, timeline={},
+      summary=common.trim(p.summary), status="open", visibility=p.visibility=="public" and "public" or "restricted", facts={}, evidence={}, citedArticles={}, judgments={}, timeline={},
       createdAt=common.now(), updatedAt=common.now(), createdBy=actor.label
     }
     if c.title == "" then return nil, "Titre obligatoire." end
