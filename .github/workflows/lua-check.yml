@@ -1,0 +1,35 @@
+name: Lua validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Lua
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.3
+
+      - name: Check Lua syntax
+        run: |
+          set -e
+          find . -type f -name '*.lua' -print0 | while IFS= read -r -d '' file; do
+            echo "Checking $file"
+            luac5.3 -p "$file"
+          done
+
+      - name: Verify initial legal corpus
+        run: |
+          set -e
+          count=$(grep -hE '^\{[0-9]+,' international_code/seed/*.lua | wc -l)
+          echo "Seed articles: $count"
+          test "$count" -eq 500
+          grep -q '^\{1,' international_code/seed/001.lua
+          grep -q '^\{500,' international_code/seed/005.lua
