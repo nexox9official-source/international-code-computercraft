@@ -3807,7 +3807,7 @@ local function serverUI(state, lastEvent)
   term.setBackgroundColor(colors.blue)
   term.setCursorPos(1,1)
   term.clearLine()
-  term.write(common.fit(" UNS / INTERNATIONAL CODE SERVER",w))
+  term.write(common.fit(" LEGAL NETWORK / UNS + NORTH COALITION",w))
 
   term.setBackgroundColor(colors.black)
   term.setTextColor(colors.lightGray)
@@ -3849,14 +3849,24 @@ local function serverUI(state, lastEvent)
   term.write("Missions: "..mis.." Conflits: "..cf.." Incidents: "..inc..(crit>0 and (" ("..crit.." CRIT)") or ""))
   term.setCursorPos(2,9)
   term.write("Execution: "..enf.." Notifications: "..tostring(#(state.notices or {})))
+  local ncLaws,ncMin,ncFilled=0,0,0
+  if state.national then
+    for _ in pairs(state.national.laws or {}) do ncLaws=ncLaws+1 end
+    for _,m in pairs(state.national.ministries or {}) do
+      ncMin=ncMin+1
+      if m.holderClientId then ncFilled=ncFilled+1 end
+    end
+  end
+  term.setCursorPos(2,10)
+  term.write("North Coalition: "..ncLaws.." lois / cabinet "..ncFilled.."/"..ncMin)
   term.setTextColor(colors.cyan)
-  term.setCursorPos(2,11)
+  term.setCursorPos(2,12)
   term.write("[P] Appairer un terminal   [B] Backup   [Q] Arreter")
 
   if state.pairing then
     term.setBackgroundColor(colors.gray)
     term.setTextColor(colors.white)
-    term.setCursorPos(2,13)
+    term.setCursorPos(2,14)
     term.write(common.fit(" CODE "..state.pairing.code.." / role "..state.pairing.role.." / 5 min ", math.max(1,w-2)))
     term.setBackgroundColor(colors.black)
   end
@@ -3866,7 +3876,7 @@ local function serverUI(state, lastEvent)
   term.write(common.fit("Dernier evenement: "..tostring(lastEvent or "Serveur demarre"), math.max(1,w-3)))
   term.setCursorPos(2,h)
   term.setTextColor(colors.gray)
-  term.write(common.fit("UNS-CIC / v"..common.VERSION.." / rednet "..common.PROTOCOL, math.max(1,w-2)))
+  term.write(common.fit("UNS + NC / v"..common.VERSION.." / rednet "..common.PROTOCOL, math.max(1,w-2)))
 end
 
 local function chooseRole()
