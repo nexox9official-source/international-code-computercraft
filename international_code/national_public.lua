@@ -55,6 +55,7 @@ local function overview(t,info,dash)
   local y=4
   fill(t,y," PRESIDENT        "..tostring(dash.presidentIdentity or info.presidentIdentity or "-"),colors.lime);y=y+2
   fill(t,y," CITOYENS ACTIFS  "..tostring(dash.activeCitizens or 0),colors.cyan);y=y+1
+  fill(t,y," TRESORERIE       "..tostring(dash.treasuryBalanceUB or 0).." "..tostring(dash.treasuryUnit or "UB"),colors.lime);y=y+1
   fill(t,y," LOIS ACTIVES     "..tostring(dash.activeLaws or 0),colors.white);y=y+1
   fill(t,y," LOIS EN PROJET   "..tostring(dash.draftLaws or 0),colors.lightGray);y=y+1
   fill(t,y," CATEGORIES       "..tostring(dash.categories or 0),colors.cyan);y=y+1
@@ -68,6 +69,34 @@ local function overview(t,info,dash)
   fill(t,y," Identite terminal: "..tostring(dash.nationalIdentity or "-"),colors.lightGray)
   local _,h=t.getSize()
   fill(t,h," Intranet national / v"..common.VERSION,colors.gray)
+end
+
+
+local function finance(t,summary,budget)
+  t.setBackgroundColor(colors.black);t.clear()
+  header(t,"FINANCES PUBLIQUES","Tresorerie et execution budgetaire")
+  local _,h=t.getSize()
+  local y=4
+  fill(t,y," SOLDE        "..tostring(summary.balanceUB or 0).." "..tostring(summary.unit or "UB"),colors.lime);y=y+1
+  fill(t,y," RECETTES     "..tostring(summary.revenueUB or 0).." "..tostring(summary.unit or "UB"),colors.cyan);y=y+1
+  fill(t,y," DEPENSES     "..tostring(summary.spentUB or 0).." "..tostring(summary.unit or "UB"),colors.yellow);y=y+1
+  fill(t,y," EN ATTENTE   "..tostring(summary.pendingExpenses or 0).." depense(s)",colors.orange);y=y+2
+  if budget then
+    fill(t,y," BUDGET ACTIF "..tostring(budget.id or "-").." / "..tostring(budget.fiscalYear or ""),colors.white);y=y+1
+    fill(t,y," "..tostring(budget.title or ""),colors.lightGray);y=y+2
+    local rows={}
+    for code,ex in pairs(budget.execution or {}) do rows[#rows+1]={code=code,ex=ex} end
+    table.sort(rows,function(a,b) return a.code<b.code end)
+    for _,row in ipairs(rows) do
+      if y>=h then break end
+      local ex=row.ex or {}
+      fill(t,y," "..row.code.." "..tostring(ex.spentUB or 0).."/"..tostring(ex.allocatedUB or 0).." "..tostring(summary.unit or "UB"),colors.lightGray)
+      y=y+1
+    end
+  else
+    fill(t,y," Aucun budget promulgue.",colors.lightGray)
+  end
+  fill(t,h," NC-BUD / tresorerie nationale",colors.gray)
 end
 
 local function government(t,info,ministries)
@@ -213,6 +242,8 @@ function P.run()
       offline(target,err or "Acces national refuse")
     else
       local ministries=rpc(cfg,"NC_MINISTRY_LIST",{},4) or {}
+      local treasury=rpc(cfg,"NC_TREASURY_DASHBOARD",{},4) or {}
+      local activeBudget=treasury.currentBudgetId and rpc(cfg,"NC_BUDGET_GET",{id=treasury.currentBudgetId},4) or nil
       local electionsOpen=rpc(cfg,"NC_ELECTION_LIST",{stage="open"},4) or {}
       local billsVoting=rpc(cfg,"NC_BILL_LIST",{stage="voting"},4) or {}
       local gazetteRows=rpc(cfg,"NC_GAZETTE_LIST",{},4) or {}
@@ -221,20 +252,21 @@ function P.run()
       local cats=rpc(cfg,"NC_CATEGORY_LIST",{},4) or {}
 
       if page==1 then overview(target,info,dash)
-      elseif page==2 then government(target,info,ministries)
-      elseif page==3 then elections(target,electionsOpen)
-      elseif page==4 then bills(target,billsVoting)
-      elseif page==5 then gazette(target,gazetteRows)
-      elseif page==6 then sessions(target,visibleSessions)
-      elseif page==7 then cases(target,visibleCases)
+      elseif page==2 then finance(target,treasury,activeBudget)
+      elseif page==3 then government(target,info,ministries)
+      elseif page==4 then elections(target,electionsOpen)
+      elseif page==5 then bills(target,billsVoting)
+      elseif page==6 then gazette(target,gazetteRows)
+      elseif page==7 then sessions(target,visibleSessions)
+      elseif page==8 then cases(target,visibleCases)
       else categories(target,cats) end
     end
 
     local timer=os.startTimer(5)
     while true do
       local ev,a=os.pullEvent()
-      if ev=="timer" and a==timer then page=page%8+1;break
-      elseif ev=="monitor_touch" then page=page%8+1;break
+      if ev=="timer" and a==timer then page=page%9+1;break
+      elseif ev=="monitor_touch" then page=page%9+1;break
       elseif ev=="key" and (a==keys.q or a==keys.escape) then
         term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
       end
