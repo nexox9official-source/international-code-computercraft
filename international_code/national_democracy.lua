@@ -92,6 +92,9 @@ end
 local function candidateAllowed(n,state,citizenId,office)
   local c=activeCitizen(n,citizenId)
   if not c then return nil,"Le candidat doit etre un citoyen actif." end
+  local linked=false
+  for _,cl in pairs(state.clients or {}) do if cl.citizenId==citizenId then linked=true break end end
+  if not linked then return nil,"Le candidat doit posseder au moins un terminal national rattache." end
   local incompatible,reason=clientHasIncompatibleOffice(state,citizenId,office)
   if incompatible then return nil,"Candidature incompatible: "..reason.."." end
   return c
@@ -223,6 +226,17 @@ local function installPresident(n,state,e,citizenId,ctx,actor)
 
   local clients=linkedClients(state,citizenId)
   if #clients==0 then return nil,"Le President elu ne possede aucun terminal national rattache." end
+
+  for i=#(n.councilMembers or {}),1,-1 do
+    if n.councilMembers[i]==citizenId then table.remove(n.councilMembers,i) end
+  end
+  for _,m in pairs(n.mandates or {}) do
+    if m.office=="council" and m.citizenId==citizenId and m.status=="active" then
+      m.status="ended";m.endedAt=now();m.endedBy=identity(actor);m.endReason="Election a la Presidence"
+      m.endSeal=seal("NC-MANDATE-END",{m.id,m.office,m.citizenId,m.startedAt,m.endedAt,m.endedBy,m.endReason,m.seal})
+    end
+  end
+
   for _,cl in ipairs(clients) do
     cl.nationalRole="president"
     cl.ministryCode=nil
@@ -503,6 +517,7 @@ function D.handle(state,actor,action,p,ctx)
     local t
     if e.office=="president" then t=closePresidential(n,state,e,ctx,actor,useRunoff)
     else t=closeCouncil(n,state,e,ctx,actor,useRunoff) end
+    e.closedBy=identity(actor)
     if useRunoff then e.runoffClosedAt=now() else e.voteClosedAt=now() end
     e.tally=t
     e.resultSeal=seal("NC-GE-RESULT",{e.id,e.office,e.seats,e.votes,e.runoffVotes,e.result,e.winners,e.fixedWinners,e.voteClosedAt,e.runoffClosedAt})
