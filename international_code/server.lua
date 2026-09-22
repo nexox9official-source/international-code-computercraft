@@ -675,6 +675,7 @@ end
 local function canViewEnforcement(actor,e)
   if not actor or not e then return false end
   if actor.role=="admin" or actor.role=="judge" or actor.role=="clerk" then return true end
+  if actor.stateId and e.targetStateId and actor.stateId==e.targetStateId then return true end
   return (e.visibility or "restricted")=="public"
 end
 
