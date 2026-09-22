@@ -1106,18 +1106,83 @@ local function agendaObjectTitle(n,state,actor,kind,ref)
   return nil
 end
 
+local HANDLE_HELPERS = {
+  seal=seal,
+  copy=copy,
+  identity=identity,
+  isSovereignAuthority=isSovereignAuthority,
+  nationalRole=nationalRole,
+  isNationalMember=isNationalMember,
+  roleIs=roleIs,
+  isPresident=isPresident,
+  isCouncil=isCouncil,
+  isMinister=isMinister,
+  requireAccess=requireAccess,
+  normalizeRef=normalizeRef,
+  lawView=lawView,
+  notice=notice,
+  noticeAll=noticeAll,
+  noticeEligible=noticeEligible,
+  listNationalNotices=listNationalNotices,
+  nationalAudit=nationalAudit,
+  mutate=mutate,
+  categoryRows=categoryRows,
+  listLaws=listLaws,
+  getLaw=getLaw,
+  nextId=nextId,
+  gazetteVisibilityAllowed=gazetteVisibilityAllowed,
+  publishGazette=publishGazette,
+  listGazette=listGazette,
+  findCitizenByIdentity=findCitizenByIdentity,
+  citizenForClient=citizenForClient,
+  createCitizen=createCitizen,
+  votingKey=votingKey,
+  isVotingCitizen=isVotingCitizen,
+  migrateClientCitizens=migrateClientCitizens,
+  uniqueEligibleIdentities=uniqueEligibleIdentities,
+  isEligible=isEligible,
+  billTally=billTally,
+  electionTally=electionTally,
+  listMinistries=listMinistries,
+  clearMinisterClient=clearMinisterClient,
+  appointMinister=appointMinister,
+  directAppointmentAllowed=directAppointmentAllowed,
+  listBills=listBills,
+  listElections=listElections,
+  listDecrees=listDecrees,
+  ministryScopeAllowed=ministryScopeAllowed,
+  technicalNationalAdmin=technicalNationalAdmin,
+  canManageCitizens=canManageCitizens,
+  citizenView=citizenView,
+  listCitizens=listCitizens,
+  nationalCaseInstitutionalRole=nationalCaseInstitutionalRole,
+  nationalCaseJudicialRole=nationalCaseJudicialRole,
+  canViewNationalCase=canViewNationalCase,
+  ensureNationalCaseShape=ensureNationalCaseShape,
+  addNationalCaseTimeline=addNationalCaseTimeline,
+  listNationalCases=listNationalCases,
+  nationalCaseId=nationalCaseId,
+  nationalLawSnapshot=nationalLawSnapshot,
+  notifyNationalCase=notifyNationalCase,
+  nationalSessionManager=nationalSessionManager,
+  canViewNationalSession=canViewNationalSession,
+  listNationalSessions=listNationalSessions,
+  nationalSessionEligible=nationalSessionEligible,
+  agendaObjectTitle=agendaObjectTitle
+}
+
 function N.handle(state,actor,action,p,ctx)
   p=p or {}
   local n=N.ensure(state)
-  migrateClientCitizens(n,state)
+  HANDLE_HELPERS.migrateClientCitizens(n,state)
 
-  if actor and isSovereignAuthority(state,actor) then
+  if actor and HANDLE_HELPERS.isSovereignAuthority(state,actor) then
     actor.nationalRoot=true
     actor.nationalIdentity=n.meta.sovereignAuthorityIdentity or "NexoFr_"
     actor.nationalRole=actor.nationalRole or "president"
     actor.stateId=n.meta.stateId
     if not actor.citizenId then
-      local founder=select(1,createCitizen(n,actor.nationalIdentity,"citizen",actor.nationalIdentity,
+      local founder=select(1,HANDLE_HELPERS.createCitizen(n,actor.nationalIdentity,"citizen",actor.nationalIdentity,
         "Autorite souveraine nationale de North Coalition"))
       actor.citizenId=founder and founder.id or actor.citizenId
     end
@@ -1131,22 +1196,22 @@ function N.handle(state,actor,action,p,ctx)
   end
 
   if action=="NC_INFO" then
-    local ok,err=requireAccess(state,actor)
+    local ok,err=HANDLE_HELPERS.requireAccess(state,actor)
     if not ok then return nil,err end
     return {
       country=n.meta.country,corpusId=n.meta.corpusId,corpusVersion=n.meta.corpusVersion,
       status=n.meta.status,stateId=n.meta.stateId,foundingMode=n.meta.foundingMode,
       foundingAccount=n.meta.foundingAccount,presidentIdentity=n.meta.presidentIdentity,
       presidentCitizenId=n.meta.presidentCitizenId,presidentClientId=n.meta.presidentClientId,
-      councilMembers=copy(n.councilMembers or {}),defaultCouncilSeats=n.meta.defaultCouncilSeats,
-      nationalRole=nationalRole(state,actor),
-      nationalIdentity=identity(actor),citizenId=actor.citizenId,
-      citizenStatus=(citizenForClient(n,actor) or {}).status,ministryCode=actor.ministryCode,
+      councilMembers=HANDLE_HELPERS.copy(n.councilMembers or {}),defaultCouncilSeats=n.meta.defaultCouncilSeats,
+      nationalRole=HANDLE_HELPERS.nationalRole(state,actor),
+      nationalIdentity=HANDLE_HELPERS.identity(actor),citizenId=actor.citizenId,
+      citizenStatus=(HANDLE_HELPERS.citizenForClient(n,actor) or {}).status,ministryCode=actor.ministryCode,
       fallbackNoVoteHours=n.meta.fallbackNoVoteHours,
       sovereignAuthority=actor and actor.nationalRoot==true or false,
       sovereignAuthorityIdentity=n.meta.sovereignAuthorityIdentity,
       sovereignAuthorityTitle=n.meta.sovereignAuthorityTitle,
-      sovereignAuthorityPowers=copy(n.meta.sovereignAuthorityPowers or {}),
+      sovereignAuthorityPowers=HANDLE_HELPERS.copy(n.meta.sovereignAuthorityPowers or {}),
       sovereignAuthorityActive=n.meta.sovereignAuthorityActive~=false,
       sovereignAuthorityTenure=n.meta.sovereignAuthorityTenure,
       sovereignAuthorityRelinquishedAt=n.meta.sovereignAuthorityRelinquishedAt,
@@ -1162,17 +1227,17 @@ function N.handle(state,actor,action,p,ctx)
     actor.nationalIdentity=n.meta.foundingAccount or "NexoFr_"
     actor.ministryCode=nil
     actor.stateId=n.meta.stateId
-    local founder=select(1,createCitizen(n,actor.nationalIdentity,"citizen",actor.nationalIdentity,"Compte fondateur de North Coalition"))
+    local founder=select(1,HANDLE_HELPERS.createCitizen(n,actor.nationalIdentity,"citizen",actor.nationalIdentity,"Compte fondateur de North Coalition"))
     actor.citizenId=founder and founder.id or actor.citizenId
     n.meta.presidentClientId=actor.clientId
     n.meta.presidentCitizenId=actor.citizenId
     n.meta.presidentIdentity=actor.nationalIdentity
     n.meta.bootstrapAt=n.meta.bootstrapAt or common.now()
     n.meta.foundingMode=true
-    noticeAll(ctx,state,n,"Intranet national initialise",
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Intranet national initialise",
       "La Presidence de North Coalition est enregistree sous l'identite "..actor.nationalIdentity..".",
       "success","nc_government","PRESIDENCY")
-    mutate(ctx,state,actor,"NC_BOOTSTRAP",actor.clientId,"President fondateur: "..actor.nationalIdentity)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_BOOTSTRAP",actor.clientId,"President fondateur: "..actor.nationalIdentity)
     return {
       nationalRole=actor.nationalRole,nationalIdentity=actor.nationalIdentity,
       presidentClientId=n.meta.presidentClientId,foundingMode=n.meta.foundingMode
@@ -1180,7 +1245,7 @@ function N.handle(state,actor,action,p,ctx)
   end
 
   if action=="NC_SOVEREIGN_RELINQUISH" then
-    if not actor or actor.nationalRoot~=true or not isSovereignAuthority(state,actor) then
+    if not actor or actor.nationalRoot~=true or not HANDLE_HELPERS.isSovereignAuthority(state,actor) then
       return nil,"Seul NexoFr_ peut renoncer a la direction souveraine de North Coalition."
     end
     if n.meta.sovereignAuthorityActive==false then
@@ -1191,12 +1256,12 @@ function N.handle(state,actor,action,p,ctx)
     end
     local reason=common.trim(p.reason)
     local at=common.now()
-    local relinquishSeal=seal("NC-SOV-RELINQUISH",{
+    local relinquishSeal=HANDLE_HELPERS.seal("NC-SOV-RELINQUISH",{
       n.meta.sovereignAuthorityIdentity,at,reason,actor.clientId,actor.citizenId
     })
     n.meta.sovereignAuthorityActive=false
     n.meta.sovereignAuthorityRelinquishedAt=at
-    n.meta.sovereignAuthorityRelinquishedBy=identity(actor)
+    n.meta.sovereignAuthorityRelinquishedBy=HANDLE_HELPERS.identity(actor)
     n.meta.sovereignAuthorityRelinquishedReason=reason
     n.meta.sovereignAuthorityRelinquishedSeal=relinquishSeal
     n.meta.presidentIdentity=nil
@@ -1204,33 +1269,33 @@ function N.handle(state,actor,action,p,ctx)
     n.meta.presidentCitizenId=nil
     n.meta.foundingMode=false
     for _,cl in pairs(state.clients or {}) do
-      if common.normalizeSearch(identity(cl))==common.normalizeSearch(n.meta.sovereignAuthorityIdentity or "NexoFr_") then
+      if common.normalizeSearch(HANDLE_HELPERS.identity(cl))==common.normalizeSearch(n.meta.sovereignAuthorityIdentity or "NexoFr_") then
         cl.nationalRoot=false
         if cl.nationalRole=="president" then cl.nationalRole="citizen" end
       end
     end
-    local gaz=publishGazette(n,actor,"sovereign_relinquishment","SOVEREIGN-AUTHORITY",
+    local gaz=HANDLE_HELPERS.publishGazette(n,actor,"sovereign_relinquishment","SOVEREIGN-AUTHORITY",
       "Renonciation volontaire du dirigeant",
       "NexoFr_ a volontairement renonce a la direction souveraine de North Coalition. Une succession peut desormais etre organisee.",
       relinquishSeal,"public")
-    noticeAll(ctx,state,n,"Renonciation souveraine enregistree",
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Renonciation souveraine enregistree",
       "La direction de North Coalition est desormais vacante a la suite de la renonciation volontaire de NexoFr_.",
       "warning","nc_government","SOVEREIGN-AUTHORITY")
-    mutate(ctx,state,actor,"NC_SOVEREIGN_RELINQUISH","SOVEREIGN-AUTHORITY",
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_SOVEREIGN_RELINQUISH","SOVEREIGN-AUTHORITY",
       relinquishSeal.." / "..(gaz and gaz.id or ""))
     actor.nationalRoot=false
     return {
-      active=false,relinquishedAt=at,relinquishedBy=identity(actor),
+      active=false,relinquishedAt=at,relinquishedBy=HANDLE_HELPERS.identity(actor),
       seal=relinquishSeal,gazetteId=gaz and gaz.id or nil
     }
   end
 
-  local access,accessErr=requireAccess(state,actor)
+  local access,accessErr=HANDLE_HELPERS.requireAccess(state,actor)
   if not access then return nil,accessErr end
 
   local netHandled,netData,netErr=network.handle(n,actor,action,p,{
     mutate=function(netAction,objectId,details)
-      mutate(ctx,state,actor,netAction,objectId,details)
+      HANDLE_HELPERS.mutate(ctx,state,actor,netAction,objectId,details)
     end,
     notify=function(row)
       if not ctx or not ctx.pushNotice then return end
@@ -1273,20 +1338,20 @@ function N.handle(state,actor,action,p,ctx)
       end
     end
 
-    append(listLaws(n,{query=q}),15,
+    append(HANDLE_HELPERS.listLaws(n,{query=q}),15,
       function() return "law" end,
       function(x) return x.id end,
       function(x) return (x.display_reference or x.id).." - "..(x.title or "") end,
       function(x) return (x.category_code or "").." / "..(x.chapter or "").." / "..(x.status or "") end,100)
 
-    append(listGazette(n,{query=q},state,actor),10,
+    append(HANDLE_HELPERS.listGazette(n,{query=q},state,actor),10,
       function() return "gazette" end,
       function(x) return x.id end,
       function(x) return x.title end,
       function(x) return (x.kind or "").." / "..(x.publishedAt or "") end,90)
 
     local ministries={}
-    for _,m in ipairs(listMinistries(n)) do
+    for _,m in ipairs(HANDLE_HELPERS.listMinistries(n)) do
       local scope=table.concat(m.scope or {}," ")
       if common.contains(m.code,q) or common.contains(m.name,q) or common.contains(scope,q) or
          common.contains(m.holderIdentity,q) then
@@ -1299,31 +1364,31 @@ function N.handle(state,actor,action,p,ctx)
       function(x) return x.name end,
       function(x) return x.code.." / "..tostring(x.holderIdentity or "VACANT") end,85)
 
-    append(listBills(n,{query=q}),10,
+    append(HANDLE_HELPERS.listBills(n,{query=q}),10,
       function() return "bill" end,
       function(x) return x.id end,
       function(x) return x.title end,
       function(x) return (x.proposalType or "").." / "..(x.stage or "") end,80)
 
-    append(listDecrees(n,{query=q}),10,
+    append(HANDLE_HELPERS.listDecrees(n,{query=q}),10,
       function() return "decree" end,
       function(x) return x.id end,
       function(x) return x.title end,
       function(x) return (x.scope or "").." / "..(x.status or "") end,78)
 
-    append(listNationalSessions(n,{query=q},state,actor),10,
+    append(HANDLE_HELPERS.listNationalSessions(n,{query=q},state,actor),10,
       function() return "session" end,
       function(x) return x.id end,
       function(x) return x.title end,
       function(x) return (x.sessionType or "").." / "..(x.status or "") end,75)
 
-    append(listNationalCases(n,{query=q},state,actor),10,
+    append(HANDLE_HELPERS.listNationalCases(n,{query=q},state,actor),10,
       function() return "case" end,
       function(x) return x.id end,
       function(x) return x.title end,
       function(x) return (x.caseType or "").." / "..(x.status or "").." / "..(x.visibility or "") end,70)
 
-    append(listCitizens(n,{query=q},canManageCitizens(state,actor)),10,
+    append(HANDLE_HELPERS.listCitizens(n,{query=q},HANDLE_HELPERS.canManageCitizens(state,actor)),10,
       function() return "citizen" end,
       function(x) return x.id end,
       function(x) return x.displayName or x.identity end,
@@ -1361,7 +1426,7 @@ function N.handle(state,actor,action,p,ctx)
 
     for _,gaz in pairs(n.gazette or {}) do
       if tostring(gaz.seal or ""):upper()==wanted then
-        if gazetteVisibilityAllowed(state,actor,gaz) then
+        if HANDLE_HELPERS.gazetteVisibilityAllowed(state,actor,gaz) then
           return result("gazette",gaz.id,gaz.title,gaz.publishedAt,gaz.publishedBy,false)
         end
         return result("gazette_confidential",gaz.id,"Publication officielle restreinte",nil,nil,true)
@@ -1422,7 +1487,7 @@ function N.handle(state,actor,action,p,ctx)
     end
 
     for _,sess in pairs(n.sessions or {}) do
-      if canViewNationalSession(state,actor,sess) then
+      if HANDLE_HELPERS.canViewNationalSession(state,actor,sess) then
         if tostring(sess.convocationSeal or ""):upper()==wanted then return result("session_convocation",sess.id,sess.title,sess.createdAt,sess.createdBy,false) end
         if tostring(sess.openSeal or ""):upper()==wanted then return result("session_open",sess.id,sess.title,sess.openedAt,sess.openedBy,false) end
         if tostring(sess.closeSeal or ""):upper()==wanted then return result("session_close",sess.id,sess.title,sess.closedAt,sess.closedBy,false) end
@@ -1437,8 +1502,8 @@ function N.handle(state,actor,action,p,ctx)
     end
 
     for _,case in pairs(n.cases or {}) do
-      ensureNationalCaseShape(case)
-      local visible=canViewNationalCase(state,actor,case)
+      HANDLE_HELPERS.ensureNationalCaseShape(case)
+      local visible=HANDLE_HELPERS.canViewNationalCase(state,actor,case)
       local function caseResult(kind,title,at,by)
         if visible then return result(kind,case.id,title,at,by,false) end
         return result(kind,case.id,"Dossier judiciaire national confidentiel",nil,nil,true)
@@ -1486,7 +1551,7 @@ function N.handle(state,actor,action,p,ctx)
   end
 
   if action=="NC_NOTICE_LIST" then
-    return listNationalNotices(ctx,state,actor,p)
+    return HANDLE_HELPERS.listNationalNotices(ctx,state,actor,p)
   end
 
   if action=="NC_DASHBOARD" then
@@ -1528,7 +1593,7 @@ function N.handle(state,actor,action,p,ctx)
       if req.status=="submitted" or req.status=="in_review" then pendingRequests=pendingRequests+1 end
     end
     local unreadNational=0
-    for _,row in ipairs(listNationalNotices(ctx,state,actor,{unreadOnly=true})) do if not row.read then unreadNational=unreadNational+1 end end
+    for _,row in ipairs(HANDLE_HELPERS.listNationalNotices(ctx,state,actor,{unreadOnly=true})) do if not row.read then unreadNational=unreadNational+1 end end
     local finSummary=finance.summary(n)
     return {
       laws=total,activeLaws=active,draftLaws=draft,repealedLaws=repealed,
@@ -1541,7 +1606,7 @@ function N.handle(state,actor,action,p,ctx)
       treasuryBalanceUB=finSummary.balanceUB,treasuryUnit=finSummary.unit,
       currentBudgetId=finSummary.currentBudgetId,pendingExpenses=finSummary.pendingExpenses,
       foundingMode=n.meta.foundingMode,presidentIdentity=n.meta.presidentIdentity,
-      nationalRole=nationalRole(state,actor),nationalIdentity=identity(actor),ministryCode=actor.ministryCode,
+      nationalRole=HANDLE_HELPERS.nationalRole(state,actor),nationalIdentity=HANDLE_HELPERS.identity(actor),ministryCode=actor.ministryCode,
       sovereignAuthority=actor and actor.nationalRoot==true or false,
       sovereignAuthorityIdentity=n.meta.sovereignAuthorityIdentity,
       sovereignAuthorityActive=n.meta.sovereignAuthorityActive~=false,
@@ -1550,49 +1615,49 @@ function N.handle(state,actor,action,p,ctx)
     }
   end
 
-  if action=="NC_CATEGORY_LIST" then return categoryRows(n) end
-  if action=="NC_LAW_LIST" then return listLaws(n,p) end
+  if action=="NC_CATEGORY_LIST" then return HANDLE_HELPERS.categoryRows(n) end
+  if action=="NC_LAW_LIST" then return HANDLE_HELPERS.listLaws(n,p) end
   if action=="NC_LAW_GET" then
-    local law=getLaw(n,p.ref or p.id)
+    local law=HANDLE_HELPERS.getLaw(n,p.ref or p.id)
     if not law then return nil,"Article national introuvable." end
-    return lawView(n,law)
+    return HANDLE_HELPERS.lawView(n,law)
   end
 
   if action=="NC_CITIZEN_LIST" then
-    return listCitizens(n,p,canManageCitizens(state,actor))
+    return HANDLE_HELPERS.listCitizens(n,p,HANDLE_HELPERS.canManageCitizens(state,actor))
   end
 
   if action=="NC_CITIZEN_GET" then
     local id=common.trim(p.id):upper()
-    local cit=n.citizens[id] or findCitizenByIdentity(n,p.id)
+    local cit=n.citizens[id] or HANDLE_HELPERS.findCitizenByIdentity(n,p.id)
     if not cit then return nil,"Citoyen introuvable." end
-    return citizenView(cit,canManageCitizens(state,actor) or cit.id==actor.citizenId)
+    return HANDLE_HELPERS.citizenView(cit,HANDLE_HELPERS.canManageCitizens(state,actor) or cit.id==actor.citizenId)
   end
 
   if action=="NC_CITIZEN_CREATE" then
-    if not canManageCitizens(state,actor) then return nil,"Registre civil reserve a la Presidence, l'administration racine ou au Ministere de l'Interieur." end
+    if not HANDLE_HELPERS.canManageCitizens(state,actor) then return nil,"Registre civil reserve a la Presidence, l'administration racine ou au Ministere de l'Interieur." end
     local status=common.trim(p.status)
     local valid={citizen=true,resident=true,suspended=true,deceased=true}
     if not valid[status] then status="citizen" end
-    local cit,err,created=createCitizen(n,p.identity,status,identity(actor),p.notes)
+    local cit,err,created=HANDLE_HELPERS.createCitizen(n,p.identity,status,HANDLE_HELPERS.identity(actor),p.notes)
     if not cit then return nil,err end
     if not created then return nil,"Cette identite existe deja sous "..cit.id.."." end
     cit.displayName=common.trim(p.displayName)~="" and common.safeName(p.displayName) or cit.identity
     cit.updatedAt=common.now()
-    noticeAll(ctx,state,n,"Nouvelle identite au registre civil",
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Nouvelle identite au registre civil",
       cit.id.." / "..cit.displayName.." / "..cit.status,
       "info","nc_citizen",cit.id)
-    mutate(ctx,state,actor,"NC_CITIZEN_CREATE",cit.id,cit.displayName.." / "..cit.status)
-    return copy(cit)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CITIZEN_CREATE",cit.id,cit.displayName.." / "..cit.status)
+    return HANDLE_HELPERS.copy(cit)
   end
 
   if action=="NC_CITIZEN_UPDATE" then
-    if not canManageCitizens(state,actor) then return nil,"Modification du registre civil non autorisee." end
+    if not HANDLE_HELPERS.canManageCitizens(state,actor) then return nil,"Modification du registre civil non autorisee." end
     local cit=n.citizens[common.trim(p.id):upper()]
     if not cit then return nil,"Citoyen introuvable." end
     local newIdentity=p.identity~=nil and common.safeName(p.identity) or cit.identity
     if newIdentity=="" then return nil,"Identite vide interdite." end
-    local duplicate=findCitizenByIdentity(n,newIdentity)
+    local duplicate=HANDLE_HELPERS.findCitizenByIdentity(n,newIdentity)
     if duplicate and duplicate.id~=cit.id then return nil,"Cette identite appartient deja a "..duplicate.id.."." end
 
     local valid={citizen=true,resident=true,suspended=true,deceased=true}
@@ -1612,13 +1677,13 @@ function N.handle(state,actor,action,p,ctx)
     if p.displayName~=nil then cit.displayName=common.trim(p.displayName)~="" and common.safeName(p.displayName) or newIdentity end
     if p.notes~=nil then cit.notes=common.trim(p.notes) end
     cit.status=newStatus
-    cit.updatedAt=common.now();cit.updatedBy=identity(actor)
+    cit.updatedAt=common.now();cit.updatedBy=HANDLE_HELPERS.identity(actor)
     cit.history=cit.history or {}
     local hist={
       at=cit.updatedAt,by=cit.updatedBy,old=old,
       new={identity=cit.identity,displayName=cit.displayName,status=cit.status,notes=cit.notes}
     }
-    hist.seal=seal("NC-CIT-HIST",{cit.id,hist.at,hist.by,hist.old,hist.new,cit.seal})
+    hist.seal=HANDLE_HELPERS.seal("NC-CIT-HIST",{cit.id,hist.at,hist.by,hist.old,hist.new,cit.seal})
     cit.history[#cit.history+1]=hist
 
     for _,cl in pairs(state.clients or {}) do
@@ -1635,15 +1700,15 @@ function N.handle(state,actor,action,p,ctx)
       end
     end
 
-    noticeAll(ctx,state,n,"Registre civil mis a jour",
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Registre civil mis a jour",
       cit.id.." / "..cit.displayName.." / "..cit.status,
       cit.status=="suspended" and "warning" or "info","nc_citizen",cit.id)
-    mutate(ctx,state,actor,"NC_CITIZEN_UPDATE",cit.id,old.status.." -> "..cit.status.." / "..cit.identity)
-    return copy(cit)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CITIZEN_UPDATE",cit.id,old.status.." -> "..cit.status.." / "..cit.identity)
+    return HANDLE_HELPERS.copy(cit)
   end
 
   if action=="NC_CITIZEN_LINK_CLIENT" then
-    if not canManageCitizens(state,actor) then return nil,"Rattachement de terminal non autorise." end
+    if not HANDLE_HELPERS.canManageCitizens(state,actor) then return nil,"Rattachement de terminal non autorise." end
     local cit=n.citizens[common.trim(p.citizenId):upper()]
     if not cit then return nil,"Identite citoyenne introuvable." end
     local cl=state.clients[common.trim(p.clientId)]
@@ -1655,45 +1720,45 @@ function N.handle(state,actor,action,p,ctx)
     cl.stateId=n.meta.stateId
     if not cl.nationalRole then cl.nationalRole=(cit.status=="citizen") and "citizen" or "public" end
     if cit.status~="citizen" and cl.nationalRole~="public" then return nil,"Cette identite n'est pas un citoyen actif." end
-    mutate(ctx,state,actor,"NC_CITIZEN_LINK_CLIENT",cit.id,cl.clientId.." / "..cl.label)
-    return {citizen=copy(cit),client=copy(cl)}
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CITIZEN_LINK_CLIENT",cit.id,cl.clientId.." / "..cl.label)
+    return {citizen=HANDLE_HELPERS.copy(cit),client=HANDLE_HELPERS.copy(cl)}
   end
 
   if action=="NC_GAZETTE_LIST" then
-    return listGazette(n,p,state,actor)
+    return HANDLE_HELPERS.listGazette(n,p,state,actor)
   end
 
   if action=="NC_GAZETTE_GET" then
     local row=n.gazette[common.trim(p.id):upper()]
     if not row then return nil,"Publication du Journal officiel introuvable." end
-    if not gazetteVisibilityAllowed(state,actor,row) then return nil,"Acces refuse a cette publication." end
-    return copy(row)
+    if not HANDLE_HELPERS.gazetteVisibilityAllowed(state,actor,row) then return nil,"Acces refuse a cette publication." end
+    return HANDLE_HELPERS.copy(row)
   end
 
   if action=="NC_GOVERNMENT_GET" then
     return {
-      meta=copy(n.meta),governmentSystem=copy(n.governmentSystem),
-      ministries=listMinistries(n)
+      meta=HANDLE_HELPERS.copy(n.meta),governmentSystem=HANDLE_HELPERS.copy(n.governmentSystem),
+      ministries=HANDLE_HELPERS.listMinistries(n)
     }
   end
 
-  if action=="NC_MINISTRY_LIST" then return listMinistries(n) end
+  if action=="NC_MINISTRY_LIST" then return HANDLE_HELPERS.listMinistries(n) end
   if action=="NC_MINISTRY_GET" then
     local m=n.ministries[common.trim(p.code):upper()]
     if not m then return nil,"Ministere introuvable." end
-    local out=copy(m)
-    out.directAppointmentAllowed,out.directAppointmentReason=directAppointmentAllowed(n,m)
+    local out=HANDLE_HELPERS.copy(m)
+    out.directAppointmentAllowed,out.directAppointmentReason=HANDLE_HELPERS.directAppointmentAllowed(n,m)
     return out
   end
 
   if action=="NC_CLIENT_LIST" then
-    if not (isPresident(state,actor) or canManageCitizens(state,actor)) then return nil,"Acces au registre des terminaux refuse." end
+    if not (HANDLE_HELPERS.isPresident(state,actor) or HANDLE_HELPERS.canManageCitizens(state,actor)) then return nil,"Acces au registre des terminaux refuse." end
     local out={}
     for _,cl in pairs(state.clients or {}) do
       out[#out+1]={
         clientId=cl.clientId,computerId=cl.computerId,label=cl.label,role=cl.role,
-        stateId=cl.stateId,nationalRole=nationalRole(state,cl),storedNationalRole=cl.nationalRole,
-        nationalIdentity=identity(cl),citizenId=cl.citizenId,ministryCode=cl.ministryCode
+        stateId=cl.stateId,nationalRole=HANDLE_HELPERS.nationalRole(state,cl),storedNationalRole=cl.nationalRole,
+        nationalIdentity=HANDLE_HELPERS.identity(cl),citizenId=cl.citizenId,ministryCode=cl.ministryCode
       }
     end
     table.sort(out,function(a,b) return tostring(a.nationalIdentity)<tostring(b.nationalIdentity) end)
@@ -1701,7 +1766,7 @@ function N.handle(state,actor,action,p,ctx)
   end
 
   if action=="NC_CLIENT_SET_ROLE" then
-    if not isPresident(state,actor) then return nil,"Reserve a la Presidence ou a l'administration." end
+    if not HANDLE_HELPERS.isPresident(state,actor) then return nil,"Reserve a la Presidence ou a l'administration." end
     local target=state.clients[common.trim(p.clientId)]
     if not target then return nil,"Terminal introuvable." end
     local wanted=common.trim(p.nationalRole)
@@ -1722,7 +1787,7 @@ function N.handle(state,actor,action,p,ctx)
     if target.nationalRole then
       target.stateId=n.meta.stateId
       if target.nationalRole~="public" then
-        local citizen,er=createCitizen(n,target.nationalIdentity,"citizen",identity(actor),"Enregistrement automatique lors de l'attribution d'une fonction nationale")
+        local citizen,er=HANDLE_HELPERS.createCitizen(n,target.nationalIdentity,"citizen",HANDLE_HELPERS.identity(actor),"Enregistrement automatique lors de l'attribution d'une fonction nationale")
         if not citizen then return nil,er end
         if citizen.status~="citizen" then return nil,"Cette identite n'a pas le statut de citoyen actif." end
         target.citizenId=citizen.id
@@ -1735,47 +1800,47 @@ function N.handle(state,actor,action,p,ctx)
       n.meta.presidentClientId=target.clientId
       n.meta.presidentIdentity=target.nationalIdentity
     end
-    mutate(ctx,state,actor,"NC_CLIENT_SET_ROLE",target.clientId,(target.nationalRole or "aucun").." / "..target.nationalIdentity)
-    return copy(target)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CLIENT_SET_ROLE",target.clientId,(target.nationalRole or "aucun").." / "..target.nationalIdentity)
+    return HANDLE_HELPERS.copy(target)
   end
 
   if action=="NC_FOUNDING_CLOSE" then
-    if not isPresident(state,actor) then return nil,"Reserve a la Presidence." end
+    if not HANDLE_HELPERS.isPresident(state,actor) then return nil,"Reserve a la Presidence." end
     if not n.meta.foundingMode then return {foundingMode=false} end
     n.meta.foundingMode=false
     n.meta.foundingClosedAt=common.now()
-    n.meta.foundingClosedBy=identity(actor)
-    n.meta.foundingSeal=seal("NC-FOUNDING",{n.meta.foundingClosedAt,n.meta.foundingClosedBy,n.meta.presidentIdentity})
+    n.meta.foundingClosedBy=HANDLE_HELPERS.identity(actor)
+    n.meta.foundingSeal=HANDLE_HELPERS.seal("NC-FOUNDING",{n.meta.foundingClosedAt,n.meta.foundingClosedBy,n.meta.presidentIdentity})
     for _,m in pairs(n.ministries) do
       if not m.holderClientId then m.vacantSince=common.now();m.vacantSinceMs=common.nowMs() end
     end
-    noticeAll(ctx,state,n,"Fin de la phase fondatrice",
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Fin de la phase fondatrice",
       "Les regles ordinaires de nomination, delais et scrutins sont maintenant applicables.",
       "warning","nc_government","FOUNDING")
-    local gaz=publishGazette(n,actor,"founding","NORTH-COALITION",
+    local gaz=HANDLE_HELPERS.publishGazette(n,actor,"founding","NORTH-COALITION",
       "Cloture de la phase fondatrice",
       "Passage au regime ordinaire de nomination, de scrutin et de fonctionnement institutionnel.",
       n.meta.foundingSeal,"public")
     n.meta.foundingGazetteId=gaz.id
-    mutate(ctx,state,actor,"NC_FOUNDING_CLOSE","NORTH-COALITION",n.meta.foundingSeal.." / "..gaz.id)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_FOUNDING_CLOSE","NORTH-COALITION",n.meta.foundingSeal.." / "..gaz.id)
     return {foundingMode=false,seal=n.meta.foundingSeal}
   end
 
   if action=="NC_MINISTER_APPOINT_DIRECT" then
-    if not isPresident(state,actor) then return nil,"Seule la Presidence peut effectuer une nomination directe." end
+    if not HANDLE_HELPERS.isPresident(state,actor) then return nil,"Seule la Presidence peut effectuer une nomination directe." end
     local m=n.ministries[common.trim(p.ministryCode):upper()]
     if not m then return nil,"Ministere introuvable." end
     local target=state.clients[common.trim(p.clientId)]
     if not target then return nil,"Terminal candidat introuvable." end
-    local allowed,reason=directAppointmentAllowed(n,m)
+    local allowed,reason=HANDLE_HELPERS.directAppointmentAllowed(n,m)
     if not allowed and actor.role~="admin" then
       return nil,"Nomination directe non ouverte: attendre "..tostring(n.meta.fallbackNoVoteHours).." h sans scrutin ou deux scrutins echoues."
     end
-    return appointMinister(state,n,ctx,actor,m,target,"direct",nil,common.trim(p.reason)~="" and common.trim(p.reason) or reason)
+    return HANDLE_HELPERS.appointMinister(state,n,ctx,actor,m,target,"direct",nil,common.trim(p.reason)~="" and common.trim(p.reason) or reason)
   end
 
   if action=="NC_MINISTER_REMOVE" then
-    if not isPresident(state,actor) then return nil,"Seule la Presidence peut revoquer un ministre." end
+    if not HANDLE_HELPERS.isPresident(state,actor) then return nil,"Seule la Presidence peut revoquer un ministre." end
     local m=n.ministries[common.trim(p.ministryCode):upper()]
     if not m then return nil,"Ministere introuvable." end
     if not m.holderClientId then return nil,"Ce ministere est deja vacant." end
@@ -1784,36 +1849,36 @@ function N.handle(state,actor,action,p,ctx)
     local oldId,oldIdentity=m.holderClientId,m.holderIdentity
     local row={
       event="removed",at=common.now(),identity=oldIdentity,clientId=oldId,reason=reason,
-      by=identity(actor)
+      by=HANDLE_HELPERS.identity(actor)
     }
-    row.seal=seal("NC-MIN-END",{m.code,oldId,oldIdentity,reason,row.at,row.by})
+    row.seal=HANDLE_HELPERS.seal("NC-MIN-END",{m.code,oldId,oldIdentity,reason,row.at,row.by})
     m.history[#m.history+1]=row
-    clearMinisterClient(state,oldId)
+    HANDLE_HELPERS.clearMinisterClient(state,oldId)
     m.holderClientId=nil;m.holderIdentity=nil;m.appointedAt=nil;m.appointmentMode=nil;m.appointmentSourceId=nil;m.appointmentReason=nil;m.appointmentSeal=nil
     m.vacantSince=common.now();m.vacantSinceMs=common.nowMs()
-    noticeAll(ctx,state,n,"Portefeuille ministeriel vacant",
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Portefeuille ministeriel vacant",
       m.name.." : fin de fonction de "..tostring(oldIdentity)..". Motif: "..reason,
       "warning","nc_ministry",m.code)
-    notice(ctx,state,{title="Fin de fonction ministerielle",body=m.name.." / "..reason,
+    HANDLE_HELPERS.notice(ctx,state,{title="Fin de fonction ministerielle",body=m.name.." / "..reason,
       severity="warning",objectType="nc_ministry",objectId=m.code,targetClientId=oldId})
-    local gaz=publishGazette(n,actor,"ministry_end",m.code,
+    local gaz=HANDLE_HELPERS.publishGazette(n,actor,"ministry_end",m.code,
       "Fin de fonction - "..m.name,
       tostring(oldIdentity).." quitte ses fonctions. Motif: "..reason,
       row.seal,"internal")
     row.gazetteId=gaz.id
-    mutate(ctx,state,actor,"NC_MINISTER_REMOVE",m.code,oldIdentity.." / "..reason.." / "..gaz.id)
-    return copy(m)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_MINISTER_REMOVE",m.code,oldIdentity.." / "..reason.." / "..gaz.id)
+    return HANDLE_HELPERS.copy(m)
   end
 
-  if action=="NC_ELECTION_LIST" then return listElections(n,p) end
+  if action=="NC_ELECTION_LIST" then return HANDLE_HELPERS.listElections(n,p) end
   if action=="NC_ELECTION_GET" then
     local e=n.elections[common.trim(p.id):upper()]
     if not e then return nil,"Scrutin national introuvable." end
-    local out=copy(e);out.tally=electionTally(e);return out
+    local out=HANDLE_HELPERS.copy(e);out.tally=HANDLE_HELPERS.electionTally(e);return out
   end
 
   if action=="NC_ELECTION_CREATE" then
-    if not isPresident(state,actor) then return nil,"Le President choisit l'ouverture d'un scrutin ministeriel." end
+    if not HANDLE_HELPERS.isPresident(state,actor) then return nil,"Le President choisit l'ouverture d'un scrutin ministeriel." end
     local ministry=n.ministries[common.trim(p.ministryCode):upper()]
     if not ministry then return nil,"Ministere introuvable." end
     if ministry.holderClientId then return nil,"Le ministere n'est pas vacant." end
@@ -1821,63 +1886,63 @@ function N.handle(state,actor,action,p,ctx)
       if e.ministryCode==ministry.code and (e.stage=="draft" or e.stage=="open") then return nil,"Un scrutin est deja en cours pour ce ministere." end
     end
     local electorate=(p.electorate=="citizen") and "citizen" or "council"
-    local id=nextId(n.electionCounters,"NC-ELECT")
+    local id=HANDLE_HELPERS.nextId(n.electionCounters,"NC-ELECT")
     local e={
       id=id,title=common.trim(p.title)~="" and common.trim(p.title) or ("Election - "..ministry.name),
       ministryCode=ministry.code,electorate=electorate,stage="draft",
-      candidates={},votes={},eligibleIdentities={},createdAt=common.now(),createdBy=identity(actor),
+      candidates={},votes={},eligibleIdentities={},createdAt=common.now(),createdBy=HANDLE_HELPERS.identity(actor),
       openedAt=nil,closedAt=nil,result=nil,winnerClientId=nil,winnerIdentity=nil
     }
     n.elections[id]=e
     ministry.lastElectionId=id
-    noticeAll(ctx,state,n,"Procedure ministerielle creee",
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Procedure ministerielle creee",
       e.title.." / "..ministry.name.." / corps electoral: "..electorate,
       "info","nc_election",id)
-    mutate(ctx,state,actor,"NC_ELECTION_CREATE",id,ministry.code.." / "..electorate)
-    return copy(e)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_ELECTION_CREATE",id,ministry.code.." / "..electorate)
+    return HANDLE_HELPERS.copy(e)
   end
 
   if action=="NC_ELECTION_ADD_CANDIDATE" then
-    if not isPresident(state,actor) then return nil,"Reserve a la Presidence." end
+    if not HANDLE_HELPERS.isPresident(state,actor) then return nil,"Reserve a la Presidence." end
     local e=n.elections[common.trim(p.id):upper()]
     if not e then return nil,"Scrutin introuvable." end
     if e.stage~="draft" then return nil,"Les candidatures sont verrouillees apres ouverture." end
     local target=state.clients[common.trim(p.clientId)]
     if not target then return nil,"Terminal candidat introuvable." end
-    if not isNationalMember(state,target) or not isVotingCitizen(n,target) then return nil,"Le candidat doit etre un citoyen national enregistre et actif." end
+    if not HANDLE_HELPERS.isNationalMember(state,target) or not HANDLE_HELPERS.isVotingCitizen(n,target) then return nil,"Le candidat doit etre un citoyen national enregistre et actif." end
     if target.nationalRole=="president" or (target.ministryCode and target.ministryCode~="") then return nil,"Candidat deja titulaire d'une fonction incompatible." end
-    for _,c in ipairs(e.candidates) do if c.clientId==target.clientId then return copy(e) end end
-    e.candidates[#e.candidates+1]={clientId=target.clientId,identity=identity(target),addedAt=common.now()}
-    mutate(ctx,state,actor,"NC_ELECTION_ADD_CANDIDATE",e.id,identity(target))
-    return copy(e)
+    for _,c in ipairs(e.candidates) do if c.clientId==target.clientId then return HANDLE_HELPERS.copy(e) end end
+    e.candidates[#e.candidates+1]={clientId=target.clientId,identity=HANDLE_HELPERS.identity(target),addedAt=common.now()}
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_ELECTION_ADD_CANDIDATE",e.id,HANDLE_HELPERS.identity(target))
+    return HANDLE_HELPERS.copy(e)
   end
 
   if action=="NC_ELECTION_OPEN" then
-    if not isPresident(state,actor) then return nil,"Reserve a la Presidence." end
+    if not HANDLE_HELPERS.isPresident(state,actor) then return nil,"Reserve a la Presidence." end
     local e=n.elections[common.trim(p.id):upper()]
     if not e then return nil,"Scrutin introuvable." end
     if e.stage~="draft" then return nil,"Scrutin deja ouvert ou termine." end
     if #e.candidates==0 then return nil,"Aucun candidat enregistre." end
-    e.eligibleIdentities=uniqueEligibleIdentities(state,e.electorate)
+    e.eligibleIdentities=HANDLE_HELPERS.uniqueEligibleIdentities(state,e.electorate)
     if #e.eligibleIdentities==0 then return nil,"Aucun electeur eligible." end
     e.votes={}
     e.stage="open"
     e.openedAt=common.now()
-    e.openedBy=identity(actor)
-    e.openSeal=seal("NC-ELECT-OPEN",{e.id,e.ministryCode,e.electorate,e.candidates,e.eligibleIdentities,e.openedAt})
-    noticeEligible(ctx,state,e,"Vote ministeriel ouvert",
+    e.openedBy=HANDLE_HELPERS.identity(actor)
+    e.openSeal=HANDLE_HELPERS.seal("NC-ELECT-OPEN",{e.id,e.ministryCode,e.electorate,e.candidates,e.eligibleIdentities,e.openedAt})
+    HANDLE_HELPERS.noticeEligible(ctx,state,e,"Vote ministeriel ouvert",
       e.title.." / "..e.ministryCode.." : votre identite appartient au corps electoral.",
       "warning","nc_election",e.id)
-    mutate(ctx,state,actor,"NC_ELECTION_OPEN",e.id,e.openSeal)
-    local out=copy(e);out.tally=electionTally(e);return out
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_ELECTION_OPEN",e.id,e.openSeal)
+    local out=HANDLE_HELPERS.copy(e);out.tally=HANDLE_HELPERS.electionTally(e);return out
   end
 
   if action=="NC_ELECTION_VOTE" then
     local e=n.elections[common.trim(p.id):upper()]
     if not e then return nil,"Scrutin introuvable." end
     if e.stage~="open" then return nil,"Scrutin ferme." end
-    local who=votingKey(n,actor)
-    if not who or not isEligible(who,e.eligibleIdentities) then return nil,"Vous ne faites pas partie du corps electoral de ce scrutin." end
+    local who=HANDLE_HELPERS.votingKey(n,actor)
+    if not who or not HANDLE_HELPERS.isEligible(who,e.eligibleIdentities) then return nil,"Vous ne faites pas partie du corps electoral de ce scrutin." end
     local choice=common.trim(p.choice)
     if choice~="abstain" then
       local found=false
@@ -1885,20 +1950,20 @@ function N.handle(state,actor,action,p,ctx)
       if not found then return nil,"Candidat invalide." end
     end
     e.votes[who]={choice=choice,at=common.now(),clientId=actor.clientId}
-    local tally=electionTally(e)
-    mutate(ctx,state,actor,"NC_ELECTION_VOTE",e.id,who.." -> "..choice)
-    local out=copy(e);out.tally=tally;return out
+    local tally=HANDLE_HELPERS.electionTally(e)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_ELECTION_VOTE",e.id,who.." -> "..choice)
+    local out=HANDLE_HELPERS.copy(e);out.tally=tally;return out
   end
 
   if action=="NC_ELECTION_CLOSE" then
-    if not isPresident(state,actor) then return nil,"Reserve a la Presidence." end
+    if not HANDLE_HELPERS.isPresident(state,actor) then return nil,"Reserve a la Presidence." end
     local e=n.elections[common.trim(p.id):upper()]
     if not e then return nil,"Scrutin introuvable." end
     if e.stage~="open" then return nil,"Scrutin non ouvert." end
     local ministry=n.ministries[e.ministryCode]
     if not ministry then return nil,"Ministere du scrutin introuvable." end
-    local tally=electionTally(e)
-    e.closedAt=common.now();e.closedBy=identity(actor);e.tallyAtClose=tally
+    local tally=HANDLE_HELPERS.electionTally(e)
+    e.closedAt=common.now();e.closedBy=HANDLE_HELPERS.identity(actor);e.tallyAtClose=tally
     if not tally.quorumMet then
       e.stage="failed";e.result="no_quorum";ministry.failedElections=(ministry.failedElections or 0)+1
     elseif tally.tie or not tally.winnerClientId then
@@ -1906,13 +1971,13 @@ function N.handle(state,actor,action,p,ctx)
     else
       e.stage="elected";e.result="elected";e.winnerClientId=tally.winnerClientId
       local target=state.clients[e.winnerClientId]
-      e.winnerIdentity=target and identity(target) or e.winnerClientId
+      e.winnerIdentity=target and HANDLE_HELPERS.identity(target) or e.winnerClientId
     end
-    e.resultSeal=seal("NC-ELECT",{e.id,e.ministryCode,e.electorate,e.candidates,e.eligibleIdentities,e.votes,e.result,e.winnerClientId,e.closedAt})
-    noticeAll(ctx,state,n,"Resultat du scrutin "..e.id,
+    e.resultSeal=HANDLE_HELPERS.seal("NC-ELECT",{e.id,e.ministryCode,e.electorate,e.candidates,e.eligibleIdentities,e.votes,e.result,e.winnerClientId,e.closedAt})
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Resultat du scrutin "..e.id,
       e.result=="elected" and ("Candidat elu: "..tostring(e.winnerIdentity or e.winnerClientId)) or ("Scrutin non concluant: "..tostring(e.result)),
       e.result=="elected" and "success" or "warning","nc_election",e.id)
-    local gaz=publishGazette(n,actor,"election_result",e.id,
+    local gaz=HANDLE_HELPERS.publishGazette(n,actor,"election_result",e.id,
       "Resultat du scrutin ministeriel "..e.id,
       e.result=="elected" and ("Elu: "..tostring(e.winnerIdentity or e.winnerClientId).." / "..e.ministryCode)
         or ("Scrutin non concluant: "..tostring(e.result).." / "..e.ministryCode),
@@ -1921,32 +1986,32 @@ function N.handle(state,actor,action,p,ctx)
     if e.stage=="elected" then
       local target=state.clients[e.winnerClientId]
       if not target then return nil,"Candidat elu introuvable au moment de la nomination." end
-      nationalAudit(state,actor,"NC_ELECTION_CLOSE",e.id,e.result.." / "..e.resultSeal.." / "..gaz.id)
-      local appointed,err=appointMinister(state,n,ctx,actor,ministry,target,"elected",e.id,"Election reguliere")
+      HANDLE_HELPERS.nationalAudit(state,actor,"NC_ELECTION_CLOSE",e.id,e.result.." / "..e.resultSeal.." / "..gaz.id)
+      local appointed,err=HANDLE_HELPERS.appointMinister(state,n,ctx,actor,ministry,target,"elected",e.id,"Election reguliere")
       if not appointed then return nil,err end
       e.appointmentSeal=appointed.appointmentSeal
       -- appointMinister already persisted, but the election fields above are part of the same state table.
-      return {election=copy(e),ministry=appointed,tally=tally}
+      return {election=HANDLE_HELPERS.copy(e),ministry=appointed,tally=tally}
     end
-    mutate(ctx,state,actor,"NC_ELECTION_CLOSE",e.id,e.result.." / "..e.resultSeal.." / "..gaz.id)
-    return {election=copy(e),ministry=copy(ministry),tally=tally}
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_ELECTION_CLOSE",e.id,e.result.." / "..e.resultSeal.." / "..gaz.id)
+    return {election=HANDLE_HELPERS.copy(e),ministry=HANDLE_HELPERS.copy(ministry),tally=tally}
   end
 
-  if action=="NC_BILL_LIST" then return listBills(n,p) end
+  if action=="NC_BILL_LIST" then return HANDLE_HELPERS.listBills(n,p) end
   if action=="NC_BILL_GET" then
     local b=n.bills[common.trim(p.id):upper()]
     if not b then return nil,"Projet de loi introuvable." end
-    local out=copy(b);out.tally=billTally(b);return out
+    local out=HANDLE_HELPERS.copy(b);out.tally=HANDLE_HELPERS.billTally(b);return out
   end
 
   if action=="NC_BILL_CREATE" then
-    if not roleIs(state,actor,"admin","president","council","minister") then return nil,"Vous ne pouvez pas deposer de projet de loi." end
+    if not HANDLE_HELPERS.roleIs(state,actor,"admin","president","council","minister") then return nil,"Vous ne pouvez pas deposer de projet de loi." end
     local typ=common.trim(p.proposalType)
     local valid={amendment=true,repeal=true,ratification_bundle=true,new_law=true}
     if not valid[typ] then typ="amendment" end
     local title=common.trim(p.title)
     if title=="" then return nil,"Titre du projet obligatoire." end
-    local id=nextId(n.billCounters,"NC-BILL")
+    local id=HANDLE_HELPERS.nextId(n.billCounters,"NC-BILL")
     local b={
       id=id,title=title,summary=common.trim(p.summary),proposalType=typ,
       stage="draft",threshold=p.threshold=="two_thirds_cast" and "two_thirds_cast" or
@@ -1958,10 +2023,10 @@ function N.handle(state,actor,action,p,ctx)
       proposedTitleGroup=common.trim(p.proposedTitleGroup),proposedChapter=common.trim(p.proposedChapter),
       proposedKind=common.trim(p.proposedKind),proposedMinistry=common.trim(p.proposedMinistry),
       votes={},voteHistory={},eligibleIdentities={},
-      createdAt=common.now(),createdBy=identity(actor),result=nil,enactedRefs={}
+      createdAt=common.now(),createdBy=HANDLE_HELPERS.identity(actor),result=nil,enactedRefs={}
     }
     if typ=="amendment" or typ=="repeal" then
-      local law=getLaw(n,p.targetRef)
+      local law=HANDLE_HELPERS.getLaw(n,p.targetRef)
       if not law then return nil,"Article cible introuvable." end
       b.targetRef=law.id
       if typ=="amendment" and b.proposedText=="" then return nil,"Nouveau texte obligatoire." end
@@ -1970,7 +2035,7 @@ function N.handle(state,actor,action,p,ctx)
       local seen={}
       if type(p.targetRefs)=="table" then
         for _,raw in ipairs(p.targetRefs) do
-          local law=getLaw(n,raw)
+          local law=HANDLE_HELPERS.getLaw(n,raw)
           if law and not seen[law.id] then seen[law.id]=true;b.targetRefs[#b.targetRefs+1]=law.id end
         end
       end
@@ -1983,63 +2048,63 @@ function N.handle(state,actor,action,p,ctx)
       if b.proposedTitle=="" or b.proposedText=="" or b.proposedCategoryCode=="" then return nil,"Titre, texte et categorie obligatoires." end
     end
     n.bills[id]=b
-    noticeAll(ctx,state,n,"Nouveau projet de loi",
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Nouveau projet de loi",
       b.id.." / "..b.title.." / "..b.proposalType,
       "info","nc_bill",b.id)
-    mutate(ctx,state,actor,"NC_BILL_CREATE",id,title.." / "..typ)
-    return copy(b)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_BILL_CREATE",id,title.." / "..typ)
+    return HANDLE_HELPERS.copy(b)
   end
 
   if action=="NC_BILL_OPEN" then
-    if not isCouncil(state,actor) then return nil,"Ouverture du vote reservee a la Presidence ou au Conseil." end
+    if not HANDLE_HELPERS.isCouncil(state,actor) then return nil,"Ouverture du vote reservee a la Presidence ou au Conseil." end
     local b=n.bills[common.trim(p.id):upper()]
     if not b then return nil,"Projet introuvable." end
     if b.stage~="draft" and b.stage~="debate" and b.stage~="no_quorum" then return nil,"Projet non ouvrable au vote." end
-    b.eligibleIdentities=uniqueEligibleIdentities(state,b.electorate)
+    b.eligibleIdentities=HANDLE_HELPERS.uniqueEligibleIdentities(state,b.electorate)
     if #b.eligibleIdentities==0 then return nil,"Aucun electeur eligible." end
-    b.votes={};b.stage="voting";b.openedAt=common.now();b.openedBy=identity(actor)
-    b.openSeal=seal("NC-BILL-OPEN",{b.id,b.proposalType,b.electorate,b.threshold,b.eligibleIdentities,b.openedAt})
-    noticeEligible(ctx,state,b,"Vote legislatif ouvert",
+    b.votes={};b.stage="voting";b.openedAt=common.now();b.openedBy=HANDLE_HELPERS.identity(actor)
+    b.openSeal=HANDLE_HELPERS.seal("NC-BILL-OPEN",{b.id,b.proposalType,b.electorate,b.threshold,b.eligibleIdentities,b.openedAt})
+    HANDLE_HELPERS.noticeEligible(ctx,state,b,"Vote legislatif ouvert",
       b.id.." / "..b.title.." : votre identite appartient au corps electoral.",
       "warning","nc_bill",b.id)
-    mutate(ctx,state,actor,"NC_BILL_OPEN",b.id,b.openSeal)
-    local out=copy(b);out.tally=billTally(b);return out
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_BILL_OPEN",b.id,b.openSeal)
+    local out=HANDLE_HELPERS.copy(b);out.tally=HANDLE_HELPERS.billTally(b);return out
   end
 
   if action=="NC_BILL_VOTE" then
     local b=n.bills[common.trim(p.id):upper()]
     if not b then return nil,"Projet introuvable." end
     if b.stage~="voting" then return nil,"Vote ferme." end
-    local who=votingKey(n,actor)
-    if not who or not isEligible(who,b.eligibleIdentities) then return nil,"Vous ne faites pas partie du corps electoral." end
+    local who=HANDLE_HELPERS.votingKey(n,actor)
+    if not who or not HANDLE_HELPERS.isEligible(who,b.eligibleIdentities) then return nil,"Vous ne faites pas partie du corps electoral." end
     local choice=common.lower(p.choice)
     if choice~="yes" and choice~="no" and choice~="abstain" then return nil,"Vote invalide." end
     b.votes[who]={choice=choice,at=common.now(),clientId=actor.clientId}
     b.voteHistory[#b.voteHistory+1]={identity=who,choice=choice,at=common.now()}
-    mutate(ctx,state,actor,"NC_BILL_VOTE",b.id,who.."="..choice)
-    local out=copy(b);out.tally=billTally(b);return out
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_BILL_VOTE",b.id,who.."="..choice)
+    local out=HANDLE_HELPERS.copy(b);out.tally=HANDLE_HELPERS.billTally(b);return out
   end
 
   if action=="NC_BILL_CLOSE" then
-    if not isCouncil(state,actor) then return nil,"Cloture reservee a la Presidence ou au Conseil." end
+    if not HANDLE_HELPERS.isCouncil(state,actor) then return nil,"Cloture reservee a la Presidence ou au Conseil." end
     local b=n.bills[common.trim(p.id):upper()]
     if not b then return nil,"Projet introuvable." end
     if b.stage~="voting" then return nil,"Vote non ouvert." end
-    local tally=billTally(b)
-    b.closedAt=common.now();b.closedBy=identity(actor)
+    local tally=HANDLE_HELPERS.billTally(b)
+    b.closedAt=common.now();b.closedBy=HANDLE_HELPERS.identity(actor)
     if not tally.quorumMet then b.stage="no_quorum";b.result="no_quorum"
     elseif tally.adopted then b.stage="adopted";b.result="adopted"
     else b.stage="rejected";b.result="rejected" end
-    b.resultSeal=seal("NC-BILL",{b.id,b.result,b.threshold,b.eligibleIdentities,b.votes,b.closedAt})
-    noticeAll(ctx,state,n,"Resultat legislatif "..b.id,
+    b.resultSeal=HANDLE_HELPERS.seal("NC-BILL",{b.id,b.result,b.threshold,b.eligibleIdentities,b.votes,b.closedAt})
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Resultat legislatif "..b.id,
       b.title.." : "..string.upper(tostring(b.result or "inconnu")),
       b.result=="adopted" and "success" or "warning","nc_bill",b.id)
-    mutate(ctx,state,actor,"NC_BILL_CLOSE",b.id,b.result.." / "..b.resultSeal)
-    local out=copy(b);out.tally=tally;return out
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_BILL_CLOSE",b.id,b.result.." / "..b.resultSeal)
+    local out=HANDLE_HELPERS.copy(b);out.tally=tally;return out
   end
 
   if action=="NC_BILL_ENACT" then
-    if not isPresident(state,actor) then return nil,"La promulgation est reservee a la Presidence." end
+    if not HANDLE_HELPERS.isPresident(state,actor) then return nil,"La promulgation est reservee a la Presidence." end
     local b=n.bills[common.trim(p.id):upper()]
     if not b then return nil,"Projet introuvable." end
     if b.stage~="adopted" then
@@ -2048,12 +2113,12 @@ function N.handle(state,actor,action,p,ctx)
         b.stage="adopted"
         b.result="sovereign_adoption"
         b.closedAt=common.now()
-        b.closedBy=identity(actor)
-        b.resultSeal=seal("NC-BILL-SOVEREIGN",{b.id,b.proposalType,b.closedAt,b.closedBy,b.proposedTitle,b.proposedText,b.targetRef,b.targetRefs})
-        noticeAll(ctx,state,n,"Adoption souveraine "..b.id,
+        b.closedBy=HANDLE_HELPERS.identity(actor)
+        b.resultSeal=HANDLE_HELPERS.seal("NC-BILL-SOVEREIGN",{b.id,b.proposalType,b.closedAt,b.closedBy,b.proposedTitle,b.proposedText,b.targetRef,b.targetRefs})
+        HANDLE_HELPERS.noticeAll(ctx,state,n,"Adoption souveraine "..b.id,
           b.title.." adopte directement par "..b.closedBy..".",
           "success","nc_bill",b.id)
-        mutate(ctx,state,actor,"NC_BILL_SOVEREIGN_ADOPT",b.id,b.resultSeal)
+        HANDLE_HELPERS.mutate(ctx,state,actor,"NC_BILL_SOVEREIGN_ADOPT",b.id,b.resultSeal)
       else
         return nil,"Le projet doit etre adopte avant promulgation."
       end
@@ -2065,24 +2130,24 @@ function N.handle(state,actor,action,p,ctx)
       law.history=law.history or {}
       law.history[#law.history+1]={
         version=law.version,status=law.status,title=law.title,text=law.text,
-        archivedAt=common.now(),archivedBy=identity(actor),sourceBill=b.id
+        archivedAt=common.now(),archivedBy=HANDLE_HELPERS.identity(actor),sourceBill=b.id
       }
       law.title=b.proposedTitle~="" and b.proposedTitle or law.title
       law.text=b.proposedText
       law.version=tostring((tonumber(law.version) or 1)+1)..".0"
-      law.updatedAt=common.now();law.updatedBy=identity(actor)
+      law.updatedAt=common.now();law.updatedBy=HANDLE_HELPERS.identity(actor)
       enacted[#enacted+1]=law.id
     elseif b.proposalType=="repeal" then
       local law=n.laws[b.targetRef]
       if not law then return nil,"Article cible introuvable." end
-      law.history[#law.history+1]={version=law.version,status=law.status,title=law.title,text=law.text,archivedAt=common.now(),archivedBy=identity(actor),sourceBill=b.id}
+      law.history[#law.history+1]={version=law.version,status=law.status,title=law.title,text=law.text,archivedAt=common.now(),archivedBy=HANDLE_HELPERS.identity(actor),sourceBill=b.id}
       law.status="repealed";law.repealed_at=common.now();law.updatedAt=common.now()
       enacted[#enacted+1]=law.id
     elseif b.proposalType=="ratification_bundle" then
       for _,ref in ipairs(b.targetRefs or {}) do
         local law=n.laws[ref]
         if law then
-          law.history[#law.history+1]={version=law.version,status=law.status,title=law.title,text=law.text,archivedAt=common.now(),archivedBy=identity(actor),sourceBill=b.id}
+          law.history[#law.history+1]={version=law.version,status=law.status,title=law.title,text=law.text,archivedAt=common.now(),archivedBy=HANDLE_HELPERS.identity(actor),sourceBill=b.id}
           law.status="active";law.effective_at=law.effective_at or common.now();law.updatedAt=common.now()
           enacted[#enacted+1]=law.id
         end
@@ -2109,32 +2174,32 @@ function N.handle(state,actor,action,p,ctx)
       n.laws[ref]=law
       enacted[#enacted+1]=ref
     end
-    b.stage="enacted";b.enactedAt=common.now();b.enactedBy=identity(actor);b.enactedRefs=enacted
-    b.enactmentSeal=seal("NC-LAW",{b.id,b.resultSeal,enacted,b.enactedAt,b.enactedBy})
-    noticeAll(ctx,state,n,"Promulgation nationale",
+    b.stage="enacted";b.enactedAt=common.now();b.enactedBy=HANDLE_HELPERS.identity(actor);b.enactedRefs=enacted
+    b.enactmentSeal=HANDLE_HELPERS.seal("NC-LAW",{b.id,b.resultSeal,enacted,b.enactedAt,b.enactedBy})
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Promulgation nationale",
       b.id.." promulgue par "..b.enactedBy.." / articles: "..table.concat(enacted,", "),
       "success","nc_bill",b.id)
-    local gaz=publishGazette(n,actor,"law_enactment",b.id,
+    local gaz=HANDLE_HELPERS.publishGazette(n,actor,"law_enactment",b.id,
       "Promulgation - "..b.title,
       "Articles concernes: "..table.concat(enacted,", ")..".",
       b.enactmentSeal,"public")
     b.gazetteId=gaz.id
-    mutate(ctx,state,actor,"NC_BILL_ENACT",b.id,table.concat(enacted,",").." / "..b.enactmentSeal.." / "..gaz.id)
-    return copy(b)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_BILL_ENACT",b.id,table.concat(enacted,",").." / "..b.enactmentSeal.." / "..gaz.id)
+    return HANDLE_HELPERS.copy(b)
   end
 
-  if action=="NC_DECREE_LIST" then return listDecrees(n,p) end
+  if action=="NC_DECREE_LIST" then return HANDLE_HELPERS.listDecrees(n,p) end
   if action=="NC_DECREE_GET" then
     local d=n.decrees[common.trim(p.id):upper()]
     if not d then return nil,"Decret introuvable." end
-    return copy(d)
+    return HANDLE_HELPERS.copy(d)
   end
 
   if action=="NC_DECREE_CREATE" then
-    if not (isPresident(state,actor) or isMinister(state,actor)) then return nil,"Seuls la Presidence et les ministres peuvent rediger un decret." end
+    if not (HANDLE_HELPERS.isPresident(state,actor) or HANDLE_HELPERS.isMinister(state,actor)) then return nil,"Seuls la Presidence et les ministres peuvent rediger un decret." end
     local ministryCode=common.trim(p.ministryCode):upper()
     local scope=common.trim(p.scope)
-    if isMinister(state,actor) then
+    if HANDLE_HELPERS.isMinister(state,actor) then
       ministryCode=actor.ministryCode
       scope="ministry"
     elseif scope~="ministry" then
@@ -2147,16 +2212,16 @@ function N.handle(state,actor,action,p,ctx)
     local body=common.trim(p.body)
     if title=="" or body=="" then return nil,"Titre et texte obligatoires." end
     local legalBasis=common.trim(p.legalBasis)
-    if legalBasis~="" and not getLaw(n,legalBasis) then return nil,"Base legale introuvable." end
-    local id=nextId(n.decreeCounters,"NC-DEC")
+    if legalBasis~="" and not HANDLE_HELPERS.getLaw(n,legalBasis) then return nil,"Base legale introuvable." end
+    local id=HANDLE_HELPERS.nextId(n.decreeCounters,"NC-DEC")
     local d={
       id=id,title=title,body=body,scope=scope,ministryCode=ministryCode,
-      legalBasis=legalBasis,status="draft",createdAt=common.now(),createdBy=identity(actor),
+      legalBasis=legalBasis,status="draft",createdAt=common.now(),createdBy=HANDLE_HELPERS.identity(actor),
       history={}
     }
     n.decrees[id]=d
-    mutate(ctx,state,actor,"NC_DECREE_CREATE",id,title.." / "..scope)
-    return copy(d)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_DECREE_CREATE",id,title.." / "..scope)
+    return HANDLE_HELPERS.copy(d)
   end
 
   if action=="NC_DECREE_PUBLISH" then
@@ -2164,83 +2229,83 @@ function N.handle(state,actor,action,p,ctx)
     if not d then return nil,"Decret introuvable." end
     if d.status~="draft" then return nil,"Decret non publiable." end
     if d.scope=="national" then
-      if not isPresident(state,actor) then return nil,"Un decret national doit etre publie par la Presidence." end
+      if not HANDLE_HELPERS.isPresident(state,actor) then return nil,"Un decret national doit etre publie par la Presidence." end
     else
-      if not ministryScopeAllowed(state,actor,d.ministryCode) then return nil,"Vous ne dirigez pas ce ministere." end
+      if not HANDLE_HELPERS.ministryScopeAllowed(state,actor,d.ministryCode) then return nil,"Vous ne dirigez pas ce ministere." end
     end
-    d.status="published";d.publishedAt=common.now();d.publishedBy=identity(actor)
-    d.seal=seal("NC-DEC",{d.id,d.title,d.body,d.scope,d.ministryCode,d.legalBasis,d.publishedAt,d.publishedBy})
-    noticeAll(ctx,state,n,"Decret publie",
+    d.status="published";d.publishedAt=common.now();d.publishedBy=HANDLE_HELPERS.identity(actor)
+    d.seal=HANDLE_HELPERS.seal("NC-DEC",{d.id,d.title,d.body,d.scope,d.ministryCode,d.legalBasis,d.publishedAt,d.publishedBy})
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Decret publie",
       d.id.." / "..d.title..(d.ministryCode~="" and (" / "..d.ministryCode) or ""),
       "info","nc_decree",d.id)
-    local gaz=publishGazette(n,actor,"decree",d.id,
+    local gaz=HANDLE_HELPERS.publishGazette(n,actor,"decree",d.id,
       "Decret - "..d.title,
       (d.scope=="ministry" and ("Acte du "..d.ministryCode..".") or "Acte de portee nationale.")..
         (d.legalBasis~="" and (" Base legale: "..d.legalBasis..".") or ""),
       d.seal,"public")
     d.gazetteId=gaz.id
-    mutate(ctx,state,actor,"NC_DECREE_PUBLISH",d.id,d.seal.." / "..gaz.id)
-    return copy(d)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_DECREE_PUBLISH",d.id,d.seal.." / "..gaz.id)
+    return HANDLE_HELPERS.copy(d)
   end
 
   if action=="NC_DECREE_REPEAL" then
     local d=n.decrees[common.trim(p.id):upper()]
     if not d then return nil,"Decret introuvable." end
     if d.status~="published" then return nil,"Seul un decret publie peut etre abroge." end
-    if d.scope=="national" and not isPresident(state,actor) then return nil,"Reserve a la Presidence." end
-    if d.scope=="ministry" and not ministryScopeAllowed(state,actor,d.ministryCode) then return nil,"Vous ne dirigez pas ce ministere." end
+    if d.scope=="national" and not HANDLE_HELPERS.isPresident(state,actor) then return nil,"Reserve a la Presidence." end
+    if d.scope=="ministry" and not HANDLE_HELPERS.ministryScopeAllowed(state,actor,d.ministryCode) then return nil,"Vous ne dirigez pas ce ministere." end
     local reason=common.trim(p.reason)
     if reason=="" then return nil,"Motif d'abrogation obligatoire." end
-    d.status="repealed";d.repealedAt=common.now();d.repealedBy=identity(actor);d.repealReason=reason
-    d.repealSeal=seal("NC-DEC-END",{d.id,d.seal,reason,d.repealedAt,d.repealedBy})
-    noticeAll(ctx,state,n,"Decret abroge",
+    d.status="repealed";d.repealedAt=common.now();d.repealedBy=HANDLE_HELPERS.identity(actor);d.repealReason=reason
+    d.repealSeal=HANDLE_HELPERS.seal("NC-DEC-END",{d.id,d.seal,reason,d.repealedAt,d.repealedBy})
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Decret abroge",
       d.id.." / "..d.title.." / "..reason,
       "warning","nc_decree",d.id)
-    local gaz=publishGazette(n,actor,"decree_repeal",d.id,
+    local gaz=HANDLE_HELPERS.publishGazette(n,actor,"decree_repeal",d.id,
       "Abrogation - "..d.title,
       "Motif: "..reason,
       d.repealSeal,"public")
     d.repealGazetteId=gaz.id
-    mutate(ctx,state,actor,"NC_DECREE_REPEAL",d.id,reason.." / "..d.repealSeal.." / "..gaz.id)
-    return copy(d)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_DECREE_REPEAL",d.id,reason.." / "..d.repealSeal.." / "..gaz.id)
+    return HANDLE_HELPERS.copy(d)
   end
 
   if action=="NC_SESSION_LIST" then
-    return listNationalSessions(n,p,state,actor)
+    return HANDLE_HELPERS.listNationalSessions(n,p,state,actor)
   end
 
   if action=="NC_SESSION_GET" then
     local sess=n.sessions[common.trim(p.id):upper()]
     if not sess then return nil,"Session nationale introuvable." end
-    if not canViewNationalSession(state,actor,sess) then return nil,"Acces refuse a cette session." end
-    return copy(sess)
+    if not HANDLE_HELPERS.canViewNationalSession(state,actor,sess) then return nil,"Acces refuse a cette session." end
+    return HANDLE_HELPERS.copy(sess)
   end
 
   if action=="NC_SESSION_CREATE" then
-    if not nationalSessionManager(state,actor) then return nil,"Creation de session reservee a la Presidence ou au Conseil." end
+    if not HANDLE_HELPERS.nationalSessionManager(state,actor) then return nil,"Creation de session reservee a la Presidence ou au Conseil." end
     local title=common.trim(p.title)
     if title=="" then return nil,"Titre de session obligatoire." end
     local validTypes={council=true,cabinet=true,emergency=true,committee=true,public_hearing=true}
     local sessionType=validTypes[p.sessionType] and p.sessionType or "council"
     local visibility=(p.visibility=="public" or p.visibility=="restricted") and p.visibility or "internal"
-    local id=nextId(n.sessionCounters,"NC-SESSION")
+    local id=HANDLE_HELPERS.nextId(n.sessionCounters,"NC-SESSION")
     local sess={
       id=id,title=title,sessionType=sessionType,status="scheduled",visibility=visibility,
       scheduledFor=common.trim(p.scheduledFor),location=common.trim(p.location),
       description=common.trim(p.description),agenda={},attendance={},
-      createdAt=common.now(),createdBy=identity(actor),updatedAt=common.now()
+      createdAt=common.now(),createdBy=HANDLE_HELPERS.identity(actor),updatedAt=common.now()
     }
-    sess.convocationSeal=seal("NC-SESSION",{sess.id,sess.title,sess.sessionType,sess.scheduledFor,sess.location,sess.description,sess.visibility,sess.createdAt,sess.createdBy})
+    sess.convocationSeal=HANDLE_HELPERS.seal("NC-SESSION",{sess.id,sess.title,sess.sessionType,sess.scheduledFor,sess.location,sess.description,sess.visibility,sess.createdAt,sess.createdBy})
     n.sessions[id]=sess
-    noticeAll(ctx,state,n,"Session nationale convoquee",
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Session nationale convoquee",
       id.." / "..title.." / "..(sess.scheduledFor~="" and sess.scheduledFor or "horaire a confirmer"),
       sessionType=="emergency" and "warning" or "info","nc_session",id)
-    mutate(ctx,state,actor,"NC_SESSION_CREATE",id,title.." / "..sessionType)
-    return copy(sess)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_SESSION_CREATE",id,title.." / "..sessionType)
+    return HANDLE_HELPERS.copy(sess)
   end
 
   if action=="NC_SESSION_ADD_AGENDA" then
-    if not nationalSessionManager(state,actor) then return nil,"Ordre du jour reserve a la Presidence ou au Conseil." end
+    if not HANDLE_HELPERS.nationalSessionManager(state,actor) then return nil,"Ordre du jour reserve a la Presidence ou au Conseil." end
     local sess=n.sessions[common.trim(p.id):upper()]
     if not sess then return nil,"Session introuvable." end
     if sess.status~="scheduled" then return nil,"L'ordre du jour est verrouille apres ouverture." end
@@ -2248,21 +2313,21 @@ function N.handle(state,actor,action,p,ctx)
     local kind=valid[p.kind] and p.kind or nil
     if not kind then return nil,"Type de point invalide." end
     local ref=common.trim(p.ref)
-    local title=agendaObjectTitle(n,state,actor,kind,ref)
+    local title=HANDLE_HELPERS.agendaObjectTitle(n,state,actor,kind,ref)
     if not title then return nil,"Objet d'ordre du jour introuvable ou inaccessible." end
     local row={
       id=string.format("ITEM-%03d",#sess.agenda+1),kind=kind,ref=ref,
       title=common.trim(p.title)~="" and common.trim(p.title) or title,
-      notes=common.trim(p.notes),status="pending",addedAt=common.now(),addedBy=identity(actor)
+      notes=common.trim(p.notes),status="pending",addedAt=common.now(),addedBy=HANDLE_HELPERS.identity(actor)
     }
     sess.agenda[#sess.agenda+1]=row
     sess.updatedAt=common.now()
-    mutate(ctx,state,actor,"NC_SESSION_ADD_AGENDA",sess.id,row.id.." / "..kind.." / "..ref)
-    return copy(sess)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_SESSION_ADD_AGENDA",sess.id,row.id.." / "..kind.." / "..ref)
+    return HANDLE_HELPERS.copy(sess)
   end
 
   if action=="NC_SESSION_REMOVE_AGENDA" then
-    if not nationalSessionManager(state,actor) then return nil,"Modification de l'ordre du jour non autorisee." end
+    if not HANDLE_HELPERS.nationalSessionManager(state,actor) then return nil,"Modification de l'ordre du jour non autorisee." end
     local sess=n.sessions[common.trim(p.id):upper()]
     if not sess then return nil,"Session introuvable." end
     if sess.status~="scheduled" then return nil,"Ordre du jour verrouille." end
@@ -2272,40 +2337,40 @@ function N.handle(state,actor,action,p,ctx)
     end
     if not removed then return nil,"Point introuvable." end
     sess.updatedAt=common.now()
-    mutate(ctx,state,actor,"NC_SESSION_REMOVE_AGENDA",sess.id,removed.id.." / "..removed.title)
-    return copy(sess)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_SESSION_REMOVE_AGENDA",sess.id,removed.id.." / "..removed.title)
+    return HANDLE_HELPERS.copy(sess)
   end
 
   if action=="NC_SESSION_OPEN" then
-    if not nationalSessionManager(state,actor) then return nil,"Ouverture reservee a la Presidence ou au Conseil." end
+    if not HANDLE_HELPERS.nationalSessionManager(state,actor) then return nil,"Ouverture reservee a la Presidence ou au Conseil." end
     local sess=n.sessions[common.trim(p.id):upper()]
     if not sess then return nil,"Session introuvable." end
     if sess.status~="scheduled" then return nil,"Session non ouvrable." end
-    sess.status="open";sess.openedAt=common.now();sess.openedBy=identity(actor)
-    sess.openSeal=seal("NC-SESSION-OPEN",{sess.id,sess.convocationSeal,sess.openedAt,sess.openedBy,sess.agenda})
-    noticeAll(ctx,state,n,"Session nationale ouverte",sess.id.." / "..sess.title,"warning","nc_session",sess.id)
-    mutate(ctx,state,actor,"NC_SESSION_OPEN",sess.id,sess.openSeal)
-    return copy(sess)
+    sess.status="open";sess.openedAt=common.now();sess.openedBy=HANDLE_HELPERS.identity(actor)
+    sess.openSeal=HANDLE_HELPERS.seal("NC-SESSION-OPEN",{sess.id,sess.convocationSeal,sess.openedAt,sess.openedBy,sess.agenda})
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Session nationale ouverte",sess.id.." / "..sess.title,"warning","nc_session",sess.id)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_SESSION_OPEN",sess.id,sess.openSeal)
+    return HANDLE_HELPERS.copy(sess)
   end
 
   if action=="NC_SESSION_CHECKIN" then
     local sess=n.sessions[common.trim(p.id):upper()]
     if not sess then return nil,"Session introuvable." end
     if sess.status~="open" then return nil,"La session n'est pas ouverte." end
-    if not nationalSessionEligible(n,state,actor,sess) then return nil,"Vous ne faites pas partie des participants autorises." end
-    local key=votingKey(n,actor)
+    if not HANDLE_HELPERS.nationalSessionEligible(n,state,actor,sess) then return nil,"Vous ne faites pas partie des participants autorises." end
+    local key=HANDLE_HELPERS.votingKey(n,actor)
     if not key then return nil,"Identite citoyenne active requise." end
     sess.attendance[key]={
-      citizenId=key,identity=identity(actor),role=nationalRole(state,actor),
+      citizenId=key,identity=HANDLE_HELPERS.identity(actor),role=HANDLE_HELPERS.nationalRole(state,actor),
       ministryCode=actor.ministryCode,checkedInAt=common.now(),clientId=actor.clientId
     }
     sess.updatedAt=common.now()
-    mutate(ctx,state,actor,"NC_SESSION_CHECKIN",sess.id,key.." / "..identity(actor))
-    return copy(sess)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_SESSION_CHECKIN",sess.id,key.." / "..HANDLE_HELPERS.identity(actor))
+    return HANDLE_HELPERS.copy(sess)
   end
 
   if action=="NC_SESSION_SET_ITEM_STATUS" then
-    if not nationalSessionManager(state,actor) then return nil,"Gestion de seance non autorisee." end
+    if not HANDLE_HELPERS.nationalSessionManager(state,actor) then return nil,"Gestion de seance non autorisee." end
     local sess=n.sessions[common.trim(p.id):upper()]
     if not sess then return nil,"Session introuvable." end
     if sess.status~="open" then return nil,"La session doit etre ouverte." end
@@ -2317,14 +2382,14 @@ function N.handle(state,actor,action,p,ctx)
     local old=item.status
     item.status=p.status
     if p.notes~=nil then item.sessionNotes=common.trim(p.notes) end
-    item.updatedAt=common.now();item.updatedBy=identity(actor)
+    item.updatedAt=common.now();item.updatedBy=HANDLE_HELPERS.identity(actor)
     sess.updatedAt=common.now()
-    mutate(ctx,state,actor,"NC_SESSION_SET_ITEM_STATUS",sess.id,item.id.." / "..old.." -> "..item.status)
-    return copy(sess)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_SESSION_SET_ITEM_STATUS",sess.id,item.id.." / "..old.." -> "..item.status)
+    return HANDLE_HELPERS.copy(sess)
   end
 
   if action=="NC_SESSION_CLOSE" then
-    if not nationalSessionManager(state,actor) then return nil,"Cloture reservee a la Presidence ou au Conseil." end
+    if not HANDLE_HELPERS.nationalSessionManager(state,actor) then return nil,"Cloture reservee a la Presidence ou au Conseil." end
     local sess=n.sessions[common.trim(p.id):upper()]
     if not sess then return nil,"Session introuvable." end
     if sess.status~="open" then return nil,"Session non ouverte." end
@@ -2332,156 +2397,156 @@ function N.handle(state,actor,action,p,ctx)
     local conclusions=common.trim(p.conclusions)
     if minutes=="" then return nil,"Proces-verbal obligatoire." end
     sess.status="closed";sess.minutes=minutes;sess.conclusions=conclusions
-    sess.closedAt=common.now();sess.closedBy=identity(actor)
-    sess.closeSeal=seal("NC-SESSION-CLOSE",{sess.id,sess.openSeal,sess.attendance,sess.agenda,sess.minutes,sess.conclusions,sess.closedAt,sess.closedBy})
+    sess.closedAt=common.now();sess.closedBy=HANDLE_HELPERS.identity(actor)
+    sess.closeSeal=HANDLE_HELPERS.seal("NC-SESSION-CLOSE",{sess.id,sess.openSeal,sess.attendance,sess.agenda,sess.minutes,sess.conclusions,sess.closedAt,sess.closedBy})
     sess.updatedAt=common.now()
-    noticeAll(ctx,state,n,"Session nationale cloturee",sess.id.." / "..sess.title,"info","nc_session",sess.id)
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Session nationale cloturee",sess.id.." / "..sess.title,"info","nc_session",sess.id)
     local gazVisibility=sess.visibility=="public" and "public" or (sess.visibility=="restricted" and "restricted" or "internal")
-    local gaz=publishGazette(n,actor,"session_minutes",sess.id,
+    local gaz=HANDLE_HELPERS.publishGazette(n,actor,"session_minutes",sess.id,
       "Proces-verbal - "..sess.title,
       common.trim(sess.conclusions)~="" and sess.conclusions or "Session cloturee sans conclusion additionnelle.",
       sess.closeSeal,gazVisibility)
     sess.gazetteId=gaz.id
-    mutate(ctx,state,actor,"NC_SESSION_CLOSE",sess.id,sess.closeSeal.." / "..gaz.id)
-    return copy(sess)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_SESSION_CLOSE",sess.id,sess.closeSeal.." / "..gaz.id)
+    return HANDLE_HELPERS.copy(sess)
   end
 
   if action=="NC_SESSION_CANCEL" then
-    if not nationalSessionManager(state,actor) then return nil,"Annulation non autorisee." end
+    if not HANDLE_HELPERS.nationalSessionManager(state,actor) then return nil,"Annulation non autorisee." end
     local sess=n.sessions[common.trim(p.id):upper()]
     if not sess then return nil,"Session introuvable." end
     if sess.status=="closed" or sess.status=="cancelled" then return nil,"Session deja terminee." end
     local reason=common.trim(p.reason)
     if reason=="" then return nil,"Motif d'annulation obligatoire." end
     sess.status="cancelled";sess.cancelReason=reason
-    sess.cancelledAt=common.now();sess.cancelledBy=identity(actor)
-    sess.cancelSeal=seal("NC-SESSION-CANCEL",{sess.id,reason,sess.cancelledAt,sess.cancelledBy,sess.convocationSeal})
+    sess.cancelledAt=common.now();sess.cancelledBy=HANDLE_HELPERS.identity(actor)
+    sess.cancelSeal=HANDLE_HELPERS.seal("NC-SESSION-CANCEL",{sess.id,reason,sess.cancelledAt,sess.cancelledBy,sess.convocationSeal})
     sess.updatedAt=common.now()
-    noticeAll(ctx,state,n,"Session nationale annulee",sess.id.." / "..reason,"warning","nc_session",sess.id)
-    mutate(ctx,state,actor,"NC_SESSION_CANCEL",sess.id,reason.." / "..sess.cancelSeal)
-    return copy(sess)
+    HANDLE_HELPERS.noticeAll(ctx,state,n,"Session nationale annulee",sess.id.." / "..reason,"warning","nc_session",sess.id)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_SESSION_CANCEL",sess.id,reason.." / "..sess.cancelSeal)
+    return HANDLE_HELPERS.copy(sess)
   end
 
   if action=="NC_CASE_LIST" then
-    return listNationalCases(n,p,state,actor)
+    return HANDLE_HELPERS.listNationalCases(n,p,state,actor)
   end
 
   if action=="NC_CASE_GET" then
     local case=n.cases[common.trim(p.id):upper()]
     if not case then return nil,"Dossier national introuvable." end
-    ensureNationalCaseShape(case)
-    if not canViewNationalCase(state,actor,case) then return nil,"Acces refuse a ce dossier national." end
-    return copy(case)
+    HANDLE_HELPERS.ensureNationalCaseShape(case)
+    if not HANDLE_HELPERS.canViewNationalCase(state,actor,case) then return nil,"Acces refuse a ce dossier national." end
+    return HANDLE_HELPERS.copy(case)
   end
 
   if action=="NC_CASE_CREATE" then
-    if not nationalCaseInstitutionalRole(state,actor) then return nil,"Creation de dossier reservee a la justice, au parquet ou a la police." end
+    if not HANDLE_HELPERS.nationalCaseInstitutionalRole(state,actor) then return nil,"Creation de dossier reservee a la justice, au parquet ou a la police." end
     local title=common.trim(p.title)
     local summary=common.trim(p.summary)
     if title=="" or summary=="" then return nil,"Titre et resume obligatoires." end
     local validTypes={criminal=true,civil=true,administrative=true,constitutional=true}
     local caseType=validTypes[p.caseType] and p.caseType or "criminal"
     local visibility=(p.visibility=="public" or p.visibility=="sealed") and p.visibility or "restricted"
-    local id=nationalCaseId(n)
+    local id=HANDLE_HELPERS.nationalCaseId(n)
     local case={
       id=id,title=title,caseType=caseType,status="open",visibility=visibility,
       complainant=common.trim(p.complainant),accused=common.trim(p.accused),
       summary=summary,facts={},evidence={},citedArticles={},hearings={},judgments={},orders={},appeals={},timeline={},
-      createdAt=common.now(),createdBy=identity(actor),updatedAt=common.now()
+      createdAt=common.now(),createdBy=HANDLE_HELPERS.identity(actor),updatedAt=common.now()
     }
-    case.seal=seal("NC-CASE",{case.id,case.title,case.caseType,case.visibility,case.complainant,case.accused,case.summary,case.createdAt,case.createdBy})
-    addNationalCaseTimeline(case,"created","Dossier ouvert",case.title,actor)
+    case.seal=HANDLE_HELPERS.seal("NC-CASE",{case.id,case.title,case.caseType,case.visibility,case.complainant,case.accused,case.summary,case.createdAt,case.createdBy})
+    HANDLE_HELPERS.addNationalCaseTimeline(case,"created","Dossier ouvert",case.title,actor)
     n.cases[id]=case
-    notifyNationalCase(ctx,state,case,"Dossier national ouvert",id.." / "..title,"info")
-    mutate(ctx,state,actor,"NC_CASE_CREATE",id,title.." / "..caseType)
-    return copy(case)
+    HANDLE_HELPERS.notifyNationalCase(ctx,state,case,"Dossier national ouvert",id.." / "..title,"info")
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CASE_CREATE",id,title.." / "..caseType)
+    return HANDLE_HELPERS.copy(case)
   end
 
   if action=="NC_CASE_ADD_FACT" then
     local case=n.cases[common.trim(p.id):upper()]
     if not case then return nil,"Dossier introuvable." end
-    ensureNationalCaseShape(case)
-    if not canViewNationalCase(state,actor,case) or not nationalCaseInstitutionalRole(state,actor) then return nil,"Ajout de fait non autorise." end
+    HANDLE_HELPERS.ensureNationalCaseShape(case)
+    if not HANDLE_HELPERS.canViewNationalCase(state,actor,case) or not HANDLE_HELPERS.nationalCaseInstitutionalRole(state,actor) then return nil,"Ajout de fait non autorise." end
     local text=common.trim(p.text)
     if text=="" then return nil,"Texte du fait obligatoire." end
-    local row={id=string.format("FACT-%03d",#case.facts+1),text=text,at=common.now(),by=identity(actor)}
-    row.seal=seal("NC-FACT",{case.id,row.id,row.text,row.at,row.by})
+    local row={id=string.format("FACT-%03d",#case.facts+1),text=text,at=common.now(),by=HANDLE_HELPERS.identity(actor)}
+    row.seal=HANDLE_HELPERS.seal("NC-FACT",{case.id,row.id,row.text,row.at,row.by})
     case.facts[#case.facts+1]=row
     case.updatedAt=common.now()
-    addNationalCaseTimeline(case,"fact","Fait ajoute",row.id.." / "..text,actor)
-    mutate(ctx,state,actor,"NC_CASE_ADD_FACT",case.id,row.id)
-    return copy(case)
+    HANDLE_HELPERS.addNationalCaseTimeline(case,"fact","Fait ajoute",row.id.." / "..text,actor)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CASE_ADD_FACT",case.id,row.id)
+    return HANDLE_HELPERS.copy(case)
   end
 
   if action=="NC_CASE_ADD_EVIDENCE" then
     local case=n.cases[common.trim(p.id):upper()]
     if not case then return nil,"Dossier introuvable." end
-    ensureNationalCaseShape(case)
-    if not canViewNationalCase(state,actor,case) or not nationalCaseInstitutionalRole(state,actor) then return nil,"Ajout de preuve non autorise." end
+    HANDLE_HELPERS.ensureNationalCaseShape(case)
+    if not HANDLE_HELPERS.canViewNationalCase(state,actor,case) or not HANDLE_HELPERS.nationalCaseInstitutionalRole(state,actor) then return nil,"Ajout de preuve non autorise." end
     local label=common.trim(p.label)
     local description=common.trim(p.description)
     if label=="" or description=="" then return nil,"Nom et description de la preuve obligatoires." end
     local row={
       id=string.format("EVID-%03d",#case.evidence+1),label=label,description=description,
-      source=common.trim(p.source),at=common.now(),by=identity(actor)
+      source=common.trim(p.source),at=common.now(),by=HANDLE_HELPERS.identity(actor)
     }
-    row.seal=seal("NC-EVID",{case.id,row.id,row.label,row.description,row.source,row.at,row.by})
+    row.seal=HANDLE_HELPERS.seal("NC-EVID",{case.id,row.id,row.label,row.description,row.source,row.at,row.by})
     case.evidence[#case.evidence+1]=row
     case.updatedAt=common.now()
-    addNationalCaseTimeline(case,"evidence","Preuve ajoutee",row.id.." / "..label,actor)
-    mutate(ctx,state,actor,"NC_CASE_ADD_EVIDENCE",case.id,row.id)
-    return copy(case)
+    HANDLE_HELPERS.addNationalCaseTimeline(case,"evidence","Preuve ajoutee",row.id.." / "..label,actor)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CASE_ADD_EVIDENCE",case.id,row.id)
+    return HANDLE_HELPERS.copy(case)
   end
 
   if action=="NC_CASE_ADD_ARTICLE" then
     local case=n.cases[common.trim(p.id):upper()]
     if not case then return nil,"Dossier introuvable." end
-    ensureNationalCaseShape(case)
-    if not canViewNationalCase(state,actor,case) or not nationalCaseInstitutionalRole(state,actor) then return nil,"Citation d'article non autorisee." end
-    local law=getLaw(n,p.ref)
+    HANDLE_HELPERS.ensureNationalCaseShape(case)
+    if not HANDLE_HELPERS.canViewNationalCase(state,actor,case) or not HANDLE_HELPERS.nationalCaseInstitutionalRole(state,actor) then return nil,"Citation d'article non autorisee." end
+    local law=HANDLE_HELPERS.getLaw(n,p.ref)
     if not law then return nil,"Article national introuvable." end
-    for _,ref in ipairs(case.citedArticles) do if ref==law.id then return copy(case) end end
+    for _,ref in ipairs(case.citedArticles) do if ref==law.id then return HANDLE_HELPERS.copy(case) end end
     case.citedArticles[#case.citedArticles+1]=law.id
     table.sort(case.citedArticles)
     case.updatedAt=common.now()
-    addNationalCaseTimeline(case,"citation","Article cite",(law.display_reference or law.id).." / "..law.title,actor)
-    mutate(ctx,state,actor,"NC_CASE_ADD_ARTICLE",case.id,law.id)
-    return copy(case)
+    HANDLE_HELPERS.addNationalCaseTimeline(case,"citation","Article cite",(law.display_reference or law.id).." / "..law.title,actor)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CASE_ADD_ARTICLE",case.id,law.id)
+    return HANDLE_HELPERS.copy(case)
   end
 
   if action=="NC_CASE_REMOVE_ARTICLE" then
     local case=n.cases[common.trim(p.id):upper()]
     if not case then return nil,"Dossier introuvable." end
-    ensureNationalCaseShape(case)
-    if not canViewNationalCase(state,actor,case) or not nationalCaseInstitutionalRole(state,actor) then return nil,"Retrait de citation non autorise." end
-    local ref=normalizeRef(p.ref)
+    HANDLE_HELPERS.ensureNationalCaseShape(case)
+    if not HANDLE_HELPERS.canViewNationalCase(state,actor,case) or not HANDLE_HELPERS.nationalCaseInstitutionalRole(state,actor) then return nil,"Retrait de citation non autorise." end
+    local ref=HANDLE_HELPERS.normalizeRef(p.ref)
     for i=#case.citedArticles,1,-1 do if case.citedArticles[i]==ref then table.remove(case.citedArticles,i) end end
     case.updatedAt=common.now()
-    addNationalCaseTimeline(case,"citation_remove","Article retire",ref,actor)
-    mutate(ctx,state,actor,"NC_CASE_REMOVE_ARTICLE",case.id,ref)
-    return copy(case)
+    HANDLE_HELPERS.addNationalCaseTimeline(case,"citation_remove","Article retire",ref,actor)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CASE_REMOVE_ARTICLE",case.id,ref)
+    return HANDLE_HELPERS.copy(case)
   end
 
   if action=="NC_CASE_SET_VISIBILITY" then
     local case=n.cases[common.trim(p.id):upper()]
     if not case then return nil,"Dossier introuvable." end
-    if not nationalCaseJudicialRole(state,actor) then return nil,"Visibilite reservee aux juges." end
+    if not HANDLE_HELPERS.nationalCaseJudicialRole(state,actor) then return nil,"Visibilite reservee aux juges." end
     local allowed={public=true,restricted=true,sealed=true}
     if not allowed[p.visibility] then return nil,"Niveau de visibilite invalide." end
     local old=case.visibility or "restricted"
     case.visibility=p.visibility
     case.updatedAt=common.now()
-    addNationalCaseTimeline(case,"visibility","Visibilite modifiee",old.." -> "..p.visibility,actor)
-    mutate(ctx,state,actor,"NC_CASE_SET_VISIBILITY",case.id,old.." -> "..p.visibility)
-    return copy(case)
+    HANDLE_HELPERS.addNationalCaseTimeline(case,"visibility","Visibilite modifiee",old.." -> "..p.visibility,actor)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CASE_SET_VISIBILITY",case.id,old.." -> "..p.visibility)
+    return HANDLE_HELPERS.copy(case)
   end
 
   if action=="NC_CASE_SET_STATUS" then
     local case=n.cases[common.trim(p.id):upper()]
     if not case then return nil,"Dossier introuvable." end
-    ensureNationalCaseShape(case)
-    local r=nationalRole(state,actor)
-    local allowedRole=(technicalNationalAdmin(actor) or r=="judge" or r=="prosecutor" or (r=="police" and p.status=="investigation"))
+    HANDLE_HELPERS.ensureNationalCaseShape(case)
+    local r=HANDLE_HELPERS.nationalRole(state,actor)
+    local allowedRole=(HANDLE_HELPERS.technicalNationalAdmin(actor) or r=="judge" or r=="prosecutor" or (r=="police" and p.status=="investigation"))
     if not allowedRole then return nil,"Changement de statut non autorise." end
     local transitions={
       open={investigation=true,hearing=true,closed=true},
@@ -2492,46 +2557,46 @@ function N.handle(state,actor,action,p,ctx)
       closed={archived=true},
       archived={}
     }
-    if case.status==p.status then return copy(case) end
+    if case.status==p.status then return HANDLE_HELPERS.copy(case) end
     if not (transitions[case.status] and transitions[case.status][p.status]) then
       return nil,"Transition interdite: "..tostring(case.status).." -> "..tostring(p.status)
     end
     local old=case.status
     case.status=p.status
     case.updatedAt=common.now()
-    addNationalCaseTimeline(case,"status","Statut modifie",old.." -> "..p.status..(common.trim(p.reason)~="" and (" / "..common.trim(p.reason)) or ""),actor)
-    notifyNationalCase(ctx,state,case,"Mise a jour dossier "..case.id,old.." -> "..p.status,"info")
-    mutate(ctx,state,actor,"NC_CASE_SET_STATUS",case.id,old.." -> "..p.status)
-    return copy(case)
+    HANDLE_HELPERS.addNationalCaseTimeline(case,"status","Statut modifie",old.." -> "..p.status..(common.trim(p.reason)~="" and (" / "..common.trim(p.reason)) or ""),actor)
+    HANDLE_HELPERS.notifyNationalCase(ctx,state,case,"Mise a jour dossier "..case.id,old.." -> "..p.status,"info")
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CASE_SET_STATUS",case.id,old.." -> "..p.status)
+    return HANDLE_HELPERS.copy(case)
   end
 
   if action=="NC_CASE_ADD_HEARING" then
     local case=n.cases[common.trim(p.id):upper()]
     if not case then return nil,"Dossier introuvable." end
-    ensureNationalCaseShape(case)
-    if not nationalCaseJudicialRole(state,actor) then return nil,"Audience reservee aux juges." end
+    HANDLE_HELPERS.ensureNationalCaseShape(case)
+    if not HANDLE_HELPERS.nationalCaseJudicialRole(state,actor) then return nil,"Audience reservee aux juges." end
     local subject=common.trim(p.subject)
     if subject=="" then return nil,"Objet de l'audience obligatoire." end
     local row={
       id=string.format("HEARING-%03d",#case.hearings+1),subject=subject,
       scheduledFor=common.trim(p.scheduledFor),location=common.trim(p.location),
-      status="scheduled",createdAt=common.now(),createdBy=identity(actor)
+      status="scheduled",createdAt=common.now(),createdBy=HANDLE_HELPERS.identity(actor)
     }
-    row.seal=seal("NC-HEAR",{case.id,row.id,row.subject,row.scheduledFor,row.location,row.createdAt,row.createdBy})
+    row.seal=HANDLE_HELPERS.seal("NC-HEAR",{case.id,row.id,row.subject,row.scheduledFor,row.location,row.createdAt,row.createdBy})
     case.hearings[#case.hearings+1]=row
     if case.status=="open" or case.status=="investigation" then case.status="hearing" end
     case.updatedAt=common.now()
-    addNationalCaseTimeline(case,"hearing","Audience planifiee",row.id.." / "..subject.." / "..row.scheduledFor,actor)
-    notifyNationalCase(ctx,state,case,"Audience nationale planifiee",case.id.." / "..subject.." / "..row.scheduledFor,"warning")
-    mutate(ctx,state,actor,"NC_CASE_ADD_HEARING",case.id,row.id)
-    return copy(case)
+    HANDLE_HELPERS.addNationalCaseTimeline(case,"hearing","Audience planifiee",row.id.." / "..subject.." / "..row.scheduledFor,actor)
+    HANDLE_HELPERS.notifyNationalCase(ctx,state,case,"Audience nationale planifiee",case.id.." / "..subject.." / "..row.scheduledFor,"warning")
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CASE_ADD_HEARING",case.id,row.id)
+    return HANDLE_HELPERS.copy(case)
   end
 
   if action=="NC_CASE_RECORD_HEARING" then
     local case=n.cases[common.trim(p.id):upper()]
     if not case then return nil,"Dossier introuvable." end
-    ensureNationalCaseShape(case)
-    if not nationalCaseJudicialRole(state,actor) then return nil,"Proces-verbal reserve aux juges." end
+    HANDLE_HELPERS.ensureNationalCaseShape(case)
+    if not HANDLE_HELPERS.nationalCaseJudicialRole(state,actor) then return nil,"Proces-verbal reserve aux juges." end
     local hearing=nil
     for _,h in ipairs(case.hearings) do if h.id==p.hearingId then hearing=h break end end
     if not hearing then return nil,"Audience introuvable." end
@@ -2539,19 +2604,19 @@ function N.handle(state,actor,action,p,ctx)
     if minutes=="" then return nil,"Proces-verbal vide." end
     hearing.minutes=minutes
     hearing.status=p.status=="cancelled" and "cancelled" or "completed"
-    hearing.recordedAt=common.now();hearing.recordedBy=identity(actor)
-    hearing.recordSeal=seal("NC-HEAR-PV",{case.id,hearing.id,hearing.minutes,hearing.status,hearing.recordedAt,hearing.recordedBy,hearing.seal})
+    hearing.recordedAt=common.now();hearing.recordedBy=HANDLE_HELPERS.identity(actor)
+    hearing.recordSeal=HANDLE_HELPERS.seal("NC-HEAR-PV",{case.id,hearing.id,hearing.minutes,hearing.status,hearing.recordedAt,hearing.recordedBy,hearing.seal})
     case.updatedAt=common.now()
-    addNationalCaseTimeline(case,"hearing_record","Proces-verbal d'audience",hearing.id.." / "..hearing.status,actor)
-    mutate(ctx,state,actor,"NC_CASE_RECORD_HEARING",case.id,hearing.id)
-    return copy(case)
+    HANDLE_HELPERS.addNationalCaseTimeline(case,"hearing_record","Proces-verbal d'audience",hearing.id.." / "..hearing.status,actor)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CASE_RECORD_HEARING",case.id,hearing.id)
+    return HANDLE_HELPERS.copy(case)
   end
 
   if action=="NC_CASE_ADD_ORDER" then
     local case=n.cases[common.trim(p.id):upper()]
     if not case then return nil,"Dossier introuvable." end
-    ensureNationalCaseShape(case)
-    if not nationalCaseJudicialRole(state,actor) then return nil,"Ordonnance reservee aux juges." end
+    HANDLE_HELPERS.ensureNationalCaseShape(case)
+    if not HANDLE_HELPERS.nationalCaseJudicialRole(state,actor) then return nil,"Ordonnance reservee aux juges." end
     local valid={search=true,seizure=true,arrest=true,release=true,protection=true,injunction=true,other=true}
     local typ=valid[p.orderType] and p.orderType or "other"
     local subject=common.trim(p.subject)
@@ -2559,73 +2624,73 @@ function N.handle(state,actor,action,p,ctx)
     if subject=="" or grounds=="" then return nil,"Objet et motifs de l'ordonnance obligatoires." end
     local row={
       id=string.format("ORDER-%03d",#case.orders+1),orderType=typ,subject=subject,grounds=grounds,
-      status="active",issuedAt=common.now(),issuedBy=identity(actor),expiresAt=common.trim(p.expiresAt)
+      status="active",issuedAt=common.now(),issuedBy=HANDLE_HELPERS.identity(actor),expiresAt=common.trim(p.expiresAt)
     }
-    row.seal=seal("NC-ORDER",{case.id,row.id,row.orderType,row.subject,row.grounds,row.expiresAt,row.issuedAt,row.issuedBy})
+    row.seal=HANDLE_HELPERS.seal("NC-ORDER",{case.id,row.id,row.orderType,row.subject,row.grounds,row.expiresAt,row.issuedAt,row.issuedBy})
     case.orders[#case.orders+1]=row
     case.updatedAt=common.now()
-    addNationalCaseTimeline(case,"order","Ordonnance emise",row.id.." / "..typ.." / "..subject,actor)
-    notifyNationalCase(ctx,state,case,"Ordonnance judiciaire",case.id.." / "..row.id.." / "..typ,"warning")
-    mutate(ctx,state,actor,"NC_CASE_ADD_ORDER",case.id,row.id)
-    return copy(case)
+    HANDLE_HELPERS.addNationalCaseTimeline(case,"order","Ordonnance emise",row.id.." / "..typ.." / "..subject,actor)
+    HANDLE_HELPERS.notifyNationalCase(ctx,state,case,"Ordonnance judiciaire",case.id.." / "..row.id.." / "..typ,"warning")
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CASE_ADD_ORDER",case.id,row.id)
+    return HANDLE_HELPERS.copy(case)
   end
 
   if action=="NC_CASE_SET_ORDER_STATUS" then
     local case=n.cases[common.trim(p.id):upper()]
     if not case then return nil,"Dossier introuvable." end
-    ensureNationalCaseShape(case)
-    if not nationalCaseJudicialRole(state,actor) then return nil,"Modification d'ordonnance reservee aux juges." end
+    HANDLE_HELPERS.ensureNationalCaseShape(case)
+    if not HANDLE_HELPERS.nationalCaseJudicialRole(state,actor) then return nil,"Modification d'ordonnance reservee aux juges." end
     local order=nil
     for _,o in ipairs(case.orders) do if o.id==p.orderId then order=o break end end
     if not order then return nil,"Ordonnance introuvable." end
     local allowed={active=true,executed=true,revoked=true,expired=true}
     if not allowed[p.status] then return nil,"Statut d'ordonnance invalide." end
     local old=order.status
-    order.status=p.status;order.updatedAt=common.now();order.updatedBy=identity(actor)
-    order.statusSeal=seal("NC-ORDER-STAT",{case.id,order.id,old,order.status,order.updatedAt,order.updatedBy,order.seal})
+    order.status=p.status;order.updatedAt=common.now();order.updatedBy=HANDLE_HELPERS.identity(actor)
+    order.statusSeal=HANDLE_HELPERS.seal("NC-ORDER-STAT",{case.id,order.id,old,order.status,order.updatedAt,order.updatedBy,order.seal})
     case.updatedAt=common.now()
-    addNationalCaseTimeline(case,"order_status","Ordonnance mise a jour",order.id.." / "..old.." -> "..order.status,actor)
-    mutate(ctx,state,actor,"NC_CASE_SET_ORDER_STATUS",case.id,order.id.." "..old.." -> "..order.status)
-    return copy(case)
+    HANDLE_HELPERS.addNationalCaseTimeline(case,"order_status","Ordonnance mise a jour",order.id.." / "..old.." -> "..order.status,actor)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CASE_SET_ORDER_STATUS",case.id,order.id.." "..old.." -> "..order.status)
+    return HANDLE_HELPERS.copy(case)
   end
 
   if action=="NC_CASE_ADD_JUDGMENT" then
     local case=n.cases[common.trim(p.id):upper()]
     if not case then return nil,"Dossier introuvable." end
-    ensureNationalCaseShape(case)
-    if not nationalCaseJudicialRole(state,actor) then return nil,"Jugement reserve aux juges." end
+    HANDLE_HELPERS.ensureNationalCaseShape(case)
+    if not HANDLE_HELPERS.nationalCaseJudicialRole(state,actor) then return nil,"Jugement reserve aux juges." end
     local verdict=common.trim(p.verdict)
     local reasoning=common.trim(p.reasoning)
     if verdict=="" or reasoning=="" then return nil,"Decision et motivation obligatoires." end
     local row={
       id=string.format("JUDG-%03d",#case.judgments+1),verdict=verdict,reasoning=reasoning,
-      sanctions=common.trim(p.sanctions),judge=identity(actor),date=common.now(),
-      final=p.final~=false,citedArticleVersions=nationalLawSnapshot(n,case.citedArticles)
+      sanctions=common.trim(p.sanctions),judge=HANDLE_HELPERS.identity(actor),date=common.now(),
+      final=p.final~=false,citedArticleVersions=HANDLE_HELPERS.nationalLawSnapshot(n,case.citedArticles)
     }
-    row.seal=seal("NC-JUDG",{case.id,row.id,row.verdict,row.reasoning,row.sanctions,row.judge,row.date,row.final,row.citedArticleVersions})
+    row.seal=HANDLE_HELPERS.seal("NC-JUDG",{case.id,row.id,row.verdict,row.reasoning,row.sanctions,row.judge,row.date,row.final,row.citedArticleVersions})
     case.judgments[#case.judgments+1]=row
     if row.final then case.status="judged" end
     case.updatedAt=common.now()
-    addNationalCaseTimeline(case,"judgment","Jugement enregistre",row.id.." / "..verdict,actor)
-    notifyNationalCase(ctx,state,case,"Jugement national rendu",case.id.." / "..verdict,row.final and "warning" or "info")
+    HANDLE_HELPERS.addNationalCaseTimeline(case,"judgment","Jugement enregistre",row.id.." / "..verdict,actor)
+    HANDLE_HELPERS.notifyNationalCase(ctx,state,case,"Jugement national rendu",case.id.." / "..verdict,row.final and "warning" or "info")
     if row.final then
       local visibility=case.visibility=="public" and "public" or "judicial"
-      local gaz=publishGazette(n,actor,"judgment",case.id,
+      local gaz=HANDLE_HELPERS.publishGazette(n,actor,"judgment",case.id,
         case.visibility=="public" and ("Jugement - "..case.title) or ("Decision judiciaire - "..case.id),
         case.visibility=="public" and verdict or "Decision rendue; contenu reserve au circuit judiciaire.",
         row.seal,visibility)
       row.gazetteId=gaz.id
     end
-    mutate(ctx,state,actor,"NC_CASE_ADD_JUDGMENT",case.id,row.id.." / "..row.seal..(row.gazetteId and (" / "..row.gazetteId) or ""))
-    return copy(case)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CASE_ADD_JUDGMENT",case.id,row.id.." / "..row.seal..(row.gazetteId and (" / "..row.gazetteId) or ""))
+    return HANDLE_HELPERS.copy(case)
   end
 
   if action=="NC_CASE_FILE_APPEAL" then
     local case=n.cases[common.trim(p.id):upper()]
     if not case then return nil,"Dossier introuvable." end
-    ensureNationalCaseShape(case)
-    local who=identity(actor)
-    local institution=(technicalNationalAdmin(actor) or nationalRole(state,actor)=="prosecutor" or nationalRole(state,actor)=="judge")
+    HANDLE_HELPERS.ensureNationalCaseShape(case)
+    local who=HANDLE_HELPERS.identity(actor)
+    local institution=(HANDLE_HELPERS.technicalNationalAdmin(actor) or HANDLE_HELPERS.nationalRole(state,actor)=="prosecutor" or HANDLE_HELPERS.nationalRole(state,actor)=="judge")
     local party=(who~="" and (who==case.complainant or who==case.accused))
     if not institution and not party then return nil,"Vous n'etes pas habilite a former appel dans ce dossier." end
     if case.status~="judged" and case.status~="closed" then return nil,"L'appel exige une decision rendue." end
@@ -2635,20 +2700,20 @@ function N.handle(state,actor,action,p,ctx)
       id=string.format("APPEAL-%03d",#case.appeals+1),appellant=who,grounds=grounds,
       status="pending",filedAt=common.now(),filedBy=who
     }
-    row.seal=seal("NC-APPEAL",{case.id,row.id,row.appellant,row.grounds,row.filedAt})
+    row.seal=HANDLE_HELPERS.seal("NC-APPEAL",{case.id,row.id,row.appellant,row.grounds,row.filedAt})
     case.appeals[#case.appeals+1]=row
     case.status="appeal";case.updatedAt=common.now()
-    addNationalCaseTimeline(case,"appeal","Appel depose",row.id.." / "..who,actor)
-    notifyNationalCase(ctx,state,case,"Appel depose",case.id.." / "..row.id,"warning")
-    mutate(ctx,state,actor,"NC_CASE_FILE_APPEAL",case.id,row.id)
-    return copy(case)
+    HANDLE_HELPERS.addNationalCaseTimeline(case,"appeal","Appel depose",row.id.." / "..who,actor)
+    HANDLE_HELPERS.notifyNationalCase(ctx,state,case,"Appel depose",case.id.." / "..row.id,"warning")
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CASE_FILE_APPEAL",case.id,row.id)
+    return HANDLE_HELPERS.copy(case)
   end
 
   if action=="NC_CASE_DECIDE_APPEAL" then
     local case=n.cases[common.trim(p.id):upper()]
     if not case then return nil,"Dossier introuvable." end
-    ensureNationalCaseShape(case)
-    if not nationalCaseJudicialRole(state,actor) then return nil,"Decision d'appel reservee aux juges." end
+    HANDLE_HELPERS.ensureNationalCaseShape(case)
+    if not HANDLE_HELPERS.nationalCaseJudicialRole(state,actor) then return nil,"Decision d'appel reservee aux juges." end
     local appeal=nil
     for _,a in ipairs(case.appeals) do if a.id==p.appealId then appeal=a break end end
     if not appeal then return nil,"Appel introuvable." end
@@ -2658,28 +2723,28 @@ function N.handle(state,actor,action,p,ctx)
     local reasoning=common.trim(p.reasoning)
     if reasoning=="" then return nil,"Motivation d'appel obligatoire." end
     appeal.status="decided";appeal.result=p.result;appeal.reasoning=reasoning
-    appeal.decidedAt=common.now();appeal.decidedBy=identity(actor)
-    appeal.decisionSeal=seal("NC-APPEAL-DEC",{case.id,appeal.id,appeal.result,appeal.reasoning,appeal.decidedAt,appeal.decidedBy,appeal.seal})
+    appeal.decidedAt=common.now();appeal.decidedBy=HANDLE_HELPERS.identity(actor)
+    appeal.decisionSeal=HANDLE_HELPERS.seal("NC-APPEAL-DEC",{case.id,appeal.id,appeal.result,appeal.reasoning,appeal.decidedAt,appeal.decidedBy,appeal.seal})
     case.status=(p.result=="remanded") and "hearing" or "judged"
     case.updatedAt=common.now()
-    addNationalCaseTimeline(case,"appeal_decision","Appel tranche",appeal.id.." / "..appeal.result,actor)
-    notifyNationalCase(ctx,state,case,"Decision d'appel",case.id.." / "..appeal.result,"info")
+    HANDLE_HELPERS.addNationalCaseTimeline(case,"appeal_decision","Appel tranche",appeal.id.." / "..appeal.result,actor)
+    HANDLE_HELPERS.notifyNationalCase(ctx,state,case,"Decision d'appel",case.id.." / "..appeal.result,"info")
     local visibility=case.visibility=="public" and "public" or "judicial"
-    local gaz=publishGazette(n,actor,"appeal_decision",case.id,
+    local gaz=HANDLE_HELPERS.publishGazette(n,actor,"appeal_decision",case.id,
       case.visibility=="public" and ("Decision d'appel - "..case.title) or ("Decision d'appel - "..case.id),
       case.visibility=="public" and appeal.result or "Decision d'appel rendue; contenu reserve au circuit judiciaire.",
       appeal.decisionSeal,visibility)
     appeal.gazetteId=gaz.id
-    mutate(ctx,state,actor,"NC_CASE_DECIDE_APPEAL",case.id,appeal.id.." / "..appeal.result.." / "..gaz.id)
-    return copy(case)
+    HANDLE_HELPERS.mutate(ctx,state,actor,"NC_CASE_DECIDE_APPEAL",case.id,appeal.id.." / "..appeal.result.." / "..gaz.id)
+    return HANDLE_HELPERS.copy(case)
   end
 
   do
     local handled,data,err=democracy.handle(state,actor,action,p,{
-      mutate=function(a,obj,details) return mutate(ctx,state,actor,a,obj,details) end,
-      notice=function(spec) return notice(ctx,state,spec) end,
+      mutate=function(a,obj,details) return HANDLE_HELPERS.mutate(ctx,state,actor,a,obj,details) end,
+      notice=function(spec) return HANDLE_HELPERS.notice(ctx,state,spec) end,
       gazette=function(kind,objectId,title,summary,sourceSeal,visibility)
-        return publishGazette(n,actor,kind,objectId,title,summary,sourceSeal,visibility)
+        return HANDLE_HELPERS.publishGazette(n,actor,kind,objectId,title,summary,sourceSeal,visibility)
       end
     })
     if handled then return data,err end
@@ -2688,10 +2753,10 @@ function N.handle(state,actor,action,p,ctx)
   do
     local handled,data,err=finance.handle(state,actor,action,p,{
       getLaw=getLaw,
-      mutate=function(a,obj,details) return mutate(ctx,state,actor,a,obj,details) end,
-      notice=function(spec) return notice(ctx,state,spec) end,
+      mutate=function(a,obj,details) return HANDLE_HELPERS.mutate(ctx,state,actor,a,obj,details) end,
+      notice=function(spec) return HANDLE_HELPERS.notice(ctx,state,spec) end,
       gazette=function(kind,objectId,title,summary,sourceSeal,visibility)
-        return publishGazette(n,actor,kind,objectId,title,summary,sourceSeal,visibility)
+        return HANDLE_HELPERS.publishGazette(n,actor,kind,objectId,title,summary,sourceSeal,visibility)
       end
     })
     if handled then return data,err end
@@ -2700,20 +2765,20 @@ function N.handle(state,actor,action,p,ctx)
   do
     local handled,data,err=services.handle(state,actor,action,p,{
       getLaw=getLaw,
-      mutate=function(a,obj,details) return mutate(ctx,state,actor,a,obj,details) end,
-      notice=function(spec) return notice(ctx,state,spec) end,
+      mutate=function(a,obj,details) return HANDLE_HELPERS.mutate(ctx,state,actor,a,obj,details) end,
+      notice=function(spec) return HANDLE_HELPERS.notice(ctx,state,spec) end,
       gazette=function(kind,objectId,title,summary,sourceSeal,visibility)
-        return publishGazette(n,actor,kind,objectId,title,summary,sourceSeal,visibility)
+        return HANDLE_HELPERS.publishGazette(n,actor,kind,objectId,title,summary,sourceSeal,visibility)
       end
     })
     if handled then return data,err end
   end
 
   if action=="NC_AUDIT_LIST" then
-    if not roleIs(state,actor,"admin","president","council","judge") then return nil,"Journal national reserve aux institutions autorisees." end
+    if not HANDLE_HELPERS.roleIs(state,actor,"admin","president","council","judge") then return nil,"Journal national reserve aux institutions autorisees." end
     local limit=math.min(tonumber(p.limit) or 100,300)
     local out={}
-    for i=#n.nationalAudit,math.max(1,#n.nationalAudit-limit+1),-1 do out[#out+1]=copy(n.nationalAudit[i]) end
+    for i=#n.nationalAudit,math.max(1,#n.nationalAudit-limit+1),-1 do out[#out+1]=HANDLE_HELPERS.copy(n.nationalAudit[i]) end
     return out
   end
 
