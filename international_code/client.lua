@@ -2022,7 +2022,9 @@ local function helpScreen()
     {label="Assemblee",text="Les propositions BILL peuvent creer un article ou amender un texte existant. Les terminaux delegate rattaches a un Etat votent POUR, CONTRE ou ABSTENTION. Apres cloture, une proposition adoptee peut etre promulguee dans le Code."},
     {label="Etats membres",text="Le registre STATE conserve le statut, le gouvernement et le representant des pays. Un administrateur peut rattacher un terminal delegate a un Etat pour ses votes officiels."},
     {label="Dossiers",text="Le panier juridique permet d'ajouter ou retirer plusieurs articles d'un dossier. Chaque fait, preuve, audience, ordonnance, changement de statut et jugement alimente la chronologie."},
-    {label="Jugements",text="Lors de l'enregistrement, le systeme fige la reference, le titre et la version des articles cites. Un jugement peut ensuite etre relu ou imprime seul."},
+    {label="Jugements",text="Lors de l'enregistrement, le systeme fige la reference, le titre et la version des articles cites. Les jugements, ordonnances, audiences, appels et scrutins recoivent aussi un sceau d'integrite applicatif."},
+    {label="Appels",text="Le greffe ou le juge peut deposer un appel. Un juge peut ensuite confirmer, modifier, annuler, rejeter la decision ou renvoyer l'affaire a une nouvelle audience."},
+    {label="Affichage public",text="ic public lance un registre tournant sur Monitor. ic display CASE-... affiche un dossier public specifique au tribunal."},
     {label="Impression",text="Une imprimante ComputerCraft connectee permet d'imprimer le dossier complet, sa chronologie, un article ou un jugement individuel sur plusieurs pages."},
     {label="Sauvegarde",text="Les textes en cours sont autosauvegardes localement. Le serveur reste la source de verite pour les lois, dossiers, jugements et le journal d'audit."}
   })
@@ -2141,9 +2143,13 @@ function C.run()
       local q=prompt("Recherche (article, titre, partie)")
       local kind=menu("RECHERCHE",{
         {text="Dans les articles",id="law"},
+        {text="Dans les propositions / votes",id="bill"},
+        {text="Dans les Etats membres",id="state"},
         {text="Dans les dossiers",id="case"}
       })
       if kind and kind.id=="law" then lawsScreen(q)
+      elseif kind and kind.id=="bill" then billsScreen(q,"")
+      elseif kind and kind.id=="state" then statesScreen(q,"")
       elseif kind then casesScreen(q) end
     elseif p.id=="audit" then
       auditScreen()
@@ -2174,7 +2180,8 @@ function C.doctor()
     "/international_code/common.lua",
     "/international_code/server.lua",
     "/international_code/client.lua",
-    "/international_code/printer.lua"
+    "/international_code/printer.lua",
+    "/international_code/public.lua"
   }
   local missing={}
   for _,path in ipairs(required) do if not fs.exists(path) then missing[#missing+1]=path end end
