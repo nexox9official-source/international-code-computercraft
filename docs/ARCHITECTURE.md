@@ -1,4 +1,4 @@
-# Architecture v0.15
+# Architecture v0.16
 
 ## Topologie
 
@@ -44,6 +44,9 @@ state
          +-- cases[NC-CASE-...]
          +-- sessions[NC-SESSION-...]
          +-- gazette[NC-GAZ-...]
+         +-- organizations[NC-ORG-...]
+         +-- licenses[NC-LIC-...]
+         +-- fines[NC-FINE-...]
          +-- nationalAudit
 ```
 
@@ -171,6 +174,31 @@ Le vote et la promulgation sont deux opérations différentes afin qu'un projet 
 Les décrets constituent une couche réglementaire séparée des lois.
 
 Le serveur vérifie le portefeuille du ministre avant publication d'un décret ministériel. Les décrets nationaux restent réservés à la Présidence. La publication et l'abrogation sont scellées et auditées.
+
+## Services administratifs nationaux
+
+Les registres économiques et administratifs sont isolés dans `national_services.lua` afin que `national.lua` reste le coordinateur institutionnel.
+
+```text
+national
+  |
+  +-- organizations[NC-ORG]
+  |      +-- owners[] -> NC-CIT
+  |
+  +-- licenses[NC-LIC]
+  |      +-- holder -> NC-CIT ou NC-ORG
+  |      +-- legalBasis -> NC-ART
+  |
+  +-- fines[NC-FINE]
+         +-- citizenId -> NC-CIT
+         +-- articleRef/version -> NC-ART
+```
+
+Les autorisations ne sont pas gérées par un rôle ministériel générique : chaque type de licence est associé à un portefeuille déterminé. Le serveur revalide le portefeuille au moment de la délivrance et de chaque changement de statut.
+
+Les amendes figent la version de l'article cité lors de l'émission. Une contestation n'efface jamais l'acte initial ; elle ajoute des événements scellés à son historique.
+
+Le dossier individuel n'est pas une base séparée. `NC_RECORD_GET` calcule une vue à partir du registre civil, des licences, des amendes, des organisations et des jugements définitifs.
 
 ## Journal officiel national
 
