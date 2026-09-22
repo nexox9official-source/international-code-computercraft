@@ -2535,6 +2535,7 @@ local function nationalNotices(info)
       if not n.read then rpc("NOTICE_MARK_READ",{id=n.id}) end
       local actions={{text="Lire la notification",id="read"}}
       if n.objectType=="nc_election" then actions[#actions+1]={text="Ouvrir le scrutin",id="open"}
+      elseif n.objectType=="nc_general_election" then actions[#actions+1]={text="Ouvrir l'election nationale",id="open"}
       elseif n.objectType=="nc_bill" then actions[#actions+1]={text="Ouvrir le projet de loi",id="open"}
       elseif n.objectType=="nc_decree" then actions[#actions+1]={text="Ouvrir le decret",id="open"}
       elseif n.objectType=="nc_ministry" then actions[#actions+1]={text="Ouvrir le ministere",id="open"}
@@ -2559,6 +2560,7 @@ local function nationalNotices(info)
         })
       elseif a and a.id=="open" then
         if n.objectType=="nc_election" then C.electionDetails(n.objectId)
+        elseif n.objectType=="nc_general_election" then dofile("/international_code/national_democracy_client.lua").openElection(n.objectId)
         elseif n.objectType=="nc_bill" then billDetails(n.objectId)
         elseif n.objectType=="nc_decree" then decreeDetails(n.objectId)
         elseif n.objectType=="nc_ministry" then ministryDetails(n.objectId)
@@ -2637,6 +2639,7 @@ function C.run()
       {text="CALENDRIER / SESSIONS / ORDRE DU JOUR",id="sessions"},
       {text="LEGISLATION / PROJETS / VOTES",id="bills"},
       {text="JOURNAL OFFICIEL / PUBLICATIONS",id="gazette"},
+      {text=(dash.nationalElections or 0)>0 and ("[!] ELECTIONS NATIONALES ("..dash.nationalElections..")") or "ELECTIONS NATIONALES / PRESIDENCE / CONSEIL",id="democracy"},
       {text="ELECTIONS MINISTERIELLES",id="elections"},
       {text="DECRETS / REGLEMENTS",id="decrees"},
       {text="JUSTICE / DOSSIERS NATIONAUX",id="cases"},
@@ -2658,6 +2661,7 @@ function C.run()
     elseif p.id=="sessions" then sessionsScreen(info)
     elseif p.id=="bills" then billsScreen()
     elseif p.id=="gazette" then gazetteScreen(info)
+    elseif p.id=="democracy" then dofile("/international_code/national_democracy_client.lua").run()
     elseif p.id=="elections" then C.electionsScreen()
     elseif p.id=="decrees" then decreesScreen(info)
     elseif p.id=="cases" then casesScreen()
