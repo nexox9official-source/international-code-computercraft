@@ -7,7 +7,16 @@ Système distribué pour **CC:Tweaked / ComputerCraft** avec deux espaces juridi
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. Les données nationales de North Coalition sont isolées logiquement des registres internationaux et soumises à leur propre contrôle d'accès.
 
-## Ce que fait la v0.20
+### Statut juridique v0.21
+
+Les deux corpus initiaux sont désormais **adoptés et ratifiés** :
+
+- `UNS-CIC-500-V1.0` : 500 articles internationaux actifs ;
+- `NC-CORPUS-400-V2.0` : 400 articles nationaux actifs depuis le 22 septembre 2026.
+
+Dans North Coalition, **NexoFr_** est enregistré comme dirigeant et autorité souveraine nationale avec habilitation cumulative sur l'ensemble des compétences internes : législation, réglementation, gouvernement, justice, sécurité, défense, diplomatie, finances et administration. Cette habilitation est uniquement nationale : elle ne donne à North Coalition aucun privilège institutionnel particulier dans l'UNS.
+
+## Ce que fait la v0.21
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
@@ -23,7 +32,7 @@ Le projet ne contient aucune référence au nom du serveur Minecraft. Les donné
 - impression multi-pages des articles et dossiers via une **Printer ComputerCraft** ;
 - interface terminal claire, navigable au clavier et à la souris.
 
-## Intranet national North Coalition v0.20
+## Intranet national North Coalition v0.21
 
 La v0.19 fournit un deuxième espace complet, **interne à North Coalition**, sans transformer les 400 lois nationales en articles UNS.
 
