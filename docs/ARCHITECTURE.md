@@ -1,4 +1,4 @@
-# Architecture v0.18
+# Architecture v0.19
 
 ## Topologie
 
@@ -38,6 +38,9 @@ state
          +-- categories
          +-- ministries
          +-- elections[NC-ELECT-...]
+         +-- generalElections[NC-GE-...]
+         +-- mandates[NC-MANDATE-...]
+         +-- councilMembers[]
          +-- bills[NC-BILL-...]
          +-- decrees[NC-DEC-...]
          +-- citizens[NC-CIT-...]
@@ -74,6 +77,36 @@ stateId
 `citizenId` est la clé électorale permanente. Le pseudo reste un libellé humain, mais l'unicité du vote repose sur `NC-CIT-XXXX`. Plusieurs terminaux rattachés au même citoyen ne produisent donc qu'une seule voix.
 
 Le ministre n'est pas attribué via un simple changement de rôle. Le serveur exige le workflow gouvernemental : nomination directe admissible ou résultat d'un scrutin valide.
+
+## Démocratie nationale et mandats
+
+Le module `national_democracy.lua` gère les élections politiques sans réutiliser le registre des élections ministérielles.
+
+```text
+NC-CIT actifs
+    |
+    +--> NC-GE presidential
+    |       |
+    |       +--> tour 1 (>50 %)
+    |       +--> second tour si nécessaire
+    |       +--> NC-MANDATE president
+    |
+    +--> NC-GE council
+            |
+            +--> classement des candidats
+            +--> second tour en cas d'égalité au dernier siège
+            +--> NC-MANDATE council x N
+```
+
+Le corps électoral est copié dans `eligibleCitizens[]` au moment où le vote s'ouvre. Les modifications ultérieures du registre civil ne changent donc pas rétroactivement les électeurs de ce tour.
+
+Les votes sont indexés par `NC-CIT`, et non par Computer ID. Le dernier bulletin déposé avant la clôture remplace le précédent bulletin du même citoyen.
+
+Les mandats ne sont jamais écrasés : l'ancien mandat passe à `ended` et reçoit un sceau de fin. Le nouveau mandat est ajouté à `national.mandates`.
+
+Une élection présidentielle conclue met à jour `meta.presidentCitizenId`, `meta.presidentIdentity` et le terminal présidentiel de référence. Une élection du Conseil remplace `councilMembers[]` et met à jour les habilitations des terminaux rattachés aux citoyens élus.
+
+Les fonctions exécutives, judiciaires et de sécurité listées comme incompatibles empêchent la candidature côté serveur ; l'interface n'est donc pas la seule barrière.
 
 ## Registre civil
 
@@ -319,6 +352,8 @@ Le mécanisme reste un dispositif d'intégrité RP, pas une signature cryptograp
 - Article national : `NC-ART-001`
 - Projet de loi national : `NC-BILL-AAAA-0001`
 - Scrutin ministériel : `NC-ELECT-AAAA-0001`
+- Élection nationale : `NC-GE-AAAA-0001`
+- Mandat national : `NC-MANDATE-AAAA-0001`
 - Décret : `NC-DEC-AAAA-0001`
 - Citoyen : `NC-CIT-0001`
 - Dossier national : `NC-CASE-AAAA-0001`
