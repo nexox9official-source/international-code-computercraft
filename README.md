@@ -81,7 +81,7 @@ wget run https://raw.githubusercontent.com/nexox9official-source/international-c
 Le Code n'affiche plus simplement une liste brute de 500 articles. Le terminal propose maintenant :
 
 - **Parcourir par Livre / catégorie** ;
-- **rechercher par numéro, titre ou mot contenu dans l'article** ;
+- **rechercher par numéro, titre, catégorie ou mot contenu dans l'article** ; la recherche ignore les accents (`legitime defense` retrouve `Légitime défense`) et classe les résultats les plus pertinents en premier ;
 - afficher tous les articles si nécessaire ;
 - ouvrir une catégorie puis naviguer uniquement dans ses articles ;
 - consulter le texte complet avant de revenir à la liste ;
@@ -166,7 +166,7 @@ Une fois la première installation terminée, les postes peuvent être mis à jo
 ic update
 ```
 
-Le serveur doit être arrêté avant de mettre à jour son code. Relancez ensuite `ic server`. Sur les clients, relancez simplement `ic` ou redémarrez le PC.
+Le serveur doit être arrêté avant de mettre à jour son code. Relancez ensuite `ic server`. Sur les clients, relancez simplement `ic` ou redémarrez le PC. La commande `ic doctor` vérifie ensuite les fichiers essentiels, les **500 articles du corpus**, le modem, l'imprimante, la connexion serveur et la cohérence des versions client/serveur.
 
 ## Rôles
 
