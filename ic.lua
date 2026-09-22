@@ -23,6 +23,7 @@ local function help()
   print("ic assembly <BILL-ID>      Tableau LIVE d'un scrutin sur Monitor")
   print("ic resolution <RES-ID>     Tableau LIVE d'une resolution")
   print("ic session <SESSION-ID>    Tableau LIVE d'une session")
+  print("ic mission <MISSION-ID>    Tableau LIVE d'une mission")
   print("ic treaty <TREATY-ID>      Tableau LIVE des signatures d'un traite")
   print("ic verify <SCEAU>          Verifier l'authenticite d'un document")
   print("ic inbox                   Ouvrir le centre de notifications")
@@ -58,6 +59,10 @@ end
 if cmd=="session" then
   if not args[2] then error("Usage: ic session SESSION-AAAA-0001",0) end
   dofile(ROOT.."/public.lua").sessionDisplay(args[2]);return
+end
+if cmd=="mission" then
+  if not args[2] then error("Usage: ic mission MISSION-AAAA-0001",0) end
+  dofile(ROOT.."/public.lua").missionDisplay(args[2]);return
 end
 if cmd=="treaty" then
   if not args[2] then error("Usage: ic treaty TREATY-AAAA-0001",0) end
