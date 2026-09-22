@@ -1,4 +1,4 @@
-# Architecture v0.1
+# Architecture v0.3
 
 ## Topologie
 
@@ -32,6 +32,10 @@
 6. Le serveur est la source de vérité ; les clients n'écrivent jamais directement dans `state.tbl`.
 7. Les codes d'appairage sont à usage unique et expirent après cinq minutes.
 8. Les sauvegardes sont effectuées automatiquement toutes les dix mutations et manuellement sur demande.
+9. Les dossiers possèdent une chronologie applicative distincte du journal d'audit global.
+10. Un jugement fige les références, titres, versions et statuts des articles cités au moment de la décision.
+11. Les paniers juridiques sont construits côté terminal mais toute modification finale d'un dossier est revalidée par le serveur.
+12. Les brouillons de rédaction sont autosauvegardés localement afin qu'une consultation du Code ou une interruption ne détruise pas le texte en cours.
 
 ## Identifiants
 
@@ -59,5 +63,5 @@ Le serveur central est la seule source de vérité et valide toutes les opérati
 - signatures de juges et quorum ;
 - table de peines paramétrable ;
 - réplication vers un second serveur de secours ;
-- export papier spécialisé : arrêt, mandat, procès-verbal, acte d'accusation ;
+- export papier spécialisé déjà disponible pour arrêt/jugement et chronologie ; à étendre aux mandats, procès-verbaux et actes d'accusation ;
 - écran mural Monitor pour le registre public.
