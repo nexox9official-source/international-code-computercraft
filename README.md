@@ -274,10 +274,21 @@ ic public
 ic display CASE-2026-0001
 ic assembly BILL-2026-0001
 ic treaty TREATY-2026-0001
+ic verify CIU-JUG-XXXXXXXX
 ic doctor
 ic update
 ic help
 ```
+
+### Vérification d'un document papier
+
+Les sceaux imprimés peuvent être contrôlés directement contre le registre central :
+
+```text
+ic verify CIU-JUG-7A1D9C20
+```
+
+Le serveur recherche le sceau dans les jugements, audiences, ordonnances, appels, scrutins, promulgations et traités. Pour un dossier confidentiel, il peut confirmer que le sceau est authentique **sans divulguer le contenu protégé**.
 
 ## Mise à jour des postes
 
