@@ -340,4 +340,22 @@ function P.enforcement(e)
   return printLines(e.id or "EXECUTION",lines)
 end
 
+
+function P.hearingMinutes(case, hearing)
+  if not hearing then return false,"Audience introuvable." end
+  local lines={}
+  appendWrapped(lines,"PROCES-VERBAL D'AUDIENCE",case.id or "-",25)
+  appendWrapped(lines,"REFERENCE",hearing.id or "-",25)
+  appendWrapped(lines,"AFFAIRE",case.title or "-",25)
+  appendWrapped(lines,"OBJET",hearing.subject or "-",25)
+  appendWrapped(lines,"DATE / HEURE",hearing.scheduledFor or "-",25)
+  appendWrapped(lines,"LIEU",hearing.location or "-",25)
+  appendWrapped(lines,"PARTICIPANTS",hearing.participants or "-",25)
+  appendWrapped(lines,"COMPTE RENDU",hearing.minutes or "",25)
+  appendWrapped(lines,"ISSUE / SUITE",hearing.outcome or "-",25)
+  appendWrapped(lines,"ENREGISTRE PAR",(hearing.recordedBy or "-").." / "..(hearing.recordedAt or "-"),25)
+  appendWrapped(lines,"SCEAU DU PV",hearing.recordSeal or "-",25)
+  return printLines((case.id or "DOSSIER").."-"..(hearing.id or "AUDIENCE").."-PV",lines)
+end
+
 return P
