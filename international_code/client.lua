@@ -718,7 +718,7 @@ lawBasketBrowser=function(initial)
       local items={}
       for _,law in ipairs(laws or {}) do
         items[#items+1]={
-          text=(selected[law.ref] and "[X] " or "[ ] ")..law.ref.."  "..law.title,
+          text=(selected[law.ref] and "[X] " or "[ ] ")..law.ref.." ["..(law.status or "?").."] "..law.title,
           law=law
         }
       end
@@ -733,7 +733,15 @@ lawBasketBrowser=function(initial)
         if selected[law.ref] then
           selected[law.ref]=nil
         else
-          addLaw(law)
+          local allow=true
+          if law.status and law.status~="active" then
+            local confirm=menu("ARTICLE NON ACTIF",{
+              {text="Ajouter quand meme",id="yes"},
+              {text="Annuler",id="no"}
+            },law.ref.." est actuellement ["..law.status.."].")
+            allow=confirm and confirm.id=="yes"
+          end
+          if allow then addLaw(law) end
         end
       elseif a and a.id=="read" then
         lawQuickView(law)
