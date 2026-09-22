@@ -77,6 +77,10 @@ local function visible(actor,row)
   return false
 end
 
+function N.visible(actor,row)
+  return visible(actor,row)
+end
+
 local function publicView(row)
   local out=copy(row)
   out.history=nil
