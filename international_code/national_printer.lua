@@ -452,4 +452,88 @@ function P.request(req)
   return printLines(req.id or "NC-REQ",lines)
 end
 
+
+function P.budget(b,unit)
+  if not b then return false,"Budget introuvable." end
+  unit=unit or "UB"
+  local lines={}
+  append(lines,"BUDGET NATIONAL",b.id.." / "..(b.title or ""),25)
+  append(lines,"EXERCICE / STATUT",tostring(b.fiscalYear or "-").." / "..(b.status or "-"),25)
+  append(lines,"RECETTES ATTENDUES",tostring(b.expectedRevenueUB or 0).." "..unit,25)
+  append(lines,"RESERVE",tostring(b.reserveUB or 0).." "..unit,25)
+  append(lines,"TOTAL CREDITS",tostring(b.totalUB or 0).." "..unit,25)
+  lines[#lines+1]="CREDITS MINISTERIELS"
+  local codes={}
+  for code in pairs(b.allocations or {}) do codes[#codes+1]=code end
+  table.sort(codes)
+  for _,code in ipairs(codes) do
+    local ex=(b.execution or {})[code] or {}
+    for _,l in ipairs(common.wrap(code.." : "..tostring((b.allocations or {})[code] or 0).." "..unit..
+      " / engage "..tostring(ex.committedUB or 0)..
+      " / paye "..tostring(ex.spentUB or 0)..
+      " / dispo "..tostring(ex.availableUB or 0),25)) do lines[#lines+1]=l end
+  end
+  if #codes==0 then lines[#lines+1]="Aucun credit" end
+  lines[#lines+1]=""
+  local t=b.tally or {}
+  append(lines,"SCRUTIN","Pour "..tostring(t.yes or 0).." / Contre "..tostring(t.no or 0)..
+    " / Abst "..tostring(t.abstain or 0).." / "..tostring(t.participation or 0).."/"..tostring(t.eligible or 0),25)
+  append(lines,"SCEAUX",(b.seal or "-").."\n"..(b.voteSeal or "-").."\n"..(b.enactmentSeal or "-"),25)
+  append(lines,"JOURNAL OFFICIEL",b.gazetteId or "-",25)
+  return printLines(b.id or "NC-BUD",lines)
+end
+
+function P.revenue(r,unit)
+  if not r then return false,"Recette introuvable." end
+  unit=unit or "UB"
+  local lines={}
+  append(lines,"RECETTE PUBLIQUE",r.id.." / "..(r.title or ""),25)
+  append(lines,"NATURE",r.kind or "-",25)
+  append(lines,"MONTANT",tostring(r.amountUB or 0).." "..unit,25)
+  append(lines,"SOURCE",r.source or "-",25)
+  append(lines,"BASE LEGALE",r.legalBasis or "-",25)
+  append(lines,"DATE / AUTEUR",(r.recordedAt or "-").." / "..(r.recordedBy or "-"),25)
+  append(lines,"NOTES",r.notes or "-",25)
+  append(lines,"SCEAU",r.seal or "-",25)
+  return printLines(r.id or "NC-REV",lines)
+end
+
+function P.expense(e,unit)
+  if not e then return false,"Depense introuvable." end
+  unit=unit or "UB"
+  local lines={}
+  append(lines,"DEPENSE PUBLIQUE",e.id.." / "..(e.title or ""),25)
+  append(lines,"BUDGET / MINISTERE",(e.budgetId or "-").." / "..(e.ministryCode or "-"),25)
+  append(lines,"MONTANT",tostring(e.amountUB or 0).." "..unit,25)
+  append(lines,"OBJET",e.purpose or "",25)
+  append(lines,"BASE LEGALE",e.legalBasis or "-",25)
+  append(lines,"PRESTATAIRE",(e.vendorId or "-").." / "..(e.vendorName or ""),25)
+  append(lines,"STATUT",e.status or "-",25)
+  append(lines,"DEMANDE",(e.requestedAt or "-").." / "..(e.requestedBy or "-"),25)
+  append(lines,"CONTROLE PRESIDENTIEL",e.requiresPresident and "OUI" or "NON",25)
+  append(lines,"CONTRAT",e.contractId or "-",25)
+  append(lines,"PAIEMENT",(e.paidAt or "-").." / "..(e.paymentReference or "-"),25)
+  append(lines,"SCEAUX",(e.requestSeal or "-").."\n"..(e.financeSeal or "-").."\n"..(e.presidentSeal or "-").."\n"..(e.paymentSeal or e.decisionSeal or "-"),25)
+  return printLines(e.id or "NC-EXP",lines)
+end
+
+function P.contract(c,unit)
+  if not c then return false,"Marche introuvable." end
+  unit=unit or "UB"
+  local lines={}
+  append(lines,"MARCHE PUBLIC",c.id.." / "..(c.title or ""),25)
+  append(lines,"MINISTERE",c.ministryCode or "-",25)
+  append(lines,"PRESTATAIRE",(c.vendorOrgId or "-").." / "..(c.vendorName or ""),25)
+  append(lines,"DEPENSE ASSOCIEE",c.expenseId or "-",25)
+  append(lines,"MONTANT",tostring(c.amountUB or 0).." "..unit,25)
+  append(lines,"OBJET",c.purpose or "",25)
+  append(lines,"PROCEDURE",c.procurementMethod or "-",25)
+  append(lines,"JUSTIFICATION",c.justification or "-",25)
+  append(lines,"STATUT",c.status or "-",25)
+  append(lines,"ATTRIBUTION",(c.awardedAt or "-").." / "..(c.awardedBy or "-"),25)
+  append(lines,"SCEAUX",(c.draftSeal or "-").."\n"..(c.awardSeal or "-").."\n"..(c.closeSeal or "-"),25)
+  append(lines,"JOURNAL OFFICIEL",c.gazetteId or "-",25)
+  return printLines(c.id or "NC-CONTRACT",lines)
+end
+
 return P
