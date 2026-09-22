@@ -1179,6 +1179,279 @@ local function citizensScreen(info)
   end
 end
 
+
+local function sessionTypeLabel(v)
+  local labels={
+    council="Conseil de la Coalition",cabinet="Conseil des ministres",
+    emergency="Session d'urgence",committee="Commission",
+    public_hearing="Audition publique"
+  }
+  return labels[v] or tostring(v or "")
+end
+
+local function chooseAgendaObject(kind)
+  if kind=="law" then
+    local law=chooseLaw("")
+    return law and law.id,nil
+  elseif kind=="bill" then
+    local rows=rpc("NC_BILL_LIST",{}) or {}
+    local items={}
+    for _,x in ipairs(rows) do items[#items+1]={text=x.id.." ["..x.stage.."] "..x.title,row=x} end
+    local p=menu("PROJETS DE LOI",items,#rows.." projet(s)")
+    return p and p.row.id,nil
+  elseif kind=="election" then
+    local rows=rpc("NC_ELECTION_LIST",{}) or {}
+    local items={}
+    for _,x in ipairs(rows) do items[#items+1]={text=x.id.." ["..x.stage.."] "..x.title,row=x} end
+    local p=menu("SCRUTINS",items,#rows.." scrutin(s)")
+    return p and p.row.id,nil
+  elseif kind=="decree" then
+    local rows=rpc("NC_DECREE_LIST",{}) or {}
+    local items={}
+    for _,x in ipairs(rows) do items[#items+1]={text=x.id.." ["..x.status.."] "..x.title,row=x} end
+    local p=menu("DECRETS",items,#rows.." decret(s)")
+    return p and p.row.id,nil
+  elseif kind=="case" then
+    local rows=rpc("NC_CASE_LIST",{}) or {}
+    local items={}
+    for _,x in ipairs(rows) do items[#items+1]={text=x.id.." ["..x.status.."] "..x.title,row=x} end
+    local p=menu("DOSSIERS NATIONAUX",items,#rows.." dossier(s)")
+    return p and p.row.id,nil
+  elseif kind=="ministry" then
+    local rows=rpc("NC_MINISTRY_LIST",{}) or {}
+    local items={}
+    for _,x in ipairs(rows) do items[#items+1]={text=x.code.." "..x.name,row=x} end
+    local p=menu("MINISTERES",items,#rows.." ministere(s)")
+    return p and p.row.code,nil
+  elseif kind=="citizen" then
+    local rows=rpc("NC_CITIZEN_LIST",{}) or {}
+    local items={}
+    for _,x in ipairs(rows) do items[#items+1]={text=x.id.." ["..x.status.."] "..(x.displayName or x.identity),row=x} end
+    local p=menu("REGISTRE CIVIL",items,#rows.." identite(s)")
+    return p and p.row.id,nil
+  elseif kind=="custom" then
+    local title=prompt("Intitule du point libre")
+    return title,title
+  end
+  return nil,nil
+end
+
+local function openAgendaObject(item,info)
+  if item.kind=="law" then lawDetails(item.ref)
+  elseif item.kind=="bill" then billDetails(item.ref)
+  elseif item.kind=="election" then C.electionDetails(item.ref)
+  elseif item.kind=="decree" then decreeDetails(item.ref)
+  elseif item.kind=="case" then caseDetails(item.ref)
+  elseif item.kind=="ministry" then ministryDetails(item.ref)
+  elseif item.kind=="citizen" then citizenDetails(item.ref,info)
+  else
+    textPage(item.id or "POINT",{{label="Point libre",text=item.title or item.ref or ""},{label="Notes",text=item.notes or ""}})
+  end
+end
+
+local function sessionDetails(id,info)
+  while true do
+    local sess,err=rpc("NC_SESSION_GET",{id=id})
+    if not sess then message("SESSION NATIONALE",err,palette.bad);return end
+    info=rpc("NC_INFO",{}) or info or {}
+    local manager=(info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council")
+    local attendanceCount=0;for _ in pairs(sess.attendance or {}) do attendanceCount=attendanceCount+1 end
+
+    local actions={
+      {text="Lire la fiche / proces-verbal",id="read"},
+      {text="Ordre du jour ("..tostring(#(sess.agenda or {}))..")",id="agenda"},
+      {text="Presences ("..attendanceCount..")",id="attendance"},
+      {text="Imprimer la session",id="print"}
+    }
+    if sess.status=="open" then actions[#actions+1]={text="Enregistrer ma presence",id="checkin"} end
+    if manager and sess.status=="scheduled" then
+      actions[#actions+1]={text="[+] Ajouter un point a l'ordre du jour",id="agenda_add"}
+      actions[#actions+1]={text="Ouvrir officiellement la session",id="open"}
+      actions[#actions+1]={text="Annuler la session",id="cancel"}
+    elseif manager and sess.status=="open" then
+      actions[#actions+1]={text="Piloter un point de l'ordre du jour",id="agenda_manage"}
+      actions[#actions+1]={text="Clore et sceller le proces-verbal",id="close"}
+      actions[#actions+1]={text="Annuler la session",id="cancel"}
+    end
+
+    local a=menu(sess.id.." - "..sess.title,actions,
+      sessionTypeLabel(sess.sessionType).." / "..sess.status.." / "..(sess.scheduledFor or ""))
+    if not a then return end
+
+    if a.id=="read" then
+      local agenda={}
+      for _,x in ipairs(sess.agenda or {}) do
+        agenda[#agenda+1]=(x.id or "?").." ["..(x.status or "?").."] "..(x.kind or "").." "..(x.ref or "")..
+          "\n"..(x.title or "")..(x.sessionNotes and ("\nNotes: "..x.sessionNotes) or "")
+      end
+      local pres={}
+      for _,x in pairs(sess.attendance or {}) do
+        pres[#pres+1]=(x.identity or "?").." / "..roleLabel(x.role)..
+          (x.ministryCode and (" / "..x.ministryCode) or "").." / "..(x.checkedInAt or "")
+      end
+      table.sort(pres)
+      textPage(sess.id,{
+        {label="Session",text=sess.title or ""},
+        {label="Type / statut",text=sessionTypeLabel(sess.sessionType).." / "..(sess.status or "")},
+        {label="Visibilite",text=sess.visibility or ""},
+        {label="Date / heure",text=sess.scheduledFor or "-"},
+        {label="Lieu",text=sess.location or "-"},
+        {label="Description",text=sess.description or ""},
+        {label="Convocation",text=sess.convocationSeal or "-"},
+        {label="Ordre du jour",text=#agenda>0 and table.concat(agenda,"\n\n") or "Aucun point"},
+        {label="Presences",text=#pres>0 and table.concat(pres,"\n") or "Aucune"},
+        {label="Sceau d'ouverture",text=sess.openSeal or "-"},
+        {label="Proces-verbal",text=sess.minutes or "-"},
+        {label="Conclusions",text=sess.conclusions or "-"},
+        {label="Sceau final",text=sess.closeSeal or sess.cancelSeal or "-"}
+      })
+
+    elseif a.id=="print" then
+      local ok,pages=printer.session(sess)
+      message("IMPRESSION",ok and ("Session imprimee: "..pages.." page(s).") or pages,ok and palette.accent or palette.bad)
+
+    elseif a.id=="checkin" then
+      local out,e=rpc("NC_SESSION_CHECKIN",{id=sess.id})
+      message("PRESENCE",out and "Presence officiellement enregistree." or e,out and palette.accent or palette.bad)
+
+    elseif a.id=="attendance" then
+      local rows={}
+      for _,x in pairs(sess.attendance or {}) do rows[#rows+1]={text=(x.identity or "?").." / "..roleLabel(x.role).." / "..(x.checkedInAt or ""),row=x} end
+      table.sort(rows,function(x,y) return x.text<y.text end)
+      local x=menu("PRESENCES / "..sess.id,rows,#rows.." participant(s)")
+      if x then
+        textPage("PRESENCE",{
+          {label="Identite",text=x.row.identity or ""},{label="Citoyen",text=x.row.citizenId or ""},
+          {label="Fonction",text=roleLabel(x.row.role)},{label="Ministere",text=x.row.ministryCode or "-"},
+          {label="Enregistrement",text=x.row.checkedInAt or ""}
+        })
+      end
+
+    elseif a.id=="agenda" then
+      local items={}
+      for _,x in ipairs(sess.agenda or {}) do items[#items+1]={text=(x.id or "?").." ["..(x.status or "?").."] "..(x.title or ""),item=x} end
+      if #items==0 then message("ORDRE DU JOUR","Aucun point.",palette.muted)
+      else
+        local x=menu("ORDRE DU JOUR",items,#items.." point(s)")
+        if x then
+          local ops={{text="Ouvrir l'objet lie",id="open"}}
+          if manager and sess.status=="scheduled" then ops[#ops+1]={text="Retirer ce point",id="remove"} end
+          local y=menu(x.item.id,ops,(x.item.kind or "").." / "..(x.item.ref or ""))
+          if y and y.id=="open" then openAgendaObject(x.item,info)
+          elseif y and y.id=="remove" then
+            local out,e=rpc("NC_SESSION_REMOVE_AGENDA",{id=sess.id,itemId=x.item.id})
+            message("ORDRE DU JOUR",out and "Point retire." or e,out and palette.accent or palette.bad)
+          end
+        end
+      end
+
+    elseif a.id=="agenda_add" then
+      local kind=menu("TYPE DE POINT",{
+        {text="Article du Code national",v="law"},{text="Projet de loi",v="bill"},
+        {text="Scrutin ministeriel",v="election"},{text="Decret",v="decree"},
+        {text="Dossier judiciaire",v="case"},{text="Ministere",v="ministry"},
+        {text="Citoyen / identite",v="citizen"},{text="Point libre",v="custom"}
+      })
+      if kind then
+        local ref,customTitle=chooseAgendaObject(kind.v)
+        if ref then
+          local title=prompt("Titre du point (optionnel)",customTitle or "")
+          local notes=multi("NOTES PREPARATOIRES","")
+          local out,e=rpc("NC_SESSION_ADD_AGENDA",{id=sess.id,kind=kind.v,ref=ref,title=title,notes=notes})
+          message("ORDRE DU JOUR",out and "Point ajoute." or e,out and palette.accent or palette.bad)
+        end
+      end
+
+    elseif a.id=="open" then
+      local out,e=rpc("NC_SESSION_OPEN",{id=sess.id})
+      message("SESSION",out and ("Session ouverte / "..tostring(out.openSeal)) or e,out and palette.accent or palette.bad)
+
+    elseif a.id=="agenda_manage" then
+      local items={}
+      for _,x in ipairs(sess.agenda or {}) do items[#items+1]={text=(x.id or "?").." ["..(x.status or "?").."] "..(x.title or ""),item=x} end
+      local x=menu("PILOTER L'ORDRE DU JOUR",items,#items.." point(s)")
+      if x then
+        local st=menu("STATUT DU POINT",{
+          {text="En attente",v="pending"},{text="En discussion",v="discussing"},
+          {text="Discute",v="discussed"},{text="Vote",v="voted"},
+          {text="Reporte",v="postponed"},{text="Retire",v="withdrawn"}
+        },"Actuel: "..(x.item.status or ""))
+        if st then
+          local notes=prompt("Note de seance",x.item.sessionNotes or "")
+          local out,e=rpc("NC_SESSION_SET_ITEM_STATUS",{id=sess.id,itemId=x.item.id,status=st.v,notes=notes})
+          message("ORDRE DU JOUR",out and "Point mis a jour." or e,out and palette.accent or palette.bad)
+        end
+      end
+
+    elseif a.id=="close" then
+      local minutes=multi("PROCES-VERBAL COMPLET","")
+      local conclusions=multi("CONCLUSIONS / DECISIONS DE SEANCE","")
+      local out,e=rpc("NC_SESSION_CLOSE",{id=sess.id,minutes=minutes,conclusions=conclusions})
+      message("SESSION",out and ("Session cloturee / "..tostring(out.closeSeal)) or e,out and palette.accent or palette.bad)
+
+    elseif a.id=="cancel" then
+      local reason=multi("MOTIF D'ANNULATION","")
+      local out,e=rpc("NC_SESSION_CANCEL",{id=sess.id,reason=reason})
+      message("SESSION",out and "Session annulee et tracee." or e,out and palette.accent or palette.bad)
+    end
+  end
+end
+
+local function sessionsScreen(info)
+  local query,status="",""
+  while true do
+    local rows,err=rpc("NC_SESSION_LIST",{query=query,status=status})
+    if not rows then message("SESSIONS",err,palette.bad);return end
+    info=rpc("NC_INFO",{}) or info or {}
+    local manager=(info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council")
+    local items={}
+    if manager then items[#items+1]={text="[+] Convoquer une session",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
+    if query~="" or status~="" then items[#items+1]={text="[R] Reinitialiser",id="reset"} end
+    for _,sess in ipairs(rows) do
+      items[#items+1]={text=sess.id.." ["..sess.status.."] "..sess.title.." / "..sessionTypeLabel(sess.sessionType),session=sess}
+    end
+
+    local p=menu("CALENDRIER / SESSIONS NATIONALES",items,#rows.." session(s)")
+    if not p then return end
+    if p.id=="new" then
+      local typ=menu("TYPE DE SESSION",{
+        {text="Conseil de la Coalition",v="council"},
+        {text="Conseil des ministres",v="cabinet"},
+        {text="Session d'urgence",v="emergency"},
+        {text="Commission",v="committee"},
+        {text="Audition publique",v="public_hearing"}
+      })
+      if typ then
+        local title=prompt("Titre de la session")
+        local scheduledFor=prompt("Date / heure RP")
+        local location=prompt("Salle / lieu")
+        local visibility=menu("VISIBILITE",{
+          {text="Interne North Coalition",v="internal"},
+          {text="Publique",v="public"},
+          {text="Restreinte institutions",v="restricted"}
+        })
+        local description=multi("OBJET / DESCRIPTION DE LA SESSION","")
+        local out,e=rpc("NC_SESSION_CREATE",{
+          title=title,sessionType=typ.v,scheduledFor=scheduledFor,location=location,
+          visibility=visibility and visibility.v or "internal",description=description
+        })
+        message("SESSION",out and ("Convoquee: "..out.id) or e,out and palette.accent or palette.bad)
+      end
+    elseif p.id=="search" then
+      query=prompt("Recherche session",query)
+    elseif p.id=="status" then
+      local st=menu("STATUT",{
+        {text="Tous",v=""},{text="Prevues",v="scheduled"},{text="Ouvertes",v="open"},
+        {text="Cloturees",v="closed"},{text="Annulees",v="cancelled"}
+      })
+      if st then status=st.v end
+    elseif p.id=="reset" then query="";status=""
+    elseif p.session then sessionDetails(p.session.id,info) end
+  end
+end
+
 local function nationalNotices(info)
   while true do
     local rows,err=rpc("NC_NOTICE_LIST",{})
@@ -1211,7 +1484,8 @@ local function nationalNotices(info)
       elseif n.objectType=="nc_ministry" then actions[#actions+1]={text="Ouvrir le ministere",id="open"}
       elseif n.objectType=="nc_government" then actions[#actions+1]={text="Ouvrir le Gouvernement",id="open"}
       elseif n.objectType=="nc_case" then actions[#actions+1]={text="Ouvrir le dossier judiciaire",id="open"}
-      elseif n.objectType=="nc_citizen" then actions[#actions+1]={text="Ouvrir la fiche citoyenne",id="open"} end
+      elseif n.objectType=="nc_citizen" then actions[#actions+1]={text="Ouvrir la fiche citoyenne",id="open"}
+      elseif n.objectType=="nc_session" then actions[#actions+1]={text="Ouvrir la session",id="open"} end
       local a=menu(n.title or n.id,actions,(n.severity or "info").." / "..(n.createdAt or ""))
       if a and a.id=="read" then
         textPage(n.id,{
@@ -1228,7 +1502,8 @@ local function nationalNotices(info)
         elseif n.objectType=="nc_ministry" then ministryDetails(n.objectId)
         elseif n.objectType=="nc_government" then governmentScreen(info)
         elseif n.objectType=="nc_case" then caseDetails(n.objectId)
-        elseif n.objectType=="nc_citizen" then citizenDetails(n.objectId,info) end
+        elseif n.objectType=="nc_citizen" then citizenDetails(n.objectId,info)
+        elseif n.objectType=="nc_session" then sessionDetails(n.objectId,info) end
       end
     end
   end
@@ -1281,13 +1556,14 @@ function C.run()
     info=rpc("NC_INFO",{}) or info
     local subtitle=roleLabel(dash.nationalRole).." / "..tostring(dash.nationalIdentity)..
       (dash.ministryCode and (" / "..dash.ministryCode) or "")..
-      " | "..tostring(dash.activeCitizens or 0).." citoyen(s) / "..dash.activeLaws.." lois / "..tostring(dash.openCases or 0).." dossier(s) / "..dash.openElections.." scrutin(s) / "..tostring(dash.unreadNotices or 0).." notif."
+      " | "..tostring(dash.activeCitizens or 0).." citoyen(s) / "..dash.activeLaws.." lois / "..tostring(dash.openSessions or 0).." session(s) / "..tostring(dash.openCases or 0).." dossier(s) / "..tostring(dash.unreadNotices or 0).." notif."
 
     local items={
       {text=(dash.unreadNotices or 0)>0 and ("[!] NOTIFICATIONS NATIONALES ("..dash.unreadNotices..")") or "NOTIFICATIONS NATIONALES",id="notices"},
       {text="CODE NATIONAL / CATEGORIES / RECHERCHE",id="code"},
       {text="REGISTRE CIVIL / CITOYENS / IDENTITES",id="citizens"},
       {text="GOUVERNEMENT / MINISTERES / FONCTIONS",id="gov"},
+      {text="CALENDRIER / SESSIONS / ORDRE DU JOUR",id="sessions"},
       {text="LEGISLATION / PROJETS / VOTES",id="bills"},
       {text="ELECTIONS MINISTERIELLES",id="elections"},
       {text="DECRETS / REGLEMENTS",id="decrees"},
@@ -1304,6 +1580,7 @@ function C.run()
     elseif p.id=="code" then codeScreen()
     elseif p.id=="citizens" then citizensScreen(info)
     elseif p.id=="gov" then governmentScreen(info)
+    elseif p.id=="sessions" then sessionsScreen(info)
     elseif p.id=="bills" then billsScreen()
     elseif p.id=="elections" then C.electionsScreen()
     elseif p.id=="decrees" then decreesScreen(info)
