@@ -933,6 +933,99 @@ local function handleAction(state, actor, action, p)
     return common.deepcopy(c)
   end
 
+  if action == "CASE_SET_VISIBILITY" then
+    local c=state.cases[common.trim(p.id):upper()]
+    if not c then return nil,"Dossier introuvable." end
+    ensureCaseShape(c)
+    local allowed={public=true,restricted=true,sealed=true}
+    if not allowed[p.visibility] then return nil,"Visibilite invalide." end
+    if c.visibility==p.visibility then return common.deepcopy(c) end
+    local previous=c.visibility
+    c.visibility=p.visibility
+    c.updatedAt=common.now()
+    caseEvent(c,actor,"VISIBILITY_CHANGED","Visibilite: "..tostring(previous).." -> "..tostring(p.visibility),"")
+    mutate(state,actor,"CASE_SET_VISIBILITY",c.id,p.visibility)
+    return common.deepcopy(c)
+  end
+
+  if action == "CASE_ADD_HEARING" then
+    local c=state.cases[common.trim(p.id):upper()]
+    if not c then return nil,"Dossier introuvable." end
+    ensureCaseShape(c)
+    local subject=common.trim(p.subject)
+    if subject=="" then return nil,"Objet de l'audience obligatoire." end
+    local hearing={
+      id=string.format("H-%03d",#c.hearings+1),
+      subject=subject,scheduledFor=common.trim(p.scheduledFor),
+      location=common.trim(p.location),notes=common.trim(p.notes),
+      status="scheduled",createdAt=common.now(),createdBy=actor.label
+    }
+    c.hearings[#c.hearings+1]=hearing
+    c.updatedAt=common.now()
+    caseEvent(c,actor,"HEARING_CREATED","Audience "..hearing.id,hearing.subject.." / "..hearing.scheduledFor)
+    mutate(state,actor,"CASE_ADD_HEARING",c.id,hearing.id.." "..hearing.subject)
+    return common.deepcopy(c)
+  end
+
+  if action == "CASE_SET_HEARING_STATUS" then
+    local c=state.cases[common.trim(p.id):upper()]
+    if not c then return nil,"Dossier introuvable." end
+    ensureCaseShape(c)
+    local allowed={scheduled=true,held=true,cancelled=true,postponed=true}
+    if not allowed[p.status] then return nil,"Statut d'audience invalide." end
+    local target=nil
+    for _,h in ipairs(c.hearings) do if h.id==p.hearingId then target=h break end end
+    if not target then return nil,"Audience introuvable." end
+    if target.status==p.status then return common.deepcopy(c) end
+    target.status=p.status
+    target.updatedAt=common.now()
+    target.updatedBy=actor.label
+    caseEvent(c,actor,"HEARING_STATUS","Audience "..target.id.." -> "..p.status,target.subject)
+    c.updatedAt=common.now()
+    mutate(state,actor,"CASE_SET_HEARING_STATUS",c.id,target.id.."="..p.status)
+    return common.deepcopy(c)
+  end
+
+  if action == "CASE_ADD_ORDER" then
+    local c=state.cases[common.trim(p.id):upper()]
+    if not c then return nil,"Dossier introuvable." end
+    ensureCaseShape(c)
+    local orderType=common.trim(p.orderType)
+    local subject=common.trim(p.subject)
+    local body=common.trim(p.body)
+    if subject=="" or body=="" then return nil,"Objet et contenu de l'ordonnance obligatoires." end
+    if orderType=="" then orderType="order" end
+    local order={
+      id=string.format("O-%03d",#c.orders+1),
+      orderType=orderType,subject=subject,body=body,status="active",
+      expiresAt=common.trim(p.expiresAt),createdAt=common.now(),createdBy=actor.label
+    }
+    c.orders[#c.orders+1]=order
+    c.updatedAt=common.now()
+    caseEvent(c,actor,"ORDER_CREATED","Ordonnance "..order.id.." / "..orderType,subject)
+    mutate(state,actor,"CASE_ADD_ORDER",c.id,order.id.." "..subject)
+    return common.deepcopy(c)
+  end
+
+  if action == "CASE_SET_ORDER_STATUS" then
+    local c=state.cases[common.trim(p.id):upper()]
+    if not c then return nil,"Dossier introuvable." end
+    ensureCaseShape(c)
+    local allowed={active=true,executed=true,revoked=true,expired=true}
+    if not allowed[p.status] then return nil,"Statut d'ordonnance invalide." end
+    local target=nil
+    for _,o in ipairs(c.orders) do if o.id==p.orderId then target=o break end end
+    if not target then return nil,"Ordonnance introuvable." end
+    if target.status==p.status then return common.deepcopy(c) end
+    target.status=p.status
+    target.updatedAt=common.now()
+    target.updatedBy=actor.label
+    c.updatedAt=common.now()
+    caseEvent(c,actor,"ORDER_STATUS","Ordonnance "..target.id.." -> "..p.status,target.subject)
+    mutate(state,actor,"CASE_SET_ORDER_STATUS",c.id,target.id.."="..p.status)
+    return common.deepcopy(c)
+  end
+
   if action == "AUDIT_LIST" then
     local out = {}
     local start = math.max(1, #state.audit - (tonumber(p.limit) or 60) + 1)
@@ -1036,7 +1129,7 @@ local function serverUI(state, lastEvent)
 end
 
 local function chooseRole()
-  local roles={"writer","clerk","judge","viewer","admin"}
+  local roles={"writer","clerk","judge","delegate","viewer","admin"}
   term.setBackgroundColor(colors.black)
   term.clear()
   term.setCursorPos(2,2)
@@ -1047,7 +1140,7 @@ local function chooseRole()
     term.setTextColor(colors.white)
     term.write(i..". "..r)
   end
-  term.setCursorPos(2,10)
+  term.setCursorPos(2,11)
   term.setTextColor(colors.lightGray)
   term.write("Choix: ")
   local n=tonumber(read())
