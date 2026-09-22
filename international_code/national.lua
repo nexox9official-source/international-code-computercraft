@@ -989,6 +989,20 @@ function N.handle(state,actor,action,p,ctx)
       end
     end
 
+    for _,e in pairs(n.generalElections or {}) do
+      if tostring(e.seal or ""):upper()==wanted then return result("general_election",e.id,e.title,e.createdAt,e.createdBy,false) end
+      if tostring(e.candidacySeal or ""):upper()==wanted then return result("general_election_candidacy",e.id,e.title,e.candidacyOpenedAt,e.candidacyOpenedBy,false) end
+      if tostring(e.voteOpenSeal or ""):upper()==wanted then return result("general_election_vote_open",e.id,e.title,e.voteOpenedAt,e.voteOpenedBy,false) end
+      if tostring(e.runoffOpenSeal or ""):upper()==wanted then return result("general_election_runoff_open",e.id,e.title,e.runoffOpenedAt,e.runoffOpenedBy,false) end
+      if tostring(e.resultSeal or ""):upper()==wanted then return result("general_election_result",e.id,e.title,e.runoffClosedAt or e.voteClosedAt,e.closedBy or e.runoffOpenedBy,false) end
+      if tostring(e.cancelSeal or ""):upper()==wanted then return result("general_election_cancel",e.id,e.title,e.cancelledAt,e.cancelledBy,false) end
+    end
+
+    for _,m in pairs(n.mandates or {}) do
+      if tostring(m.seal or ""):upper()==wanted then return result("national_mandate",m.id,(m.identity or m.citizenId).." / "..tostring(m.office or ""),m.startedAt,m.identity,false) end
+      if tostring(m.endSeal or ""):upper()==wanted then return result("national_mandate_end",m.id,(m.identity or m.citizenId).." / fin de mandat",m.endedAt,m.endedBy,false) end
+    end
+
     for _,e in pairs(n.elections or {}) do
       if tostring(e.openSeal or ""):upper()==wanted then return result("election_open",e.id,e.title,e.openedAt,e.openedBy,false) end
       if tostring(e.resultSeal or ""):upper()==wanted then return result("election_result",e.id,e.title,e.closedAt,e.closedBy,false) end
