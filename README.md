@@ -7,20 +7,20 @@ Système distribué pour **CC:Tweaked / ComputerCraft** avec deux espaces juridi
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. Les données nationales de North Coalition sont isolées logiquement des registres internationaux et soumises à leur propre contrôle d'accès.
 
-### Statut juridique v0.21
+### Statut juridique v0.22
 
 Les deux corpus initiaux sont désormais **adoptés et ratifiés** :
 
 - `UNS-CIC-500-V1.0` : 500 articles internationaux actifs ;
 - `NC-CORPUS-400-V2.0` : 400 articles nationaux actifs depuis le 22 septembre 2026.
 
-Dans North Coalition, **NexoFr_** est enregistré comme dirigeant et autorité souveraine nationale avec habilitation cumulative sur l'ensemble des compétences internes : législation, réglementation, gouvernement, justice, sécurité, défense, diplomatie, finances et administration. Cette habilitation est uniquement nationale : elle ne donne à North Coalition aucun privilège institutionnel particulier dans l'UNS.
+Dans North Coalition, **NexoFr_** est enregistré comme **dirigeant permanent**, Président de la Coalition et autorité souveraine nationale avec habilitation cumulative sur l'ensemble des compétences internes : législation, réglementation, gouvernement, justice, sécurité, défense, diplomatie, finances et administration. Son statut n'a aucune limite de durée : aucun vote, aucune élection, motion, juridiction, ministre ou autre autorité nationale ne peut le remplacer ou le destituer. La direction ne peut prendre fin que si **NexoFr_ lui-même** enregistre une renonciation volontaire explicite et scellée. Cette habilitation est uniquement nationale : elle ne donne à North Coalition aucun privilège institutionnel particulier dans l'UNS.
 
-## Ce que fait la v0.21
+## Ce que fait la v0.22
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
-- import initial des **500 articles** du Code UNS en statut `draft` / projet non ratifié ;
+- import initial des **500 articles** du Code UNS en statut `active` / Code ratifié ;
 - création automatique de nouveaux numéros `UNS-ART-501`, `UNS-ART-502`, etc. ;
 - modification versionnée des articles avec conservation de l'ancienne version ;
 - abrogation sans réutilisation du numéro ;
@@ -32,7 +32,7 @@ Dans North Coalition, **NexoFr_** est enregistré comme dirigeant et autorité s
 - impression multi-pages des articles et dossiers via une **Printer ComputerCraft** ;
 - interface terminal claire, navigable au clavier et à la souris.
 
-## Intranet national North Coalition v0.21
+## Intranet national North Coalition v0.22
 
 La v0.19 fournit un deuxième espace complet, **interne à North Coalition**, sans transformer les 400 lois nationales en articles UNS.
 
@@ -142,41 +142,29 @@ NC-GE-AAAA-XXXX        élection nationale
 NC-MANDATE-AAAA-XXXX   mandat issu d'une élection
 ```
 
-Deux offices sont actuellement gérés :
+Deux offices existent dans le registre :
 
-- **Présidence de la Coalition** ;
-- **Conseil de la Coalition** avec un nombre de sièges configurable (5 par défaut).
+- **Présidence de la Coalition** : occupée de manière permanente par **NexoFr_** tant qu'il n'a pas lui-même enregistré une renonciation volontaire ; aucune élection présidentielle n'est ouverte pendant cette période ;
+- **Conseil de la Coalition** : renouvelable par élection avec un nombre de sièges configurable (5 par défaut).
 
 Le corps électoral utilise exclusivement les identifiants permanents `NC-CIT-...`. Une personne disposant de plusieurs terminaux ne peut donc jamais voter plusieurs fois.
 
-Le cycle présidentiel est réglementé :
-
-```text
-draft
-  -> candidacy
-  -> voting
-      -> elected
-      -> runoff_ready -> runoff_voting -> elected
-      -> failed
-```
-
-Au premier tour présidentiel, un candidat doit obtenir **plus de 50 % des suffrages valides**. À défaut, les deux premiers passent au second tour. Le quorum de participation est fixé à 50 % des citoyens inscrits au moment de l'ouverture du vote.
+Le cycle présidentiel électif reste disponible dans le moteur uniquement comme procédure de **succession après vacance**. Tant que l'autorité souveraine de NexoFr_ est active, le serveur refuse l'ouverture d'une élection présidentielle. Après une renonciation volontaire enregistrée de NexoFr_, la procédure électorale ordinaire peut être utilisée pour la succession.
 
 Pour le Conseil, les candidats sont classés par nombre de voix. Les premiers obtiennent les sièges disponibles. Une égalité sur le dernier siège déclenche automatiquement un second tour limité aux candidats concernés.
 
 Les candidatures sont soumises à des incompatibilités : un ministre en exercice, un juge, un procureur, un policier ou un agent administratif doit d'abord quitter sa fonction avant de briguer un mandat politique. Un candidat doit également disposer d'au moins un terminal national rattaché.
 
-Lorsqu'un scrutin est conclu :
+Lorsqu'un scrutin autorisé est conclu :
 
 - le mandat est créé et scellé ;
 - les habilitations des terminaux sont mises à jour automatiquement ;
-- l'ancien mandat est clôturé sans être supprimé ;
-- un Président élu remplace la Présidence précédente ;
+- l'ancien mandat ordinaire est clôturé sans être supprimé ;
 - un membre du Conseil élu reçoit automatiquement son habilitation ;
 - une publication est ajoutée au Journal officiel ;
 - les résultats restent vérifiables par sceau.
 
-La Présidence fondatrice de **NexoFr_** reste en fonction tant qu'aucune élection présidentielle conclue n'a régulièrement transféré le mandat.
+La direction de **NexoFr_** n'est pas un mandat électif ordinaire : elle demeure active sans limite de durée. Seul NexoFr_ peut l'arrêter via l'action protégée de renonciation volontaire. Une fois cette renonciation enregistrée, la Présidence devient vacante et une succession peut être organisée.
 
 ### Registre civil et identités permanentes
 
