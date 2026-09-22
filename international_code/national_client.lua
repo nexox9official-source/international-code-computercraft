@@ -713,6 +713,363 @@ local function decreesScreen(info)
 end
 
 
+
+local function caseTypeLabel(v)
+  local labels={
+    criminal="Penal",civil="Civil",administrative="Administratif",constitutional="Constitutionnel"
+  }
+  return labels[v] or tostring(v or "")
+end
+
+local function caseStatusMenu(current)
+  local options={
+    open={{text="Enquete",v="investigation"},{text="Audience",v="hearing"},{text="Clore",v="closed"}},
+    investigation={{text="Audience",v="hearing"},{text="Clore",v="closed"}},
+    hearing={{text="Juge",v="judged"},{text="Clore",v="closed"}},
+    judged={{text="Appel",v="appeal"},{text="Clore",v="closed"}},
+    appeal={{text="Retour a juge",v="judged"},{text="Clore",v="closed"}},
+    closed={{text="Archiver",v="archived"}}
+  }
+  local rows=options[current] or {}
+  return menu("NOUVEAU STATUT",rows,"Actuel: "..tostring(current))
+end
+
+local function caseDetails(id)
+  while true do
+    local case,err=rpc("NC_CASE_GET",{id=id})
+    if not case then message("DOSSIER NATIONAL",err,palette.bad);return end
+    local info=rpc("NC_INFO",{}) or {}
+    local role=info.nationalRole
+    local investigator=(role=="admin" or role=="judge" or role=="prosecutor" or role=="police")
+    local judicial=(role=="admin" or role=="judge")
+    local prosecutor=(role=="admin" or role=="judge" or role=="prosecutor")
+
+    local actions={
+      {text="Lire le dossier complet",id="read"},
+      {text="Imprimer le dossier",id="print"},
+      {text="Articles nationaux cites ("..tostring(#(case.citedArticles or {}))..")",id="articles"},
+      {text="Audiences ("..tostring(#(case.hearings or {}))..")",id="hearings"},
+      {text="Ordonnances ("..tostring(#(case.orders or {}))..")",id="orders"},
+      {text="Jugements ("..tostring(#(case.judgments or {}))..")",id="judgments"},
+      {text="Appels ("..tostring(#(case.appeals or {}))..")",id="appeals"}
+    }
+    if investigator then
+      actions[#actions+1]={text="[+] Ajouter un fait",id="fact"}
+      actions[#actions+1]={text="[+] Ajouter une preuve",id="evidence"}
+      actions[#actions+1]={text="[+] Citer un article national",id="cite"}
+    end
+    if prosecutor then actions[#actions+1]={text="Changer le statut procedural",id="status"} end
+    if role=="police" and case.status=="open" then actions[#actions+1]={text="Passer en enquete",id="investigate"} end
+    if judicial then
+      actions[#actions+1]={text="[+] Planifier une audience",id="hearing_new"}
+      actions[#actions+1]={text="[+] Emettre une ordonnance",id="order_new"}
+      actions[#actions+1]={text="[+] Rendre un jugement",id="judgment_new"}
+      actions[#actions+1]={text="Modifier la visibilite",id="visibility"}
+    end
+    if case.status=="judged" or case.status=="closed" then actions[#actions+1]={text="Former appel",id="appeal_new"} end
+
+    local a=menu(case.id.." - "..case.title,actions,
+      caseTypeLabel(case.caseType).." / "..case.status.." / "..case.visibility)
+    if not a then return end
+
+    if a.id=="read" then
+      local facts={}
+      for _,x in ipairs(case.facts or {}) do facts[#facts+1]=(x.id or "?").." / "..(x.text or "").." / "..(x.by or "").."\nSceau: "..(x.seal or "-") end
+      local evidence={}
+      for _,x in ipairs(case.evidence or {}) do evidence[#evidence+1]=(x.id or "?").." / "..(x.label or "").."\n"..(x.description or "").."\nSource: "..(x.source or "-").."\nSceau: "..(x.seal or "-") end
+      local hearings={}
+      for _,x in ipairs(case.hearings or {}) do hearings[#hearings+1]=(x.id or "?").." ["..(x.status or "?").."] "..(x.scheduledFor or "").." / "..(x.subject or "")..(x.recordSeal and ("\nPV: "..x.recordSeal) or "") end
+      local orders={}
+      for _,x in ipairs(case.orders or {}) do orders[#orders+1]=(x.id or "?").." ["..(x.status or "?").."] "..(x.orderType or "").." / "..(x.subject or "").."\nSceau: "..(x.seal or "-") end
+      local judgments={}
+      for _,x in ipairs(case.judgments or {}) do judgments[#judgments+1]=(x.id or "?").." / "..(x.date or "").." / "..(x.judge or "").."\n"..(x.verdict or "").."\nSceau: "..(x.seal or "-") end
+      local appeals={}
+      for _,x in ipairs(case.appeals or {}) do appeals[#appeals+1]=(x.id or "?").." ["..(x.status or "?").."] "..(x.appellant or "")..(x.result and (" / "..x.result) or "") end
+      local timeline={}
+      for _,x in ipairs(case.timeline or {}) do timeline[#timeline+1]=(x.at or "").." / "..(x.title or x.kind or "").."\n"..(x.details or "") end
+
+      textPage(case.id,{
+        {label="Titre",text=case.title or ""},
+        {label="Type / statut",text=caseTypeLabel(case.caseType).." / "..(case.status or "")},
+        {label="Visibilite",text=case.visibility or ""},
+        {label="Demandeur",text=case.complainant or "-"},
+        {label="Mis en cause",text=case.accused or "-"},
+        {label="Resume",text=case.summary or ""},
+        {label="Sceau initial",text=case.seal or "-"},
+        {label="Faits",text=#facts>0 and table.concat(facts,"\n\n") or "Aucun"},
+        {label="Preuves",text=#evidence>0 and table.concat(evidence,"\n\n") or "Aucune"},
+        {label="Articles cites",text=#(case.citedArticles or {})>0 and table.concat(case.citedArticles,"\n") or "Aucun"},
+        {label="Audiences",text=#hearings>0 and table.concat(hearings,"\n\n") or "Aucune"},
+        {label="Ordonnances",text=#orders>0 and table.concat(orders,"\n\n") or "Aucune"},
+        {label="Jugements",text=#judgments>0 and table.concat(judgments,"\n\n") or "Aucun"},
+        {label="Appels",text=#appeals>0 and table.concat(appeals,"\n\n") or "Aucun"},
+        {label="Chronologie",text=#timeline>0 and table.concat(timeline,"\n\n") or "Aucune"}
+      })
+
+    elseif a.id=="print" then
+      local ok,pages=printer.caseFile(case)
+      message("IMPRESSION",ok and ("Dossier imprime: "..pages.." page(s).") or pages,ok and palette.accent or palette.bad)
+
+    elseif a.id=="fact" then
+      local text=multi("FAIT / CONSTAT","")
+      local out,e=rpc("NC_CASE_ADD_FACT",{id=case.id,text=text})
+      message("FAIT",out and "Fait ajoute et scelle." or e,out and palette.accent or palette.bad)
+
+    elseif a.id=="evidence" then
+      local label=prompt("Nom / reference de la preuve")
+      local source=prompt("Source / origine")
+      local description=multi("DESCRIPTION DE LA PREUVE","")
+      local out,e=rpc("NC_CASE_ADD_EVIDENCE",{id=case.id,label=label,source=source,description=description})
+      message("PREUVE",out and "Preuve ajoutee et scellee." or e,out and palette.accent or palette.bad)
+
+    elseif a.id=="cite" then
+      local law=chooseLaw("")
+      if law then
+        local out,e=rpc("NC_CASE_ADD_ARTICLE",{id=case.id,ref=law.id})
+        message("ARTICLE",out and ((law.display_reference or law.id).." ajoute au dossier.") or e,out and palette.accent or palette.bad)
+      end
+
+    elseif a.id=="articles" then
+      local items={}
+      for _,ref in ipairs(case.citedArticles or {}) do
+        local law=rpc("NC_LAW_GET",{ref=ref})
+        items[#items+1]={text=law and ((law.display_reference or law.id).." "..law.title) or ref,ref=ref,law=law}
+      end
+      if #items==0 then message("ARTICLES","Aucun article cite.",palette.muted)
+      else
+        local x=menu("ARTICLES CITES",items,#items.." article(s)")
+        if x then
+          local op={{text="Lire l'article",id="read"}}
+          if investigator then op[#op+1]={text="Retirer cette citation",id="remove"} end
+          local y=menu(x.ref,op)
+          if y and y.id=="read" then lawDetails(x.ref)
+          elseif y and y.id=="remove" then
+            local out,e=rpc("NC_CASE_REMOVE_ARTICLE",{id=case.id,ref=x.ref})
+            message("ARTICLE",out and "Citation retiree." or e,out and palette.accent or palette.bad)
+          end
+        end
+      end
+
+    elseif a.id=="status" then
+      local st=caseStatusMenu(case.status)
+      if st then
+        local reason=prompt("Motif / note")
+        local out,e=rpc("NC_CASE_SET_STATUS",{id=case.id,status=st.v,reason=reason})
+        message("PROCEDURE",out and ("Statut: "..out.status) or e,out and palette.accent or palette.bad)
+      end
+
+    elseif a.id=="investigate" then
+      local out,e=rpc("NC_CASE_SET_STATUS",{id=case.id,status="investigation",reason="Ouverture de l'enquete"})
+      message("PROCEDURE",out and "Dossier passe en enquete." or e,out and palette.accent or palette.bad)
+
+    elseif a.id=="visibility" then
+      local v=menu("VISIBILITE DU DOSSIER",{
+        {text="Public",v="public"},{text="Restreint",v="restricted"},{text="Scelle",v="sealed"}
+      },"Actuel: "..case.visibility)
+      if v then
+        local out,e=rpc("NC_CASE_SET_VISIBILITY",{id=case.id,visibility=v.v})
+        message("VISIBILITE",out and ("Niveau: "..out.visibility) or e,out and palette.accent or palette.bad)
+      end
+
+    elseif a.id=="hearing_new" then
+      local subject=prompt("Objet de l'audience")
+      local scheduledFor=prompt("Date / heure RP")
+      local location=prompt("Salle / lieu")
+      local out,e=rpc("NC_CASE_ADD_HEARING",{id=case.id,subject=subject,scheduledFor=scheduledFor,location=location})
+      message("AUDIENCE",out and "Audience planifiee." or e,out and palette.accent or palette.bad)
+
+    elseif a.id=="hearings" then
+      local items={}
+      for _,h in ipairs(case.hearings or {}) do items[#items+1]={text=(h.id or "?").." ["..(h.status or "?").."] "..(h.scheduledFor or "").." "..(h.subject or ""),hearing=h} end
+      if #items==0 then message("AUDIENCES","Aucune audience.",palette.muted)
+      else
+        local x=menu("AUDIENCES",items,#items.." audience(s)")
+        if x then
+          local h=x.hearing
+          local ops={{text="Lire la fiche",id="read"}}
+          if judicial and h.status=="scheduled" then ops[#ops+1]={text="Enregistrer le proces-verbal",id="record"} end
+          local y=menu(h.id,ops,h.subject)
+          if y and y.id=="read" then
+            textPage(h.id,{
+              {label="Objet",text=h.subject or ""},{label="Date",text=h.scheduledFor or ""},
+              {label="Lieu",text=h.location or ""},{label="Statut",text=h.status or ""},
+              {label="Proces-verbal",text=h.minutes or "-"},{label="Sceaux",text=(h.seal or "-").."\n"..(h.recordSeal or "-")}
+            })
+          elseif y and y.id=="record" then
+            local minutes=multi("PROCES-VERBAL D'AUDIENCE","")
+            local st=menu("ISSUE",{{text="Audience terminee",v="completed"},{text="Audience annulee",v="cancelled"}})
+            local out,e=rpc("NC_CASE_RECORD_HEARING",{id=case.id,hearingId=h.id,minutes=minutes,status=st and st.v or "completed"})
+            message("AUDIENCE",out and "Proces-verbal scelle." or e,out and palette.accent or palette.bad)
+          end
+        end
+      end
+
+    elseif a.id=="order_new" then
+      local typ=menu("TYPE D'ORDONNANCE",{
+        {text="Perquisition",v="search"},{text="Saisie",v="seizure"},{text="Arrestation",v="arrest"},
+        {text="Mise en liberte",v="release"},{text="Protection",v="protection"},
+        {text="Injonction",v="injunction"},{text="Autre",v="other"}
+      })
+      if typ then
+        local subject=prompt("Objet / personne / lieu")
+        local expiresAt=prompt("Expiration (optionnel)")
+        local grounds=multi("MOTIFS JURIDIQUES","")
+        local out,e=rpc("NC_CASE_ADD_ORDER",{id=case.id,orderType=typ.v,subject=subject,expiresAt=expiresAt,grounds=grounds})
+        message("ORDONNANCE",out and "Ordonnance emise et scellee." or e,out and palette.accent or palette.bad)
+      end
+
+    elseif a.id=="orders" then
+      local items={}
+      for _,o in ipairs(case.orders or {}) do items[#items+1]={text=(o.id or "?").." ["..(o.status or "?").."] "..(o.orderType or "").." "..(o.subject or ""),order=o} end
+      if #items==0 then message("ORDONNANCES","Aucune ordonnance.",palette.muted)
+      else
+        local x=menu("ORDONNANCES",items,#items.." ordonnance(s)")
+        if x then
+          local o=x.order
+          local ops={{text="Lire",id="read"}}
+          if judicial then ops[#ops+1]={text="Changer le statut",id="status"} end
+          local y=menu(o.id,ops)
+          if y and y.id=="read" then
+            textPage(o.id,{
+              {label="Type",text=o.orderType or ""},{label="Objet",text=o.subject or ""},
+              {label="Motifs",text=o.grounds or ""},{label="Statut",text=o.status or ""},
+              {label="Expiration",text=o.expiresAt or "-"},{label="Sceau",text=o.seal or "-"}
+            })
+          elseif y and y.id=="status" then
+            local st=menu("STATUT",{{text="Active",v="active"},{text="Executee",v="executed"},{text="Revoquee",v="revoked"},{text="Expiree",v="expired"}})
+            if st then
+              local out,e=rpc("NC_CASE_SET_ORDER_STATUS",{id=case.id,orderId=o.id,status=st.v})
+              message("ORDONNANCE",out and "Statut mis a jour." or e,out and palette.accent or palette.bad)
+            end
+          end
+        end
+      end
+
+    elseif a.id=="judgment_new" then
+      local verdict=multi("DECISION / VERDICT","")
+      local reasoning=multi("MOTIVATION JURIDIQUE","")
+      local sanctions=multi("SANCTIONS / REPARATIONS / MESURES","")
+      local final=menu("NATURE",{{text="Jugement final",v=true},{text="Decision intermediaire",v=false}})
+      local out,e=rpc("NC_CASE_ADD_JUDGMENT",{id=case.id,verdict=verdict,reasoning=reasoning,sanctions=sanctions,final=final and final.v or true})
+      message("JUGEMENT",out and "Jugement enregistre et articles figes." or e,out and palette.accent or palette.bad)
+
+    elseif a.id=="judgments" then
+      local items={}
+      for _,j in ipairs(case.judgments or {}) do items[#items+1]={text=(j.id or "?").." "..(j.date or "").." / "..(j.verdict or ""),judgment=j} end
+      if #items==0 then message("JUGEMENTS","Aucun jugement.",palette.muted)
+      else
+        local x=menu("JUGEMENTS",items,#items.." decision(s)")
+        if x then
+          local j=x.judgment
+          local y=menu(j.id,{{text="Lire la decision",id="read"},{text="Imprimer ce jugement",id="print"}})
+          if y and y.id=="read" then
+            local refs={}
+            for _,law in ipairs(j.citedArticleVersions or {}) do refs[#refs+1]=(law.display_reference or law.id).." v"..tostring(law.version).." / "..(law.title or "") end
+            textPage(j.id,{
+              {label="Juge",text=j.judge or ""},{label="Date",text=j.date or ""},
+              {label="Decision",text=j.verdict or ""},{label="Motivation",text=j.reasoning or ""},
+              {label="Sanctions / mesures",text=j.sanctions or "-"},
+              {label="Articles figes",text=#refs>0 and table.concat(refs,"\n") or "Aucun"},
+              {label="Sceau",text=j.seal or "-"}
+            })
+          elseif y and y.id=="print" then
+            local ok,pages=printer.judgment(case,j)
+            message("IMPRESSION",ok and ("Jugement imprime: "..pages.." page(s).") or pages,ok and palette.accent or palette.bad)
+          end
+        end
+      end
+
+    elseif a.id=="appeal_new" then
+      local grounds=multi("MOTIFS D'APPEL","")
+      local out,e=rpc("NC_CASE_FILE_APPEAL",{id=case.id,grounds=grounds})
+      message("APPEL",out and "Appel depose." or e,out and palette.accent or palette.bad)
+
+    elseif a.id=="appeals" then
+      local items={}
+      for _,ap in ipairs(case.appeals or {}) do items[#items+1]={text=(ap.id or "?").." ["..(ap.status or "?").."] "..(ap.appellant or "")..(ap.result and (" / "..ap.result) or ""),appeal=ap} end
+      if #items==0 then message("APPELS","Aucun appel.",palette.muted)
+      else
+        local x=menu("APPELS",items,#items.." appel(s)")
+        if x then
+          local ap=x.appeal
+          local ops={{text="Lire",id="read"}}
+          if judicial and ap.status=="pending" then ops[#ops+1]={text="Rendre la decision d'appel",id="decide"} end
+          local y=menu(ap.id,ops)
+          if y and y.id=="read" then
+            textPage(ap.id,{
+              {label="Appelant",text=ap.appellant or ""},{label="Motifs",text=ap.grounds or ""},
+              {label="Statut",text=ap.status or ""},{label="Resultat",text=ap.result or "-"},
+              {label="Motivation d'appel",text=ap.reasoning or "-"},{label="Sceaux",text=(ap.seal or "-").."\n"..(ap.decisionSeal or "-")}
+            })
+          elseif y and y.id=="decide" then
+            local rs=menu("DECISION D'APPEL",{
+              {text="Confirmer",v="upheld"},{text="Infirmer",v="reversed"},{text="Modifier",v="modified"},
+              {text="Renvoyer en audience",v="remanded"},{text="Rejeter",v="dismissed"}
+            })
+            if rs then
+              local reasoning=multi("MOTIVATION DE L'APPEL","")
+              local out,e=rpc("NC_CASE_DECIDE_APPEAL",{id=case.id,appealId=ap.id,result=rs.v,reasoning=reasoning})
+              message("APPEL",out and "Decision d'appel enregistree." or e,out and palette.accent or palette.bad)
+            end
+          end
+        end
+      end
+    end
+  end
+end
+
+local function casesScreen()
+  local query,status="",""
+  while true do
+    local rows,err=rpc("NC_CASE_LIST",{query=query,status=status})
+    if not rows then message("JUSTICE NATIONALE",err,palette.bad);return end
+    local info=rpc("NC_INFO",{}) or {}
+    local role=info.nationalRole
+    local canCreate=(role=="admin" or role=="judge" or role=="prosecutor" or role=="police")
+    local items={}
+    if canCreate then items[#items+1]={text="[+] Ouvrir un dossier national",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer par statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
+    if query~="" or status~="" then items[#items+1]={text="[R] Reinitialiser les filtres",id="reset"} end
+    for _,case in ipairs(rows) do
+      items[#items+1]={text=case.id.." ["..case.status.."] "..case.title.." / "..caseTypeLabel(case.caseType),case=case}
+    end
+    local p=menu("JUSTICE / DOSSIERS NATIONAUX",items,#rows.." dossier(s) visible(s)")
+    if not p then return end
+
+    if p.id=="new" then
+      local typ=menu("TYPE DE DOSSIER",{
+        {text="Penal",v="criminal"},{text="Civil",v="civil"},
+        {text="Administratif",v="administrative"},{text="Constitutionnel",v="constitutional"}
+      })
+      if typ then
+        local title=prompt("Titre du dossier")
+        local complainant=prompt("Demandeur / plaignant")
+        local accused=prompt("Mis en cause / defendeur")
+        local visibility=menu("VISIBILITE",{
+          {text="Restreinte",v="restricted"},{text="Publique",v="public"},{text="Scellee",v="sealed"}
+        })
+        local summary=multi("RESUME / OBJET DU DOSSIER","")
+        local out,e=rpc("NC_CASE_CREATE",{
+          title=title,caseType=typ.v,complainant=complainant,accused=accused,
+          visibility=visibility and visibility.v or "restricted",summary=summary
+        })
+        message("DOSSIER",out and ("Ouvert: "..out.id) or e,out and palette.accent or palette.bad)
+      end
+    elseif p.id=="search" then
+      query=prompt("Recherche dossier / partie",query)
+    elseif p.id=="status" then
+      local st=menu("STATUT",{
+        {text="Tous",v=""},{text="Ouverts",v="open"},{text="En enquete",v="investigation"},
+        {text="Audience",v="hearing"},{text="Juges",v="judged"},{text="Appel",v="appeal"},
+        {text="Clos",v="closed"},{text="Archives",v="archived"}
+      })
+      if st then status=st.v end
+    elseif p.id=="reset" then query="";status=""
+    elseif p.case then caseDetails(p.case.id) end
+  end
+end
+
 local function nationalNotices(info)
   while true do
     local rows,err=rpc("NC_NOTICE_LIST",{})
@@ -743,7 +1100,8 @@ local function nationalNotices(info)
       elseif n.objectType=="nc_bill" then actions[#actions+1]={text="Ouvrir le projet de loi",id="open"}
       elseif n.objectType=="nc_decree" then actions[#actions+1]={text="Ouvrir le decret",id="open"}
       elseif n.objectType=="nc_ministry" then actions[#actions+1]={text="Ouvrir le ministere",id="open"}
-      elseif n.objectType=="nc_government" then actions[#actions+1]={text="Ouvrir le Gouvernement",id="open"} end
+      elseif n.objectType=="nc_government" then actions[#actions+1]={text="Ouvrir le Gouvernement",id="open"}
+      elseif n.objectType=="nc_case" then actions[#actions+1]={text="Ouvrir le dossier judiciaire",id="open"} end
       local a=menu(n.title or n.id,actions,(n.severity or "info").." / "..(n.createdAt or ""))
       if a and a.id=="read" then
         textPage(n.id,{
@@ -758,7 +1116,8 @@ local function nationalNotices(info)
         elseif n.objectType=="nc_bill" then billDetails(n.objectId)
         elseif n.objectType=="nc_decree" then decreeDetails(n.objectId)
         elseif n.objectType=="nc_ministry" then ministryDetails(n.objectId)
-        elseif n.objectType=="nc_government" then governmentScreen(info) end
+        elseif n.objectType=="nc_government" then governmentScreen(info)
+        elseif n.objectType=="nc_case" then caseDetails(n.objectId) end
       end
     end
   end
@@ -811,7 +1170,7 @@ function C.run()
     info=rpc("NC_INFO",{}) or info
     local subtitle=roleLabel(dash.nationalRole).." / "..tostring(dash.nationalIdentity)..
       (dash.ministryCode and (" / "..dash.ministryCode) or "")..
-      " | "..dash.activeLaws.." lois actives / "..dash.openElections.." scrutin(s) / "..tostring(dash.unreadNotices or 0).." notif."
+      " | "..dash.activeLaws.." lois actives / "..tostring(dash.openCases or 0).." dossier(s) / "..dash.openElections.." scrutin(s) / "..tostring(dash.unreadNotices or 0).." notif."
 
     local items={
       {text=(dash.unreadNotices or 0)>0 and ("[!] NOTIFICATIONS NATIONALES ("..dash.unreadNotices..")") or "NOTIFICATIONS NATIONALES",id="notices"},
@@ -819,7 +1178,8 @@ function C.run()
       {text="GOUVERNEMENT / MINISTERES / FONCTIONS",id="gov"},
       {text="LEGISLATION / PROJETS / VOTES",id="bills"},
       {text="ELECTIONS MINISTERIELLES",id="elections"},
-      {text="DECRETS / REGLEMENTS",id="decrees"}
+      {text="DECRETS / REGLEMENTS",id="decrees"},
+      {text="JUSTICE / DOSSIERS NATIONAUX",id="cases"}
     }
     if dash.nationalRole=="admin" or dash.nationalRole=="president" or dash.nationalRole=="council" or dash.nationalRole=="judge" then
       items[#items+1]={text="JOURNAL D'AUDIT NATIONAL",id="audit"}
@@ -834,6 +1194,7 @@ function C.run()
     elseif p.id=="bills" then billsScreen()
     elseif p.id=="elections" then C.electionsScreen()
     elseif p.id=="decrees" then decreesScreen(info)
+    elseif p.id=="cases" then casesScreen()
     elseif p.id=="audit" then auditScreen() end
   end
 end
