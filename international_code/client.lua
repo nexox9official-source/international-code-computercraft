@@ -1677,6 +1677,9 @@ local function billTextSections(bill)
     {label="Texte propose",text=(bill.proposedTitle or "").."\n\n"..(bill.proposedBody or "")},
     {label="Classement",text=(bill.proposedBook or "").." / "..(bill.proposedSection or "")},
     {label="Regle de vote",text=thresholdLabel(bill.threshold)},
+    {label="Tour de scrutin",text=tostring(bill.votingRound or 0)},
+    {label="Quorum",text=tostring(tally.participation or 0).."/"..tostring(tally.eligible or 0)..
+      " participants / minimum "..tostring(tally.quorumRequired or 0).." / "..(tally.quorumMet and "ATTEINT" or "NON ATTEINT")},
     {label="Resultats",text="Pour "..tostring(tally.yes or 0).." / Contre "..tostring(tally.no or 0)..
       " / Abstention "..tostring(tally.abstain or 0).." / Membres eligibles "..tostring(tally.eligible or 0)},
     {label="Votes par Etat",text=#votes>0 and table.concat(votes,"\n") or "Aucun vote enregistre."},
@@ -1715,6 +1718,9 @@ local function billDetails(id)
     if allowed("legislature") and bill.stage=="voting" then
       actions[#actions+1]={text="Clore et depouiller le vote",id="close"}
     end
+    if allowed("legislature") and bill.stage=="no_quorum" then
+      actions[#actions+1]={text="Ouvrir un nouveau tour de scrutin",id="reopen"}
+    end
     if allowed("legislature") and bill.stage=="adopted" then
       actions[#actions+1]={text="Promulguer dans le Code",id="enact"}
     end
@@ -1724,7 +1730,7 @@ local function billDetails(id)
 
     local tally=bill.tally or {}
     local a=menu(bill.id.." - "..bill.title,actions,
-      "["..bill.stage.."] Pour "..tostring(tally.yes or 0).." / Contre "..tostring(tally.no or 0).." / Abst. "..tostring(tally.abstain or 0))
+      "["..bill.stage.."] Tour "..tostring(bill.votingRound or 0).." | Pour "..tostring(tally.yes or 0).." / Contre "..tostring(tally.no or 0).." / Quorum "..tostring(tally.participation or 0).."/"..tostring(tally.quorumRequired or 0))
     if not a then return end
 
     if a.id=="read" then
@@ -1764,7 +1770,11 @@ local function billDetails(id)
 
     elseif a.id=="open" then
       local r,e=rpc("BILL_OPEN_VOTE",{id=bill.id})
-      message("ASSEMBLEE",r and "Vote officiellement ouvert." or e,r and palette.ok or palette.bad)
+      message("ASSEMBLEE",r and ("Vote officiellement ouvert / tour "..tostring(r.votingRound or 1)) or e,r and palette.ok or palette.bad)
+
+    elseif a.id=="reopen" then
+      local r,e=rpc("BILL_OPEN_VOTE",{id=bill.id})
+      message("ASSEMBLEE",r and ("Nouveau tour ouvert: "..tostring(r.votingRound or "?")) or e,r and palette.ok or palette.bad)
 
     elseif a.id=="close" then
       local confirm=menu("CLOTURER LE VOTE",{
@@ -1773,8 +1783,14 @@ local function billDetails(id)
       },"La regle appliquee sera: "..thresholdLabel(bill.threshold))
       if confirm and confirm.id=="yes" then
         local r,e=rpc("BILL_CLOSE",{id=bill.id})
-        message("RESULTAT",r and (r.result=="adopted" and "PROPOSITION ADOPTEE" or "PROPOSITION REJETEE") or e,
-          r and (r.result=="adopted" and palette.ok or palette.warn) or palette.bad)
+        local resultText=e
+        local resultColor=palette.bad
+        if r then
+          if r.result=="adopted" then resultText="PROPOSITION ADOPTEE";resultColor=palette.ok
+          elseif r.result=="no_quorum" then resultText="SCRUTIN INVALIDE: QUORUM NON ATTEINT";resultColor=palette.warn
+          else resultText="PROPOSITION REJETEE";resultColor=palette.warn end
+        end
+        message("RESULTAT",resultText,resultColor)
       end
 
     elseif a.id=="enact" then
@@ -1871,7 +1887,8 @@ local function billsScreen(query,stage)
     elseif p.id=="stage" then
       local e=menu("ETAPE LEGISLATIVE",{
         {text="Toutes",v=""},{text="Brouillons",v="draft"},{text="En debat",v="debate"},
-        {text="Vote ouvert",v="voting"},{text="Adoptees",v="adopted"},{text="Rejetees",v="rejected"},
+        {text="Vote ouvert",v="voting"},{text="Sans quorum",v="no_quorum"},
+        {text="Adoptees",v="adopted"},{text="Rejetees",v="rejected"},
         {text="Promulguees",v="enacted"}
       })
       if e then stage=e.v end
