@@ -288,4 +288,20 @@ function P.session(sess)
   return printLines(sess.id or "NC-SESSION",lines)
 end
 
+
+function P.gazette(row)
+  if not row then return false,"Publication introuvable." end
+  local lines={}
+  append(lines,"JOURNAL OFFICIEL",row.id or "-",25)
+  append(lines,"NATURE",row.kind or "-",25)
+  append(lines,"OBJET",row.objectId or "-",25)
+  append(lines,"TITRE",row.title or "",25)
+  append(lines,"RESUME",row.summary or "",25)
+  append(lines,"VISIBILITE",row.visibility or "internal",25)
+  append(lines,"PUBLICATION",(row.publishedAt or "-").." / "..(row.publishedBy or "-"),25)
+  append(lines,"SCEAU DE L'ACTE SOURCE",row.sourceSeal or "-",25)
+  append(lines,"SCEAU DU JOURNAL",row.seal or "-",25)
+  return printLines(row.id or "NC-GAZ",lines)
+end
+
 return P
