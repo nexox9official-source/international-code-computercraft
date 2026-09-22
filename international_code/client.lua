@@ -2913,6 +2913,7 @@ local function notificationCenter()
         })
       elseif a and a.id=="open" then
         if n.objectType=="bill" then billDetails(n.objectId)
+        elseif n.objectType=="resolution" then resolutionDetails(n.objectId)
         elseif n.objectType=="treaty" then treatyDetails(n.objectId)
         elseif n.objectType=="case" then caseDetails(n.objectId)
         elseif n.objectType=="enforcement" then enforcementDetails(n.objectId)
@@ -2983,6 +2984,7 @@ local function helpScreen()
     {label="Navigation du Code",text="Parcourez par Livre, utilisez la recherche plein texte ou filtrez par statut. Un article peut etre ouvert, imprime et son historique de versions consulte."},
     {label="Editeur juridique",text="F2: Livres / categories\nF3: Recherche d'article\nF4: Inserer une citation a la position du curseur\nF6: Panier juridique multi-selection\nF7: Recuperer un brouillon autosauvegarde\nF5: Terminer la redaction\nEchap: menu de sortie"},
     {label="Assemblee",text="Les propositions BILL peuvent creer un article ou amender un texte existant. Les terminaux delegate rattaches a un Etat votent POUR, CONTRE ou ABSTENTION. Apres cloture, une proposition adoptee peut etre promulguee dans le Code."},
+    {label="Resolutions",text="Les resolutions RES servent aux decisions institutionnelles qui ne modifient pas directement le Code: securite, sanctions, humanitaire, urgence, adhesion, cessez-le-feu ou mission d'observation. Elles disposent du meme quorum et vote par Etat, puis peuvent creer automatiquement une mesure ENF."},
     {label="Etats membres",text="Le registre STATE conserve le statut, le gouvernement et le representant des pays. Un administrateur peut rattacher un terminal delegate a un Etat pour ses votes officiels."},
     {label="Traites",text="Les traites TREATY sont rediges puis figes avant signature. Chaque Etat partie signe depuis un terminal delegate rattache. Une fois toutes les signatures reunies, le traite peut entrer en vigueur avec un sceau officiel."},
     {label="Notifications",text="Le serveur cree des alertes pour les votes ouverts, signatures de traites, audiences, appels et mesures d'execution. Les delegues recoivent automatiquement les actions qui concernent leur Etat."},
@@ -3078,13 +3080,14 @@ function C.run()
   while true do
     local dash,err=rpc("DASHBOARD",{})
     local subtitle=dash and
-      ("Role "..cfg.role.." | "..dash.laws.." art. | "..tostring(dash.votingBills or 0).." vote(s) | "..tostring(dash.activeTreaties or 0).." traites | "..tostring(dash.activeEnforcements or 0).." exec. | "..tostring(dash.unreadNotices or 0).." notif. | r"..dash.revision)
+      ("Role "..cfg.role.." | "..dash.laws.." art. | "..tostring((dash.votingBills or 0)+(dash.votingResolutions or 0)).." scrutin(s) | "..tostring(dash.activeTreaties or 0).." traites | "..tostring(dash.activeEnforcements or 0).." exec. | "..tostring(dash.unreadNotices or 0).." notif. | r"..dash.revision)
       or ("HORS LIGNE - "..tostring(err))
 
     local items={
       {text=(dash and (dash.unreadNotices or 0)>0) and ("[!] NOTIFICATIONS ("..dash.unreadNotices..")") or "CENTRE DE NOTIFICATIONS",id="notices"},
       {text="CODE INTERNATIONAL / ARTICLES",id="laws"},
       {text="ASSEMBLEE / PROPOSITIONS / VOTES",id="bills"},
+      {text="RESOLUTIONS / CONSEIL / SECURITE",id="resolutions"},
       {text="TRAITES / DIPLOMATIE",id="treaties"},
       {text="REGISTRE DES ETATS MEMBRES",id="states"},
       {text="DOSSIERS JUDICIAIRES",id="cases"},
@@ -3108,6 +3111,8 @@ function C.run()
       lawsScreen("")
     elseif p.id=="bills" then
       billsScreen("","")
+    elseif p.id=="resolutions" then
+      resolutionsScreen("","")
     elseif p.id=="treaties" then
       treatiesScreen("","","")
     elseif p.id=="states" then
@@ -3123,6 +3128,7 @@ function C.run()
       local kind=menu("RECHERCHE",{
         {text="Dans les articles",id="law"},
         {text="Dans les propositions / votes",id="bill"},
+        {text="Dans les resolutions",id="resolution"},
         {text="Dans les traites",id="treaty"},
         {text="Dans les Etats membres",id="state"},
         {text="Dans les dossiers",id="case"},
@@ -3130,6 +3136,7 @@ function C.run()
       })
       if kind and kind.id=="law" then lawsScreen(q)
       elseif kind and kind.id=="bill" then billsScreen(q,"")
+      elseif kind and kind.id=="resolution" then resolutionsScreen(q,"")
       elseif kind and kind.id=="treaty" then treatiesScreen(q,"","")
       elseif kind and kind.id=="state" then statesScreen(q,"")
       elseif kind and kind.id=="enforcement" then enforcementsScreen(q,"","","")
