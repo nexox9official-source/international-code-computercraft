@@ -113,6 +113,46 @@ local function government(t,info,ministries)
   fill(t,h," Registre gouvernemental",colors.gray)
 end
 
+local function democracy(t,elections,mandates,info)
+  t.setBackgroundColor(colors.black);t.clear()
+  header(t,"DEMOCRATIE NATIONALE","Presidence et Conseil de la Coalition")
+  local _,h=t.getSize()
+  local y=4
+
+  fill(t,y," President: "..tostring(info.presidentIdentity or "-"),colors.lime);y=y+1
+  local council=info.councilMembers or {}
+  fill(t,y," Conseil: "..tostring(#council).." membre(s)",colors.cyan);y=y+2
+
+  local active={}
+  for _,e in ipairs(elections or {}) do
+    if e.stage=="candidacy" or e.stage=="voting" or e.stage=="runoff_ready" or e.stage=="runoff_voting" then active[#active+1]=e end
+  end
+  if #active>0 then
+    fill(t,y," SCRUTINS ACTIFS",colors.yellow);y=y+1
+    for _,e in ipairs(active) do
+      if y>=h then break end
+      fill(t,y," "..e.id.." ["..tostring(e.stage or "?").."]",colors.yellow);y=y+1
+      if y<h then fill(t,y,"   "..tostring(e.title or ""),colors.white);y=y+1 end
+    end
+  else
+    fill(t,y," Aucun scrutin national actif.",colors.lightGray);y=y+2
+  end
+
+  if y<h-2 then
+    fill(t,y," MANDATS ACTIFS",colors.cyan);y=y+1
+    local shown=0
+    for _,m in ipairs(mandates or {}) do
+      if m.status=="active" and y<h then
+        fill(t,y," "..tostring(m.office or "?").." / "..tostring(m.identity or m.citizenId or "?"),colors.lightGray);y=y+1
+        shown=shown+1
+        if shown>=4 then break end
+      end
+    end
+    if shown==0 and y<h then fill(t,y," Aucun mandat electoral enregistre.",colors.lightGray) end
+  end
+  fill(t,h," NC-GE / NC-MANDATE / vote par NC-CIT",colors.gray)
+end
+
 local function elections(t,rows)
   t.setBackgroundColor(colors.black);t.clear()
   header(t,"ELECTIONS MINISTERIELLES","Scrutins actuellement ouverts")
@@ -244,6 +284,8 @@ function P.run()
       local ministries=rpc(cfg,"NC_MINISTRY_LIST",{},4) or {}
       local treasury=rpc(cfg,"NC_TREASURY_DASHBOARD",{},4) or {}
       local activeBudget=treasury.currentBudgetId and rpc(cfg,"NC_BUDGET_GET",{id=treasury.currentBudgetId},4) or nil
+      local generalElections=rpc(cfg,"NC_GE_LIST",{},4) or {}
+      local mandates=rpc(cfg,"NC_MANDATE_LIST",{status="active"},4) or {}
       local electionsOpen=rpc(cfg,"NC_ELECTION_LIST",{stage="open"},4) or {}
       local billsVoting=rpc(cfg,"NC_BILL_LIST",{stage="voting"},4) or {}
       local gazetteRows=rpc(cfg,"NC_GAZETTE_LIST",{},4) or {}
@@ -254,19 +296,20 @@ function P.run()
       if page==1 then overview(target,info,dash)
       elseif page==2 then finance(target,treasury,activeBudget)
       elseif page==3 then government(target,info,ministries)
-      elseif page==4 then elections(target,electionsOpen)
-      elseif page==5 then bills(target,billsVoting)
-      elseif page==6 then gazette(target,gazetteRows)
-      elseif page==7 then sessions(target,visibleSessions)
-      elseif page==8 then cases(target,visibleCases)
+      elseif page==4 then democracy(target,generalElections,mandates,info)
+      elseif page==5 then elections(target,electionsOpen)
+      elseif page==6 then bills(target,billsVoting)
+      elseif page==7 then gazette(target,gazetteRows)
+      elseif page==8 then sessions(target,visibleSessions)
+      elseif page==9 then cases(target,visibleCases)
       else categories(target,cats) end
     end
 
     local timer=os.startTimer(5)
     while true do
       local ev,a=os.pullEvent()
-      if ev=="timer" and a==timer then page=page%9+1;break
-      elseif ev=="monitor_touch" then page=page%9+1;break
+      if ev=="timer" and a==timer then page=page%10+1;break
+      elseif ev=="monitor_touch" then page=page%10+1;break
       elseif ev=="key" and (a==keys.q or a==keys.escape) then
         term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
       end
