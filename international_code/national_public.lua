@@ -54,10 +54,12 @@ local function overview(t,info,dash)
   header(t,"TABLEAU NATIONAL",dash.foundingMode and "PHASE FONDATRICE" or "REGIME NORMAL")
   local y=4
   fill(t,y," PRESIDENT        "..tostring(dash.presidentIdentity or info.presidentIdentity or "-"),colors.lime);y=y+2
+  fill(t,y," CITOYENS ACTIFS  "..tostring(dash.activeCitizens or 0),colors.cyan);y=y+1
   fill(t,y," LOIS ACTIVES     "..tostring(dash.activeLaws or 0),colors.white);y=y+1
   fill(t,y," LOIS EN PROJET   "..tostring(dash.draftLaws or 0),colors.lightGray);y=y+1
   fill(t,y," CATEGORIES       "..tostring(dash.categories or 0),colors.cyan);y=y+1
   fill(t,y," CABINET          "..tostring(dash.filledMinistries or 0).."/"..tostring(dash.ministries or 0),colors.cyan);y=y+1
+  fill(t,y," SESSIONS LIVE    "..tostring(dash.openSessions or 0).." / "..tostring(dash.scheduledSessions or 0).." prevues",colors.cyan);y=y+1
   fill(t,y," SCRUTINS OUVERTS "..tostring(dash.openElections or 0),colors.yellow);y=y+1
   fill(t,y," VOTES LEGISLATIFS "..tostring(dash.votingBills or 0),colors.yellow);y=y+1
   fill(t,y," DECRETS PUBLIES  "..tostring(dash.publishedDecrees or 0),colors.white);y=y+1
@@ -138,6 +140,26 @@ local function decrees(t,rows)
   fill(t,h," Registre des actes reglementaires",colors.gray)
 end
 
+local function sessions(t,rows)
+  t.setBackgroundColor(colors.black);t.clear()
+  header(t,"SESSIONS NATIONALES","Conseil, Cabinet et commissions")
+  local _,h=t.getSize()
+  local y=4
+  if #rows==0 then
+    fill(t,y," Aucune session visible.",colors.lightGray)
+  else
+    for _,sess in ipairs(rows) do
+      if y>=h then break end
+      local fg=sess.status=="open" and colors.lime or
+        (sess.status=="scheduled" and colors.yellow or colors.lightGray)
+      fill(t,y," "..sess.id.." ["..tostring(sess.status or "?").."]",fg);y=y+1
+      if y<h then fill(t,y,"   "..tostring(sess.title or ""),colors.white);y=y+1 end
+      if y<h then fill(t,y,"   "..tostring(sess.scheduledFor or "").." / "..tostring(sess.location or ""),colors.lightGray);y=y+1 end
+    end
+  end
+  fill(t,h," Calendrier institutionnel national",colors.gray)
+end
+
 local function cases(t,rows)
   t.setBackgroundColor(colors.black);t.clear()
   header(t,"JUSTICE NATIONALE","Dossiers visibles depuis ce terminal")
@@ -192,6 +214,7 @@ function P.run()
       local electionsOpen=rpc(cfg,"NC_ELECTION_LIST",{stage="open"},4) or {}
       local billsVoting=rpc(cfg,"NC_BILL_LIST",{stage="voting"},4) or {}
       local decreesPublished=rpc(cfg,"NC_DECREE_LIST",{status="published"},4) or {}
+      local visibleSessions=rpc(cfg,"NC_SESSION_LIST",{},4) or {}
       local visibleCases=rpc(cfg,"NC_CASE_LIST",{},4) or {}
       local cats=rpc(cfg,"NC_CATEGORY_LIST",{},4) or {}
 
@@ -200,15 +223,16 @@ function P.run()
       elseif page==3 then elections(target,electionsOpen)
       elseif page==4 then bills(target,billsVoting)
       elseif page==5 then decrees(target,decreesPublished)
-      elseif page==6 then cases(target,visibleCases)
+      elseif page==6 then sessions(target,visibleSessions)
+      elseif page==7 then cases(target,visibleCases)
       else categories(target,cats) end
     end
 
     local timer=os.startTimer(5)
     while true do
       local ev,a=os.pullEvent()
-      if ev=="timer" and a==timer then page=page%7+1;break
-      elseif ev=="monitor_touch" then page=page%7+1;break
+      if ev=="timer" and a==timer then page=page%8+1;break
+      elseif ev=="monitor_touch" then page=page%8+1;break
       elseif ev=="key" and (a==keys.q or a==keys.escape) then
         term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
       end
