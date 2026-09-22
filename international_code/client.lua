@@ -719,36 +719,57 @@ lawBasketBrowser=function(initial)
 
   local function toggleList(title,laws)
     while true do
-      local items={}
+      local items={
+        {text="[+] Ajouter toute cette liste au panier",id="all"},
+        {text="[-] Retirer toute cette liste du panier",id="none"}
+      }
       for _,law in ipairs(laws or {}) do
         items[#items+1]={
           text=(selected[law.ref] and "[X] " or "[ ] ")..law.ref.." ["..(law.status or "?").."] "..law.title,
           law=law
         }
       end
-      local p=menu(title,items,"Entree: ajouter/retirer ou lire. Retour: panier.")
+      local p=menu(title,items,"Selection multiple. Retour: panier.")
       if not p then return end
-      local law=p.law
-      local a=menu(law.ref.." - "..law.title,{
-        {text=selected[law.ref] and "Retirer de la selection" or "Ajouter a la selection",id="toggle"},
-        {text="Lire l'article",id="read"}
-      },(selected[law.ref] and "DEJA SELECTIONNE" or "NON SELECTIONNE"))
-      if a and a.id=="toggle" then
-        if selected[law.ref] then
-          selected[law.ref]=nil
-        else
-          local allow=true
-          if law.status=="repealed" or law.status=="suspended" then
-            local confirm=menu("ARTICLE NON APPLICABLE",{
-              {text="Ajouter quand meme",id="yes"},
-              {text="Annuler",id="no"}
-            },law.ref.." est actuellement ["..law.status.."]. Les brouillons restent selectionnables sans avertissement.")
-            allow=confirm and confirm.id=="yes"
-          end
-          if allow then addLaw(law) end
+
+      if p.id=="all" then
+        local count=0
+        for _,law in ipairs(laws or {}) do
+          if not selected[law.ref] then addLaw(law);count=count+1 end
         end
-      elseif a and a.id=="read" then
-        lawQuickView(law)
+        message("PANIER",tostring(count).." article(s) ajoute(s) a la selection.",palette.ok)
+
+      elseif p.id=="none" then
+        local count=0
+        for _,law in ipairs(laws or {}) do
+          if selected[law.ref] then selected[law.ref]=nil;count=count+1 end
+        end
+        message("PANIER",tostring(count).." article(s) retire(s) de la selection.",palette.warn)
+
+      elseif p.law then
+        local law=p.law
+        local a=menu(law.ref.." - "..law.title,{
+          {text=selected[law.ref] and "Retirer de la selection" or "Ajouter a la selection",id="toggle"},
+          {text="Lire l'article",id="read"}
+        },(selected[law.ref] and "DEJA SELECTIONNE" or "NON SELECTIONNE"))
+
+        if a and a.id=="toggle" then
+          if selected[law.ref] then
+            selected[law.ref]=nil
+          else
+            local allow=true
+            if law.status=="repealed" or law.status=="suspended" then
+              local confirm=menu("ARTICLE NON APPLICABLE",{
+                {text="Ajouter quand meme",id="yes"},
+                {text="Annuler",id="no"}
+              },law.ref.." est actuellement ["..law.status.."]. Les brouillons restent selectionnables sans avertissement.")
+              allow=confirm and confirm.id=="yes"
+            end
+            if allow then addLaw(law) end
+          end
+        elseif a and a.id=="read" then
+          lawQuickView(law)
+        end
       end
     end
   end
