@@ -28,7 +28,8 @@ local function identity(actor)
 end
 
 local function technicalAdmin(actor)
-  return actor and actor.role=="admin" and (not actor.nationalRole or actor.nationalRole=="admin")
+  return actor and (actor.nationalRoot==true or
+    (actor.role=="admin" and (not actor.nationalRole or actor.nationalRole=="admin")))
 end
 
 local function role(actor)
@@ -64,12 +65,14 @@ end
 local function clientHasIncompatibleOffice(state,citizenId,office)
   for _,cl in pairs(state.clients or {}) do
     if cl.citizenId==citizenId then
-      local r=cl.nationalRole
-      if cl.ministryCode and cl.ministryCode~="" then return true,"portefeuille ministeriel actif" end
-      if r=="judge" or r=="prosecutor" or r=="police" or r=="civil_servant" or r=="minister" then
-        return true,"fonction incompatible: "..tostring(r)
+      if not cl.nationalRoot then
+        local r=cl.nationalRole
+        if cl.ministryCode and cl.ministryCode~="" then return true,"portefeuille ministeriel actif" end
+        if r=="judge" or r=="prosecutor" or r=="police" or r=="civil_servant" or r=="minister" then
+          return true,"fonction incompatible: "..tostring(r)
+        end
+        if office=="council" and r=="president" then return true,"Presidence en exercice" end
       end
-      if office=="council" and r=="president" then return true,"Presidence en exercice" end
     end
   end
   return false,nil
