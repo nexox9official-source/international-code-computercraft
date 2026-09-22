@@ -177,7 +177,7 @@ end
 local function roleLabel(r)
   local labels={
     admin="Administrateur",president="President de la Coalition",council="Conseil de la Coalition",
-    minister="Ministre",judge="Justice",police="Police / securite",civil_servant="Administration",
+    minister="Ministre",judge="Juge",prosecutor="Parquet / Procureur",police="Police / securite",civil_servant="Administration",
     citizen="Citoyen",public="Public"
   }
   return labels[r] or tostring(r or "non autorise")
@@ -423,7 +423,8 @@ local function governmentScreen(info)
       if cl then
         local role=menu("ROLE NATIONAL",{
           {text="Citoyen",v="citizen"},{text="Conseil de la Coalition",v="council"},
-          {text="Justice",v="judge"},{text="Police / securite",v="police"},
+          {text="Juge",v="judge"},{text="Parquet / Procureur",v="prosecutor"},
+          {text="Police / securite",v="police"},
           {text="Administration",v="civil_servant"},{text="Retirer l'acces national",v=""}
         },"Actuel: "..roleLabel(cl.nationalRole))
         if role then
