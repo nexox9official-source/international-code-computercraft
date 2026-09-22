@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.15.0
+
+### Journal officiel
+- registre immuable `NC-GAZ-AAAA-XXXX` ;
+- publications automatiques lors des promulgations, décrets, nominations, fins de fonction, résultats électoraux, procès-verbaux de session et décisions judiciaires pertinentes ;
+- lien permanent vers l'objet source ;
+- conservation du sceau de l'acte source ;
+- sceau propre à chaque avis du Journal officiel ;
+- niveaux public / internal / restricted / judicial ;
+- recherche et filtrage du Journal officiel ;
+- impression des avis officiels ;
+- le Monitor national utilise désormais les entrées `NC-GAZ` pour sa page Journal officiel.
+
+### Vérification des sceaux
+- action serveur `NC_VERIFY_SEAL` ;
+- commande `ic nc-verify <SCEAU>` ;
+- vérification depuis le bureau national ;
+- couverture des actes fondateurs, registre civil, ministères, élections, législation, décrets, sessions, justice et Journal officiel ;
+- pour les objets confidentiels, validation du sceau sans fuite du contenu protégé.
+
 ## 0.14.0
 
 ### Registre civil
