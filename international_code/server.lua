@@ -953,6 +953,22 @@ local function handleAction(state, actor, action, p)
       end
     end
 
+    for _,r in pairs(state.resolutions or {}) do
+      if tostring(r.resultSeal or ""):upper()==seal then
+        return {
+          valid=true,kind="resolution_vote",seal=seal,parentId=r.id,title=r.title,
+          status=r.result,issuedAt=r.closedAt,issuedBy=r.closedBy
+        }
+      end
+      if tostring(r.executionSeal or ""):upper()==seal then
+        return {
+          valid=true,kind="resolution_execution",seal=seal,parentId=r.id,title=r.title,
+          status=r.stage,issuedAt=r.executedAt,issuedBy=r.executedBy,
+          reference=r.enforcementId
+        }
+      end
+    end
+
     for _,bill in pairs(state.bills or {}) do
       if tostring(bill.resultSeal or ""):upper()==seal then
         return {valid=true,kind="vote_result",seal=seal,parentId=bill.id,title=bill.title,status=bill.result,issuedAt=bill.closedAt,issuedBy=bill.closedBy}
@@ -987,7 +1003,7 @@ local function handleAction(state, actor, action, p)
     return { meta=state.meta, clientsCount=(function() local n=0 for _ in pairs(state.clients) do n=n+1 end return n end)() }
   end
   if action == "DASHBOARD" then
-    local lc, cc, openCases, activeLaws, sc, votingBills, activeTreaties, signingTreaties, activeEnforcements = 0, 0, 0, 0, 0, 0, 0, 0, 0
+    local lc, cc, openCases, activeLaws, sc, votingBills, votingResolutions, activeTreaties, signingTreaties, activeEnforcements = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     for _,law in pairs(state.laws) do lc=lc+1 if law.status=="active" then activeLaws=activeLaws+1 end end
     for _,c in pairs(state.cases) do
       if canViewCase(actor,c) then
@@ -997,6 +1013,7 @@ local function handleAction(state, actor, action, p)
     end
     for _,st in pairs(state.states or {}) do if st.status=="member" then sc=sc+1 end end
     for _,bill in pairs(state.bills or {}) do if bill.stage=="voting" then votingBills=votingBills+1 end end
+    for _,r in pairs(state.resolutions or {}) do if r.stage=="voting" then votingResolutions=votingResolutions+1 end end
     for _,t in pairs(state.treaties or {}) do
       if t.stage=="in_force" then activeTreaties=activeTreaties+1 end
       if t.stage=="signing" or t.stage=="ready" then signingTreaties=signingTreaties+1 end
@@ -1008,7 +1025,7 @@ local function handleAction(state, actor, action, p)
     end
     return {
       laws=lc, activeLaws=activeLaws, cases=cc, openCases=openCases,
-      states=sc, votingBills=votingBills, activeTreaties=activeTreaties, signingTreaties=signingTreaties,
+      states=sc, votingBills=votingBills, votingResolutions=votingResolutions, activeTreaties=activeTreaties, signingTreaties=signingTreaties,
       activeEnforcements=activeEnforcements, unreadNotices=countUnreadNotices(state,actor),
       stateId=actor.stateId,
       revision=state.meta.revision, codeStatus=state.meta.codeStatus
