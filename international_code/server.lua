@@ -1360,6 +1360,256 @@ local function handleAction(state, actor, action, p)
     local out=common.deepcopy(bill); out.tally=billTally(state,bill); return out
   end
 
+  if action == "RESOLUTION_LIST" then return listResolutions(state,p) end
+
+  if action == "RESOLUTION_GET" then
+    local resolution=state.resolutions[common.trim(p.id):upper()]
+    if not resolution then return nil,"Resolution introuvable." end
+    local out=common.deepcopy(resolution)
+    out.tally=billTally(state,resolution)
+    return out
+  end
+
+  if action == "RESOLUTION_CREATE" then
+    local title=common.trim(p.title)
+    local body=common.trim(p.body)
+    if title=="" or body=="" then return nil,"Titre et texte de la resolution obligatoires." end
+
+    local allowedTypes={
+      general=true,sanctions=true,peace_security=true,membership=true,humanitarian=true,
+      emergency=true,investigation=true,ceasefire=true,observer_mission=true,economic=true,other=true
+    }
+    local resolutionType=allowedTypes[p.resolutionType] and p.resolutionType or "general"
+    local targetStateId=common.trim(p.targetStateId):upper()
+    if targetStateId~="" and not state.states[targetStateId] then return nil,"Etat cible introuvable." end
+
+    local linkedCaseId=common.trim(p.linkedCaseId):upper()
+    if linkedCaseId~="" and not state.cases[linkedCaseId] then return nil,"Dossier lie introuvable." end
+
+    local threshold=p.threshold or "simple_cast"
+    local validThreshold={simple_cast=true,absolute_members=true,two_thirds_cast=true,three_quarters_members=true}
+    if not validThreshold[threshold] then threshold="simple_cast" end
+
+    local id=makeResolutionId(state)
+    local resolution={
+      id=id,title=title,resolutionType=resolutionType,summary=common.trim(p.summary),body=body,
+      targetStateId=targetStateId,linkedCaseId=linkedCaseId,
+      stage="draft",threshold=threshold,votes={},voteHistory={},voteRounds={},
+      eligibleStateIds={},votingRound=0,
+      createsEnforcement=p.createsEnforcement==true,
+      enforcementType=common.trim(p.enforcementType),
+      enforcementTerms=common.trim(p.enforcementTerms),
+      enforcementAmount=common.trim(p.enforcementAmount),
+      enforcementDeadline=common.trim(p.enforcementDeadline),
+      createdAt=common.now(),updatedAt=common.now(),createdBy=actor.label,
+      result=nil,enforcementId=nil
+    }
+    state.resolutions[id]=resolution
+    mutate(state,actor,"RESOLUTION_CREATE",id,title.." / "..resolutionType)
+    return common.deepcopy(resolution)
+  end
+
+  if action == "RESOLUTION_EDIT" then
+    local r=state.resolutions[common.trim(p.id):upper()]
+    if not r then return nil,"Resolution introuvable." end
+    if r.stage~="draft" and r.stage~="debate" then return nil,"La resolution n'est plus modifiable a ce stade." end
+
+    local validTypes={
+      general=true,sanctions=true,peace_security=true,membership=true,humanitarian=true,
+      emergency=true,investigation=true,ceasefire=true,observer_mission=true,economic=true,other=true
+    }
+    if p.title~=nil and common.trim(p.title)~="" then r.title=common.trim(p.title) end
+    if p.summary~=nil then r.summary=common.trim(p.summary) end
+    if p.body~=nil and common.trim(p.body)~="" then r.body=common.trim(p.body) end
+    if p.resolutionType~=nil and validTypes[p.resolutionType] then r.resolutionType=p.resolutionType end
+    if p.targetStateId~=nil then
+      local target=common.trim(p.targetStateId):upper()
+      if target~="" and not state.states[target] then return nil,"Etat cible introuvable." end
+      r.targetStateId=target
+    end
+    if p.linkedCaseId~=nil then
+      local caseId=common.trim(p.linkedCaseId):upper()
+      if caseId~="" and not state.cases[caseId] then return nil,"Dossier lie introuvable." end
+      r.linkedCaseId=caseId
+    end
+    if p.threshold~=nil then
+      local valid={simple_cast=true,absolute_members=true,two_thirds_cast=true,three_quarters_members=true}
+      if valid[p.threshold] then r.threshold=p.threshold end
+    end
+    if p.createsEnforcement~=nil then r.createsEnforcement=p.createsEnforcement==true end
+    if p.enforcementType~=nil then r.enforcementType=common.trim(p.enforcementType) end
+    if p.enforcementTerms~=nil then r.enforcementTerms=common.trim(p.enforcementTerms) end
+    if p.enforcementAmount~=nil then r.enforcementAmount=common.trim(p.enforcementAmount) end
+    if p.enforcementDeadline~=nil then r.enforcementDeadline=common.trim(p.enforcementDeadline) end
+
+    r.updatedAt=common.now()
+    mutate(state,actor,"RESOLUTION_EDIT",r.id,r.title)
+    local out=common.deepcopy(r);out.tally=billTally(state,r);return out
+  end
+
+  if action == "RESOLUTION_SET_STAGE" then
+    local r=state.resolutions[common.trim(p.id):upper()]
+    if not r then return nil,"Resolution introuvable." end
+    if p.stage~="draft" and p.stage~="debate" then return nil,"Etape invalide." end
+    if r.stage~="draft" and r.stage~="debate" then return nil,"Cette resolution ne peut plus revenir a cette etape." end
+    if r.stage==p.stage then local out=common.deepcopy(r);out.tally=billTally(state,r);return out end
+    local previous=r.stage
+    r.stage=p.stage
+    r.updatedAt=common.now()
+    mutate(state,actor,"RESOLUTION_SET_STAGE",r.id,previous.." -> "..r.stage)
+    local out=common.deepcopy(r);out.tally=billTally(state,r);return out
+  end
+
+  if action == "RESOLUTION_OPEN_VOTE" then
+    local r=state.resolutions[common.trim(p.id):upper()]
+    if not r then return nil,"Resolution introuvable." end
+    if r.stage=="adopted" or r.stage=="rejected" or r.stage=="executed" or r.stage=="withdrawn" then
+      return nil,"Cette resolution est deja terminee."
+    end
+
+    r.voteRounds=r.voteRounds or {}
+    if r.votingRound and r.votingRound>0 then
+      r.voteRounds[#r.voteRounds+1]={
+        round=r.votingRound,openedAt=r.votingOpenedAt,closedAt=r.closedAt,
+        result=r.result,votes=common.deepcopy(r.votes or {}),tally=billTally(state,r)
+      }
+    end
+
+    r.votingRound=(r.votingRound or 0)+1
+    r.votes={}
+    r.eligibleStateIds={}
+    for stateId,st in pairs(state.states or {}) do
+      if st.status=="member" then r.eligibleStateIds[#r.eligibleStateIds+1]=stateId end
+    end
+    table.sort(r.eligibleStateIds)
+    r.stage="voting"
+    r.result=nil
+    r.closedAt=nil
+    r.votingOpenedAt=common.now()
+    r.updatedAt=common.now()
+
+    for _,stateId in ipairs(r.eligibleStateIds) do
+      pushNotice(state,{
+        title="Vote resolution: "..r.id,
+        body=r.title.." / tour "..tostring(r.votingRound),
+        severity="action",objectType="resolution",objectId=r.id,targetStateId=stateId
+      })
+    end
+
+    mutate(state,actor,"RESOLUTION_OPEN_VOTE",r.id,r.title.." / tour "..r.votingRound)
+    local out=common.deepcopy(r);out.tally=billTally(state,r);return out
+  end
+
+  if action == "RESOLUTION_VOTE" then
+    local r=state.resolutions[common.trim(p.id):upper()]
+    if not r then return nil,"Resolution introuvable." end
+    if r.stage~="voting" then return nil,"Le vote n'est pas ouvert." end
+    local st=getClientState(state,actor)
+    if not st then return nil,"Ce terminal delegue n'est rattache a aucun Etat." end
+
+    local eligible=false
+    for _,stateId in ipairs(r.eligibleStateIds or {}) do if stateId==st.id then eligible=true break end end
+    if not eligible then return nil,"Votre Etat ne fait pas partie du corps electoral de ce tour." end
+
+    local choice=common.lower(p.choice)
+    if choice~="yes" and choice~="no" and choice~="abstain" then return nil,"Vote invalide." end
+    r.votes=r.votes or {}
+    r.voteHistory=r.voteHistory or {}
+    local previous=r.votes[st.id]
+    r.votes[st.id]={choice=choice,at=common.now(),by=actor.label,stateName=st.name}
+    r.voteHistory[#r.voteHistory+1]={
+      at=common.now(),stateId=st.id,stateName=st.name,choice=choice,
+      previous=previous and previous.choice or nil,by=actor.label
+    }
+    r.updatedAt=common.now()
+    mutate(state,actor,"RESOLUTION_VOTE",r.id,st.id.."="..choice)
+    local out=common.deepcopy(r);out.tally=billTally(state,r);return out
+  end
+
+  if action == "RESOLUTION_CLOSE" then
+    local r=state.resolutions[common.trim(p.id):upper()]
+    if not r then return nil,"Resolution introuvable." end
+    if r.stage~="voting" then return nil,"Le vote n'est pas ouvert." end
+
+    local tally=billTally(state,r)
+    if not tally.quorumMet then
+      r.result="no_quorum"
+      r.stage="no_quorum"
+    else
+      r.result=tally.adopted and "adopted" or "rejected"
+      r.stage=r.result
+    end
+    r.closedAt=common.now()
+    r.closedBy=actor.label
+    r.resultSeal=officialSeal("UNS-RESVOTE",{r.id,r.votingRound,r.result,tally,r.eligibleStateIds,r.votes,r.closedAt})
+    r.updatedAt=common.now()
+
+    for _,stateId in ipairs(r.eligibleStateIds or {}) do
+      pushNotice(state,{
+        title="Resultat resolution: "..r.id,
+        body=r.title.." / "..string.upper(tostring(r.result)).." / POUR "..tally.yes.." CONTRE "..tally.no.." ABST "..tally.abstain,
+        severity=r.result=="adopted" and "success" or "info",
+        objectType="resolution",objectId=r.id,targetStateId=stateId
+      })
+    end
+
+    mutate(state,actor,"RESOLUTION_CLOSE",r.id,r.result)
+    local out=common.deepcopy(r);out.tally=tally;return out
+  end
+
+  if action == "RESOLUTION_EXECUTE" then
+    local r=state.resolutions[common.trim(p.id):upper()]
+    if not r then return nil,"Resolution introuvable." end
+    if r.stage~="adopted" then return nil,"La resolution doit etre adoptee avant execution." end
+
+    local enforcementId=nil
+    if r.createsEnforcement then
+      local targetStateId=r.targetStateId or ""
+      local targetName=""
+      if targetStateId~="" and state.states[targetStateId] then targetName=state.states[targetStateId].name end
+      if targetName=="" then targetName="Cible definie par "..r.id end
+      local eid=makeEnforcementId(state)
+      local e={
+        id=eid,caseId=r.linkedCaseId or "",judgmentId="",
+        targetType=targetStateId~="" and "state" or "other",
+        targetStateId=targetStateId,targetName=targetName,
+        enforcementType=(r.enforcementType~="" and r.enforcementType or "other"),
+        summary=r.title,terms=(r.enforcementTerms~="" and r.enforcementTerms or r.body),
+        amount=r.enforcementAmount or "",deadline=r.enforcementDeadline or "",
+        status="ordered",visibility="public",progress={},statusHistory={},
+        sourceResolutionId=r.id,
+        createdAt=common.now(),createdBy=actor.label,updatedAt=common.now()
+      }
+      e.seal=officialSeal("CIU-ENF",{e.id,e.sourceResolutionId,e.targetStateId,e.targetName,e.enforcementType,e.summary,e.terms,e.amount,e.deadline,e.createdAt,e.createdBy})
+      state.enforcements[eid]=e
+      enforcementId=eid
+      r.enforcementId=eid
+
+      if targetStateId~="" then
+        pushNotice(state,{
+          title="Resolution a executer: "..r.id,
+          body=r.title.." / mesure "..eid,
+          severity="warning",objectType="enforcement",objectId=eid,targetStateId=targetStateId
+        })
+      end
+    end
+
+    r.stage="executed"
+    r.executedAt=common.now()
+    r.executedBy=actor.label
+    r.executionSeal=officialSeal("UNS-RES",{r.id,r.resultSeal,r.executedAt,r.executedBy,enforcementId,r.body})
+    r.updatedAt=common.now()
+
+    pushNotice(state,{
+      title="Resolution executee: "..r.id,
+      body=r.title..(enforcementId and (" / mesure "..enforcementId) or ""),
+      severity="success",objectType="resolution",objectId=r.id,global=true
+    })
+
+    mutate(state,actor,"RESOLUTION_EXECUTE",r.id,enforcementId or r.executionSeal)
+    local out=common.deepcopy(r);out.tally=billTally(state,r);return out
+  end
+
   if action == "TREATY_LIST" then return listTreaties(state,p) end
 
   if action == "TREATY_GET" then
