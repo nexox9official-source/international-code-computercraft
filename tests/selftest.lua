@@ -23,7 +23,7 @@ end
 assert(total==500,"expected 500 seed articles, got "..total)
 for n=1,500 do assert(seen[n],"missing article "..n) end
 
-assert(common.VERSION=="0.12.0","unexpected application version: "..tostring(common.VERSION))
+assert(common.VERSION=="0.12.1","unexpected application version: "..tostring(common.VERSION))
 
 local function readSource(path)
   local h=assert(io.open(path,"r"))
@@ -40,6 +40,7 @@ local cli=readSource("ic.lua")
 local national=readSource("international_code/national.lua")
 local nationalClient=readSource("international_code/national_client.lua")
 local nationalPrinter=readSource("international_code/national_printer.lua")
+local nationalPublic=readSource("international_code/national_public.lua")
 local nationalCorpus=readSource("international_code/national/corpus_v2.json")
 
 assert(server:find('CONFLICT_CREATE',1,true),"conflict server actions missing")
@@ -55,13 +56,17 @@ assert(printer:find('function P.incident',1,true),"incident printer missing")
 assert(cli:find('cmd=="conflict"',1,true),"conflict CLI missing")
 assert(cli:find('cmd=="situation"',1,true),"situation CLI missing")
 assert(cli:find('cmd=="nc"',1,true),"national intranet CLI missing")
+assert(cli:find('cmd=="nc-display"',1,true),"national live monitor CLI missing")
 assert(server:find('national.handle',1,true),"national server dispatcher missing")
 assert(national:find('NC_MINISTER_APPOINT_DIRECT',1,true),"national minister appointments missing")
 assert(national:find('NC_ELECTION_VOTE',1,true),"national minister elections missing")
 assert(national:find('NC_BILL_ENACT',1,true),"national legislation workflow missing")
 assert(national:find('NC_DECREE_PUBLISH',1,true),"national decrees missing")
+assert(national:find('NC_NOTICE_LIST',1,true),"national notifications missing")
 assert(nationalClient:find('CODE NATIONAL / CATEGORIES / RECHERCHE',1,true),"national categorized code UI missing")
+assert(nationalClient:find('NOTIFICATIONS NATIONALES',1,true),"national notification center missing")
 assert(nationalPrinter:find('function P.law',1,true),"national law printing missing")
+assert(nationalPublic:find('function P.run',1,true),"national live monitor missing")
 
 local ncCount=0
 for _ in nationalCorpus:gmatch('"id"%s*:%s*"NC%-ART%-%d%d%d"') do ncCount=ncCount+1 end
@@ -69,4 +74,4 @@ assert(ncCount==400,"expected 400 North Coalition articles, got "..ncCount)
 assert(nationalCorpus:find('"founding_phase_account": "NexoFr_"',1,true),"NexoFr_ founding account missing")
 assert(not nationalCorpus:find("Astralium",1,true),"forbidden server name leaked into national corpus")
 
-print("Self-test OK: 500 UNS articles + 400 NC articles + v0.12 national intranet")
+print("Self-test OK: 500 UNS articles + 400 NC articles + v0.12.1 national intranet")
