@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.5.0
+
+### Traités internationaux
+- registre `TREATY-AAAA-XXXX` ;
+- accords bilatéraux, multilatéraux, défense, commerce, frontière, cessez-le-feu et non-agression ;
+- sélection des États parties ;
+- versionnement des brouillons ;
+- gel du texte avant signature ;
+- sceau du texte signé ;
+- signature officielle par terminal `delegate` rattaché à un État partie ;
+- suivi des signatures manquantes ;
+- entrée en vigueur après signature de toutes les parties ;
+- sceau d'activation ;
+- fin du traité avec motif et sceau de terminaison ;
+- impression multipage du traité et de ses signatures ;
+- `ic treaty TREATY-...` pour un tableau LIVE des signatures.
+
+### Ratification
+- proposition de ratification groupée de plusieurs articles ;
+- sélection de tout un Livre en une action ;
+- activation en masse après un vote adopté ;
+- archivage/versionnement automatique de chaque article ratifié.
+
 ## 0.4.0
 
 ### Union et États membres
