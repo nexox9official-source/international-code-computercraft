@@ -1,4 +1,4 @@
-# Architecture v0.12
+# Architecture v0.14
 
 ## Topologie
 
@@ -40,6 +40,9 @@ state
          +-- elections[NC-ELECT-...]
          +-- bills[NC-BILL-...]
          +-- decrees[NC-DEC-...]
+         +-- citizens[NC-CIT-...]
+         +-- cases[NC-CASE-...]
+         +-- sessions[NC-SESSION-...]
          +-- nationalAudit
 ```
 
@@ -54,13 +57,69 @@ Chaque client peut stocker :
 ```text
 nationalRole
 nationalIdentity
+citizenId
 ministryCode
 stateId
 ```
 
-`nationalIdentity` est la clé électorale : le système déduplique les électeurs par identité, afin que deux terminaux appartenant à la même identité ne produisent pas deux voix.
+`citizenId` est la clé électorale permanente. Le pseudo reste un libellé humain, mais l'unicité du vote repose sur `NC-CIT-XXXX`. Plusieurs terminaux rattachés au même citoyen ne produisent donc qu'une seule voix.
 
 Le ministre n'est pas attribué via un simple changement de rôle. Le serveur exige le workflow gouvernemental : nomination directe admissible ou résultat d'un scrutin valide.
+
+## Registre civil
+
+`state.national.citizens` constitue la référence des identités nationales.
+
+```text
+NC-CIT-0001
+  |
+  +-- identity / displayName
+  +-- status
+  +-- seal
+  +-- history[]
+  |
+  +<-- CLIENT.citizenId
+```
+
+Un changement de statut vers résident, suspendu ou décédé retire les fonctions ordinaires des terminaux liés. La Présidence et les portefeuilles ministériels doivent être libérés avant qu'une identité titulaire puisse perdre sa citoyenneté.
+
+## Justice nationale
+
+Les dossiers nationaux sont entièrement séparés de `state.cases` international :
+
+```text
+national.cases[NC-CASE]
+   |
+   +-- facts[] / evidence[]
+   +-- citedArticles[] -> NC-ART
+   +-- hearings[]
+   +-- orders[]
+   +-- judgments[]
+   |      +-- citedArticleVersions[]
+   +-- appeals[]
+   +-- timeline[]
+```
+
+Le contrôle de visibilité est appliqué côté serveur. Les dossiers scellés ne sont pas simplement cachés par l'interface : ils ne sont pas renvoyés aux rôles qui n'y ont pas accès.
+
+Le compte technique admin ne confère pas ses pouvoirs judiciaires au rôle politique présidentiel une fois ce terminal enregistré comme Président.
+
+## Sessions nationales
+
+Les sessions nationales disposent de leur propre registre et ne réutilisent pas les `SESSION-...` UNS.
+
+```text
+NC-SESSION
+   |
+   +-- agenda[] -> NC-ART / NC-BILL / NC-ELECT / NC-DEC
+   |               NC-CASE / MIN / NC-CIT / custom
+   +-- attendance[NC-CIT]
+   +-- minutes
+   +-- conclusions
+   +-- seals
+```
+
+Les présences sont indexées par citoyen permanent. L'ordre du jour devient immuable à l'ouverture, sauf évolution de l'état de chaque point pendant la séance.
 
 ## Corpus national
 
@@ -134,7 +193,10 @@ Le serveur vérifie le portefeuille du ministre avant publication d'un décret m
 - Projet de loi national : `NC-BILL-AAAA-0001`
 - Scrutin ministériel : `NC-ELECT-AAAA-0001`
 - Décret : `NC-DEC-AAAA-0001`
-- Dossier : `CASE-AAAA-0001`
+- Citoyen : `NC-CIT-0001`
+- Dossier national : `NC-CASE-AAAA-0001`
+- Session nationale : `NC-SESSION-AAAA-0001`
+- Dossier international : `CASE-AAAA-0001`
 - Terminal : `CLIENT-<computerId>-<suffixe>`
 
 ## Rôles
