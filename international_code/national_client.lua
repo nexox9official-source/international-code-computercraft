@@ -2104,6 +2104,392 @@ local function administrationScreen(info)
   end
 end
 
+
+local function money(v,unit)
+  return tostring(tonumber(v) or 0).." "..tostring(unit or "UB")
+end
+
+local function budgetDetails(id,info)
+  while true do
+    local b,err=rpc("NC_BUDGET_GET",{id=id})
+    if not b then message("BUDGET",err,palette.bad);return end
+    info=rpc("NC_INFO",{}) or info or {}
+    local financeManager=(info.nationalRole=="admin" or info.nationalRole=="president" or
+      (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
+    local voteManager=(info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council")
+    local president=(info.nationalRole=="admin" or info.nationalRole=="president")
+    local unit=(rpc("NC_TREASURY_DASHBOARD",{}) or {}).unit or "UB"
+
+    local actions={{text="Lire le budget complet",id="read"}}
+    if financeManager and b.status=="draft" then
+      actions[#actions+1]={text="Modifier les credits par ministere",id="alloc"}
+      actions[#actions+1]={text="Ouvrir le vote du Conseil",id="open_vote"}
+    elseif b.status=="voting" then
+      actions[#actions+1]={text="Voter sur le budget",id="vote"}
+      if voteManager then actions[#actions+1]={text="Clore le vote",id="close_vote"} end
+    elseif b.status=="adopted" and president then
+      actions[#actions+1]={text="Promulguer le budget",id="enact"}
+    end
+
+    local a=menu(b.id.." - "..b.title,actions,
+      tostring(b.fiscalYear).." / "..b.status.." / total "..money(b.totalUB,unit))
+    if not a then return end
+
+    if a.id=="read" then
+      local alloc={}
+      for code,amount in pairs(b.allocations or {}) do
+        local ex=(b.execution or {})[code] or {}
+        alloc[#alloc+1]=code.." : "..money(amount,unit)..
+          " / engage "..money(ex.committedUB,unit)..
+          " / paye "..money(ex.spentUB,unit)..
+          " / dispo "..money(ex.availableUB,unit)
+      end
+      table.sort(alloc)
+      local t=b.tally or {}
+      textPage(b.id,{
+        {label="Exercice",text=tostring(b.fiscalYear or "")},
+        {label="Statut",text=b.status or ""},
+        {label="Titre",text=b.title or ""},
+        {label="Recettes attendues",text=money(b.expectedRevenueUB,unit)},
+        {label="Reserve nationale",text=money(b.reserveUB,unit)},
+        {label="Credits ministeriels",text=#alloc>0 and table.concat(alloc,"\n") or "Aucun"},
+        {label="Vote",text="Pour "..tostring(t.yes or 0).." / Contre "..tostring(t.no or 0)..
+          " / Abstention "..tostring(t.abstain or 0).." / participation "..tostring(t.participation or 0).."/"..tostring(t.eligible or 0)},
+        {label="Sceaux",text=(b.seal or "-").."\n"..(b.voteOpenSeal or "-").."\n"..(b.voteSeal or "-").."\n"..(b.enactmentSeal or "-")},
+        {label="Journal officiel",text=b.gazetteId or "-"},
+        {label="Notes",text=b.notes or "-"}
+      })
+    elseif a.id=="alloc" then
+      local ministries=rpc("NC_MINISTRY_LIST",{}) or {}
+      local items={}
+      for _,m in ipairs(ministries) do
+        items[#items+1]={text=m.code.." "..m.name.." / actuel "..money((b.allocations or {})[m.code],unit),m=m}
+      end
+      local x=menu("CREDITS MINISTERIELS",items,#items.." ministere(s)")
+      if x then
+        local amount=tonumber(prompt("Nouveau credit "..unit,tostring((b.allocations or {})[x.m.code] or 0)))
+        local out,e=rpc("NC_BUDGET_SET_ALLOCATION",{id=b.id,ministryCode=x.m.code,amountUB=amount})
+        message("BUDGET",out and "Credit mis a jour." or e,out and palette.accent or palette.bad)
+      end
+    elseif a.id=="open_vote" then
+      local out,e=rpc("NC_BUDGET_OPEN_VOTE",{id=b.id})
+      message("BUDGET",out and "Vote budgetaire ouvert." or e,out and palette.accent or palette.bad)
+    elseif a.id=="vote" then
+      local v=menu("VOTE BUDGETAIRE",{
+        {text="POUR",v="yes"},{text="CONTRE",v="no"},{text="ABSTENTION",v="abstain"}
+      })
+      if v then
+        local out,e=rpc("NC_BUDGET_VOTE",{id=b.id,choice=v.v})
+        message("VOTE",out and "Vote enregistre." or e,out and palette.accent or palette.bad)
+      end
+    elseif a.id=="close_vote" then
+      local out,e=rpc("NC_BUDGET_CLOSE_VOTE",{id=b.id})
+      message("BUDGET",out and ("Resultat: "..tostring(out.result or out.status)) or e,
+        out and ((out.status=="adopted") and palette.accent or palette.warn) or palette.bad)
+    elseif a.id=="enact" then
+      local out,e=rpc("NC_BUDGET_ENACT",{id=b.id})
+      message("BUDGET",out and ("Budget promulgue / "..tostring(out.enactmentSeal)) or e,out and palette.accent or palette.bad)
+    end
+  end
+end
+
+local function budgetsScreen(info)
+  while true do
+    info=rpc("NC_INFO",{}) or info or {}
+    local rows,err=rpc("NC_BUDGET_LIST",{})
+    if not rows then message("BUDGETS",err,palette.bad);return end
+    local canCreate=(info.nationalRole=="admin" or info.nationalRole=="president" or
+      (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
+    local items={}
+    if canCreate then items[#items+1]={text="[+] Preparer un nouveau budget",id="new"} end
+    for _,b in ipairs(rows) do
+      items[#items+1]={text=b.id.." ["..b.status.."] exercice "..tostring(b.fiscalYear).." / "..b.title,budget=b}
+    end
+    local p=menu("BUDGETS NATIONAUX",items,#rows.." budget(s)")
+    if not p then return end
+    if p.id=="new" then
+      local fiscal=prompt("Exercice budgetaire",os.date and os.date("%Y") or "")
+      local title=prompt("Titre","Budget national "..fiscal)
+      local revenue=tonumber(prompt("Recettes attendues (UB)","0"))
+      local reserve=tonumber(prompt("Reserve nationale (UB)","0"))
+      local notes=multi("ORIENTATIONS BUDGETAIRES","")
+      local out,e=rpc("NC_BUDGET_CREATE",{fiscalYear=fiscal,title=title,expectedRevenueUB=revenue,reserveUB=reserve,notes=notes})
+      message("BUDGET",out and ("Cree: "..out.id) or e,out and palette.accent or palette.bad)
+    elseif p.budget then budgetDetails(p.budget.id,info) end
+  end
+end
+
+local function revenueDetails(id)
+  local rows=rpc("NC_REVENUE_LIST",{query=id}) or {}
+  local row=nil
+  for _,x in ipairs(rows) do if x.id==id then row=x break end end
+  if not row then message("RECETTE","Recette introuvable.",palette.bad);return end
+  textPage(row.id,{
+    {label="Nature",text=row.kind or ""},{label="Titre",text=row.title or ""},
+    {label="Montant",text=money(row.amountUB,"UB")},{label="Source",text=row.source or "-"},
+    {label="Base legale",text=row.legalBasis or "-"},{label="Date",text=row.recordedAt or ""},
+    {label="Enregistre par",text=row.recordedBy or ""},{label="Notes",text=row.notes or "-"},
+    {label="Sceau",text=row.seal or "-"}
+  })
+end
+
+local function revenuesScreen(info)
+  local query=""
+  while true do
+    info=rpc("NC_INFO",{}) or info or {}
+    local rows,err=rpc("NC_REVENUE_LIST",{query=query})
+    if not rows then message("RECETTES",err,palette.bad);return end
+    local canCreate=(info.nationalRole=="admin" or info.nationalRole=="president" or
+      (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
+    local items={}
+    if canCreate then items[#items+1]={text="[+] Enregistrer une recette",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    for _,r in ipairs(rows) do items[#items+1]={text=r.id.." +"..money(r.amountUB,"UB").." / "..r.title,revenue=r} end
+    local p=menu("RECETTES / TRESORERIE",items,#rows.." recette(s)")
+    if not p then return end
+    if p.id=="new" then
+      local k=menu("NATURE DE RECETTE",{
+        {text="Solde initial",v="opening_balance"},{text="Impot / taxe",v="tax"},
+        {text="Douanes",v="customs"},{text="Amende",v="fine"},{text="Frais / redevance",v="fee"},
+        {text="Dividende public",v="dividend"},{text="Subvention / aide",v="grant"},{text="Autre",v="other"}
+      })
+      if k then
+        local title=prompt("Titre de la recette")
+        local amount=tonumber(prompt("Montant (UB)","0"))
+        local source=prompt("Source / payeur")
+        local legalBasis=prompt("Base legale NC-ART-... (si requise)")
+        local notes=multi("NOTES DE TRESORERIE","")
+        local out,e=rpc("NC_REVENUE_RECORD",{kind=k.v,title=title,amountUB=amount,source=source,legalBasis=legalBasis,notes=notes})
+        message("RECETTE",out and ("Enregistree: "..out.id) or e,out and palette.accent or palette.bad)
+      end
+    elseif p.id=="search" then query=prompt("Recherche",query)
+    elseif p.revenue then revenueDetails(p.revenue.id) end
+  end
+end
+
+local function expenseDetails(id,info)
+  while true do
+    local e,err=rpc("NC_EXPENSE_GET",{id=id})
+    if not e then message("DEPENSE",err,palette.bad);return end
+    info=rpc("NC_INFO",{}) or info or {}
+    local finance=(info.nationalRole=="admin" or info.nationalRole=="president" or
+      (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
+    local president=(info.nationalRole=="admin" or info.nationalRole=="president")
+    local actions={{text="Lire la demande de depense",id="read"}}
+    if e.status=="requested" and finance then
+      actions[#actions+1]={text="Valider par les Finances",id="finance_yes"}
+      actions[#actions+1]={text="Rejeter par les Finances",id="finance_no"}
+    elseif e.status=="finance_approved" and president then
+      actions[#actions+1]={text="Autoriser par la Presidence",id="pres_yes"}
+      actions[#actions+1]={text="Refuser par la Presidence",id="pres_no"}
+    elseif e.status=="president_approved" and finance then
+      actions[#actions+1]={text="Enregistrer le paiement",id="pay"}
+    end
+    local a=menu(e.id.." - "..e.title,actions,
+      e.ministryCode.." / "..e.status.." / "..money(e.amountUB,"UB"))
+    if not a then return end
+    if a.id=="read" then
+      textPage(e.id,{
+        {label="Budget",text=e.budgetId or ""},{label="Ministere",text=e.ministryCode or ""},
+        {label="Montant",text=money(e.amountUB,"UB")},{label="Objet",text=e.purpose or ""},
+        {label="Base legale",text=e.legalBasis or "-"},{label="Prestataire",text=(e.vendorName or "-").." / "..(e.vendorId or "-")},
+        {label="Controle renforce",text=e.requiresPresident and "Oui - validation presidentielle obligatoire" or "Non"},
+        {label="Statut",text=e.status or ""},{label="Demandeur",text=e.requestedBy or ""},
+        {label="Contrat",text=e.contractId or "-"},
+        {label="Sceaux",text=(e.requestSeal or "-").."\n"..(e.financeSeal or "-").."\n"..(e.presidentSeal or "-").."\n"..(e.paymentSeal or e.decisionSeal or "-")}
+      })
+    elseif a.id=="finance_yes" then
+      local out,er=rpc("NC_EXPENSE_FINANCE_DECIDE",{id=e.id,approve=true})
+      message("DEPENSE",out and ("Validation: "..out.status) or er,out and palette.accent or palette.bad)
+    elseif a.id=="finance_no" then
+      local reason=multi("MOTIF DU REJET","")
+      local out,er=rpc("NC_EXPENSE_FINANCE_DECIDE",{id=e.id,approve=false,reason=reason})
+      message("DEPENSE",out and "Depense rejetee." or er,out and palette.warn or palette.bad)
+    elseif a.id=="pres_yes" then
+      local out,er=rpc("NC_EXPENSE_PRESIDENT_DECIDE",{id=e.id,approve=true})
+      message("DEPENSE",out and "Autorisation presidentielle accordee." or er,out and palette.accent or palette.bad)
+    elseif a.id=="pres_no" then
+      local reason=multi("MOTIF DU REFUS PRESIDENTIEL","")
+      local out,er=rpc("NC_EXPENSE_PRESIDENT_DECIDE",{id=e.id,approve=false,reason=reason})
+      message("DEPENSE",out and "Depense refusee." or er,out and palette.warn or palette.bad)
+    elseif a.id=="pay" then
+      local ref=prompt("Reference de paiement / note")
+      local out,er=rpc("NC_EXPENSE_PAY",{id=e.id,paymentReference=ref})
+      message("DEPENSE",out and ("Paiement enregistre / "..tostring(out.paymentSeal)) or er,out and palette.accent or palette.bad)
+    end
+  end
+end
+
+local function expensesScreen(info)
+  local query,status="",""
+  while true do
+    info=rpc("NC_INFO",{}) or info or {}
+    local rows,err=rpc("NC_EXPENSE_LIST",{query=query,status=status})
+    if not rows then message("DEPENSES",err,palette.bad);return end
+    local canRequest=(info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="minister")
+    local items={}
+    if canRequest then items[#items+1]={text="[+] Nouvelle demande de depense",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
+    for _,e in ipairs(rows) do items[#items+1]={text=e.id.." ["..e.status.."] "..e.ministryCode.." / "..money(e.amountUB,"UB").." / "..e.title,expense=e} end
+    local p=menu("DEPENSES PUBLIQUES",items,#rows.." depense(s)")
+    if not p then return end
+    if p.id=="new" then
+      local budgets=rpc("NC_BUDGET_LIST",{status="enacted"}) or {}
+      local bi={};for _,b in ipairs(budgets) do bi[#bi+1]={text=b.id.." exercice "..b.fiscalYear.." / "..b.title,b=b} end
+      local b=menu("BUDGET A IMPUTER",bi,#bi.." budget(s) actif(s)")
+      if b then
+        local ministryCode=info.nationalRole=="minister" and info.ministryCode or ""
+        if ministryCode=="" then
+          local ms=rpc("NC_MINISTRY_LIST",{}) or {}
+          local mi={};for _,m in ipairs(ms) do mi[#mi+1]={text=m.code.." "..m.name,m=m} end
+          local m=menu("MINISTERE DEPENSIER",mi);if not m then return end;ministryCode=m.m.code
+        end
+        local title=prompt("Titre de la depense")
+        local amount=tonumber(prompt("Montant (UB)","0"))
+        local legalBasis=prompt("Base legale NC-ART-... (optionnel)")
+        local purpose=multi("OBJET / JUSTIFICATION DE LA DEPENSE","")
+        local vendorType=menu("PRESTATAIRE",{{text="Organisation enregistree",v="organization"},{text="Autre / a definir",v="other"}})
+        local vendorId,vendorName="",""
+        if vendorType and vendorType.v=="organization" then
+          local orgs=rpc("NC_ORG_LIST",{status="active"}) or {}
+          local oi={};for _,o in ipairs(orgs) do oi[#oi+1]={text=o.id.." "..o.name,o=o} end
+          local o=menu("PRESTATAIRE",oi,#oi.." organisation(s)")
+          if o then vendorId=o.o.id;vendorName=o.o.name end
+        else vendorName=prompt("Nom du prestataire / beneficiaire") end
+        local out,e=rpc("NC_EXPENSE_REQUEST",{
+          budgetId=b.b.id,ministryCode=ministryCode,title=title,amountUB=amount,
+          legalBasis=legalBasis,purpose=purpose,vendorType=vendorType and vendorType.v or "other",
+          vendorId=vendorId,vendorName=vendorName
+        })
+        message("DEPENSE",out and ("Demande: "..out.id..(out.requiresPresident and " / CONTROLE PRESIDENTIEL" or "")) or e,out and palette.accent or palette.bad)
+      end
+    elseif p.id=="search" then query=prompt("Recherche",query)
+    elseif p.id=="status" then
+      local st=menu("STATUT",{
+        {text="Tous",v=""},{text="Demandees",v="requested"},{text="Validees finances",v="finance_approved"},
+        {text="Autorisees",v="president_approved"},{text="Payees",v="paid"},{text="Rejetees",v="rejected"}
+      })
+      if st then status=st.v end
+    elseif p.expense then expenseDetails(p.expense.id,info) end
+  end
+end
+
+local function contractDetails(id,info)
+  while true do
+    local row,err=rpc("NC_CONTRACT_GET",{id=id})
+    if not row then message("MARCHE PUBLIC",err,palette.bad);return end
+    info=rpc("NC_INFO",{}) or info or {}
+    local finance=(info.nationalRole=="admin" or info.nationalRole=="president" or
+      (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
+    local manager=finance or (info.nationalRole=="minister" and info.ministryCode==row.ministryCode)
+    local actions={{text="Lire le marche",id="read"}}
+    if row.status=="draft" and finance then actions[#actions+1]={text="Attribuer officiellement le marche",id="award"}
+    elseif (row.status=="awarded" or row.status=="active") and manager then actions[#actions+1]={text="Changer le statut d'execution",id="status"} end
+    local a=menu(row.id.." - "..row.title,actions,row.ministryCode.." / "..row.status.." / "..money(row.amountUB,"UB"))
+    if not a then return end
+    if a.id=="read" then
+      textPage(row.id,{
+        {label="Ministere",text=row.ministryCode or ""},{label="Prestataire",text=(row.vendorName or "").." / "..(row.vendorOrgId or "")},
+        {label="Depense associee",text=row.expenseId or ""},{label="Montant",text=money(row.amountUB,"UB")},
+        {label="Objet",text=row.purpose or ""},{label="Procedure",text=row.procurementMethod or ""},
+        {label="Justification",text=row.justification or "-"},{label="Statut",text=row.status or ""},
+        {label="Sceaux",text=(row.draftSeal or "-").."\n"..(row.awardSeal or "-").."\n"..(row.closeSeal or "-")},
+        {label="Journal officiel",text=row.gazetteId or "-"}
+      })
+    elseif a.id=="award" then
+      local out,e=rpc("NC_CONTRACT_AWARD",{id=row.id})
+      message("MARCHE PUBLIC",out and ("Attribue / "..tostring(out.awardSeal)) or e,out and palette.accent or palette.bad)
+    elseif a.id=="status" then
+      local opts={}
+      if row.status=="awarded" then opts={{text="Demarrer l'execution",v="active"},{text="Resilier",v="terminated"}}
+      else opts={{text="Achever le marche",v="completed"},{text="Resilier",v="terminated"}} end
+      local st=menu("STATUT DU MARCHE",opts)
+      if st then
+        local reason=prompt("Note / motif")
+        local out,e=rpc("NC_CONTRACT_SET_STATUS",{id=row.id,status=st.v,reason=reason})
+        message("MARCHE PUBLIC",out and ("Statut: "..out.status) or e,out and palette.accent or palette.bad)
+      end
+    end
+  end
+end
+
+local function contractsScreen(info)
+  local query=""
+  while true do
+    info=rpc("NC_INFO",{}) or info or {}
+    local rows,err=rpc("NC_CONTRACT_LIST",{query=query})
+    if not rows then message("MARCHES PUBLICS",err,palette.bad);return end
+    local canCreate=(info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="minister")
+    local items={}
+    if canCreate then items[#items+1]={text="[+] Preparer un marche public",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    for _,x in ipairs(rows) do items[#items+1]={text=x.id.." ["..x.status.."] "..x.ministryCode.." / "..x.vendorName.." / "..x.title,contract=x} end
+    local p=menu("MARCHES PUBLICS",items,#rows.." marche(s)")
+    if not p then return end
+    if p.id=="new" then
+      local ministryCode=info.nationalRole=="minister" and info.ministryCode or ""
+      if ministryCode=="" then
+        local ms=rpc("NC_MINISTRY_LIST",{}) or {}
+        local mi={};for _,m in ipairs(ms) do mi[#mi+1]={text=m.code.." "..m.name,m=m} end
+        local m=menu("MINISTERE",mi);if not m then return end;ministryCode=m.m.code
+      end
+      local expenses=rpc("NC_EXPENSE_LIST",{ministryCode=ministryCode}) or {}
+      local ei={}
+      for _,e in ipairs(expenses) do
+        if e.status=="finance_approved" or e.status=="president_approved" then
+          ei[#ei+1]={text=e.id.." ["..e.status.."] "..money(e.amountUB,"UB").." / "..e.title,e=e}
+        end
+      end
+      local ex=menu("DEPENSE AUTORISEE",ei,#ei.." depense(s)")
+      if ex then
+        local orgs=rpc("NC_ORG_LIST",{status="active"}) or {}
+        local oi={};for _,o in ipairs(orgs) do oi[#oi+1]={text=o.id.." "..o.name,o=o} end
+        local org=menu("PRESTATAIRE",oi,#oi.." organisation(s)")
+        if org then
+          local method=menu("PROCEDURE",{
+            {text="Appel d'offres ouvert",v="open_tender"},{text="Appel restreint",v="restricted_tender"},
+            {text="Attribution directe",v="direct"},{text="Urgence",v="emergency"}
+          })
+          if method then
+            local title=prompt("Titre du marche")
+            local purpose=multi("OBJET DU MARCHE","")
+            local justification=(method.v=="direct" or method.v=="emergency") and multi("JUSTIFICATION DE LA PROCEDURE","") or ""
+            local out,e=rpc("NC_CONTRACT_CREATE",{
+              ministryCode=ministryCode,expenseId=ex.e.id,vendorOrgId=org.o.id,
+              procurementMethod=method.v,title=title,purpose=purpose,justification=justification
+            })
+            message("MARCHE PUBLIC",out and ("Prepare: "..out.id) or e,out and palette.accent or palette.bad)
+          end
+        end
+      end
+    elseif p.id=="search" then query=prompt("Recherche",query)
+    elseif p.contract then contractDetails(p.contract.id,info) end
+  end
+end
+
+local function financeScreen(info)
+  while true do
+    info=rpc("NC_INFO",{}) or info or {}
+    local d,err=rpc("NC_TREASURY_DASHBOARD",{})
+    if not d then message("FINANCES",err,palette.bad);return end
+    local items={
+      {text="BUDGETS / CREDITS MINISTERIELS",id="budgets"},
+      {text="RECETTES / TRESORERIE",id="revenues"},
+      {text="DEPENSES / ENGAGEMENTS / PAIEMENTS",id="expenses"},
+      {text="MARCHES PUBLICS / PRESTATAIRES",id="contracts"}
+    }
+    local p=menu("FINANCES PUBLIQUES",items,
+      "Solde "..money(d.balanceUB,d.unit).." / recettes "..money(d.revenueUB,d.unit)..
+      " / depenses "..money(d.spentUB,d.unit).." / budget "..tostring(d.currentBudgetId or "aucun"))
+    if not p then return end
+    if p.id=="budgets" then budgetsScreen(info)
+    elseif p.id=="revenues" then revenuesScreen(info)
+    elseif p.id=="expenses" then expensesScreen(info)
+    elseif p.id=="contracts" then contractsScreen(info) end
+  end
+end
+
 local function nationalNotices(info)
   while true do
     local rows,err=rpc("NC_NOTICE_LIST",{})
@@ -2140,7 +2526,10 @@ local function nationalNotices(info)
       elseif n.objectType=="nc_session" then actions[#actions+1]={text="Ouvrir la session",id="open"}
       elseif n.objectType=="nc_license" then actions[#actions+1]={text="Ouvrir la licence",id="open"}
       elseif n.objectType=="nc_fine" then actions[#actions+1]={text="Ouvrir l'amende",id="open"}
-      elseif n.objectType=="nc_request" then actions[#actions+1]={text="Ouvrir la demande",id="open"} end
+      elseif n.objectType=="nc_request" then actions[#actions+1]={text="Ouvrir la demande",id="open"}
+      elseif n.objectType=="nc_budget" then actions[#actions+1]={text="Ouvrir le budget",id="open"}
+      elseif n.objectType=="nc_expense" then actions[#actions+1]={text="Ouvrir la depense",id="open"}
+      elseif n.objectType=="nc_contract" then actions[#actions+1]={text="Ouvrir le marche public",id="open"} end
       local a=menu(n.title or n.id,actions,(n.severity or "info").." / "..(n.createdAt or ""))
       if a and a.id=="read" then
         textPage(n.id,{
@@ -2161,7 +2550,10 @@ local function nationalNotices(info)
         elseif n.objectType=="nc_session" then sessionDetails(n.objectId,info)
         elseif n.objectType=="nc_license" then licenseDetails(n.objectId,info)
         elseif n.objectType=="nc_fine" then fineDetails(n.objectId,info)
-        elseif n.objectType=="nc_request" then requestDetails(n.objectId,info) end
+        elseif n.objectType=="nc_request" then requestDetails(n.objectId,info)
+        elseif n.objectType=="nc_budget" then budgetDetails(n.objectId,info)
+        elseif n.objectType=="nc_expense" then expenseDetails(n.objectId,info)
+        elseif n.objectType=="nc_contract" then contractDetails(n.objectId,info) end
       end
     end
   end
@@ -2214,13 +2606,15 @@ function C.run()
     info=rpc("NC_INFO",{}) or info
     local subtitle=roleLabel(dash.nationalRole).." / "..tostring(dash.nationalIdentity)..
       (dash.ministryCode and (" / "..dash.ministryCode) or "")..
-      " | "..tostring(dash.activeCitizens or 0).." citoyen(s) / "..dash.activeLaws.." lois / "..tostring(dash.pendingRequests or 0).." demande(s) / "..tostring(dash.openCases or 0).." dossier(s) / "..tostring(dash.unreadNotices or 0).." notif."
+      " | "..tostring(dash.activeCitizens or 0).." citoyen(s) / solde "..money(dash.treasuryBalanceUB,dash.treasuryUnit)..
+      " / "..tostring(dash.pendingRequests or 0).." demande(s) / "..tostring(dash.openCases or 0).." dossier(s) / "..tostring(dash.unreadNotices or 0).." notif."
 
     local items={
       {text=(dash.unreadNotices or 0)>0 and ("[!] NOTIFICATIONS NATIONALES ("..dash.unreadNotices..")") or "NOTIFICATIONS NATIONALES",id="notices"},
       {text="CODE NATIONAL / CATEGORIES / RECHERCHE",id="code"},
       {text="REGISTRE CIVIL / CITOYENS / IDENTITES",id="citizens"},
       {text="ADMINISTRATION / ORGANISATIONS / LICENCES / AMENDES",id="adminservices"},
+      {text="FINANCES PUBLIQUES / BUDGET / TRESORERIE",id="finance"},
       {text="GOUVERNEMENT / MINISTERES / FONCTIONS",id="gov"},
       {text="CALENDRIER / SESSIONS / ORDRE DU JOUR",id="sessions"},
       {text="LEGISLATION / PROJETS / VOTES",id="bills"},
@@ -2241,6 +2635,7 @@ function C.run()
     elseif p.id=="code" then codeScreen()
     elseif p.id=="citizens" then citizensScreen(info)
     elseif p.id=="adminservices" then administrationScreen(info)
+    elseif p.id=="finance" then financeScreen(info)
     elseif p.id=="gov" then governmentScreen(info)
     elseif p.id=="sessions" then sessionsScreen(info)
     elseif p.id=="bills" then billsScreen()
