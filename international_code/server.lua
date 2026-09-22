@@ -484,7 +484,9 @@ local function sessionAgendaReference(state,kind,ref)
     local x=state.cases[ref]
     return x and x.title or nil
   elseif kind=="law" then
-    local law=state.laws[normalizeArticleRef(ref)]
+    local n=tonumber(ref:match("(%d+)$"))
+    local lawRef=n and string.format("UNS-ART-%03d",n) or ref
+    local law=state.laws[lawRef]
     return law and law.title or nil
   elseif kind=="enforcement" then
     local x=state.enforcements[ref]
