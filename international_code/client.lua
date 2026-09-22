@@ -629,6 +629,123 @@ referenceBrowser=function(opts)
   end
 end
 
+
+lawBasketBrowser=function(initial)
+  local selected={}
+  local order={}
+
+  local function addLaw(law)
+    if not law or not law.ref then return end
+    if not selected[law.ref] then
+      selected[law.ref]={ref=law.ref,title=law.title or law.ref,status=law.status,book=law.book}
+      order[#order+1]=law.ref
+    else
+      selected[law.ref].title=law.title or selected[law.ref].title
+      selected[law.ref].status=law.status or selected[law.ref].status
+      selected[law.ref].book=law.book or selected[law.ref].book
+    end
+  end
+
+  for _,law in ipairs(initial or {}) do
+    if type(law)=="table" then
+      addLaw(law)
+    elseif type(law)=="string" then
+      local full=rpc("LAW_GET",{ref=law})
+      if full then addLaw(full) end
+    end
+  end
+
+  local function selectedList()
+    local out={}
+    for _,ref in ipairs(order) do
+      if selected[ref] then out[#out+1]=selected[ref] end
+    end
+    return out
+  end
+
+  local function toggleList(title,laws)
+    while true do
+      local items={}
+      for _,law in ipairs(laws or {}) do
+        items[#items+1]={
+          text=(selected[law.ref] and "[X] " or "[ ] ")..law.ref.."  "..law.title,
+          law=law
+        }
+      end
+      local p=menu(title,items,"Entree: ajouter/retirer ou lire. Retour: panier.")
+      if not p then return end
+      local law=p.law
+      local a=menu(law.ref.." - "..law.title,{
+        {text=selected[law.ref] and "Retirer de la selection" or "Ajouter a la selection",id="toggle"},
+        {text="Lire l'article",id="read"}
+      },(selected[law.ref] and "DEJA SELECTIONNE" or "NON SELECTIONNE"))
+      if a and a.id=="toggle" then
+        if selected[law.ref] then
+          selected[law.ref]=nil
+        else
+          addLaw(law)
+        end
+      elseif a and a.id=="read" then
+        lawQuickView(law)
+      end
+    end
+  end
+
+  while true do
+    local current=selectedList()
+    local items={
+      {text="[+] Ajouter depuis les Livres / categories",id="books"},
+      {text="[?] Ajouter depuis une recherche",id="search"},
+      {text="[V] Voir / retirer la selection ("..#current..")",id="selected"},
+      {text="[OK] Valider la selection ("..#current..")",id="done"},
+      {text="[X] Vider le panier",id="clear"}
+    }
+
+    local p=menu("PANIER JURIDIQUE",items,#current.." article(s) selectionne(s)")
+    if not p then return current end
+
+    if p.id=="books" then
+      local books,err=rpc("LAW_BOOKS",{})
+      if not books then
+        message("CODE",err,palette.bad)
+      else
+        local bookItems={}
+        for _,b in ipairs(books) do
+          bookItems[#bookItems+1]={text=b.name.." ("..tostring(b.count or 0)..")",book=b}
+        end
+        local bp=menu("CHOISIR UN LIVRE",bookItems,"Ouvrez un Livre puis cochez plusieurs articles.")
+        if bp and bp.book then
+          local laws,e=rpc("LAW_LIST",{book=bp.book.name})
+          if laws then toggleList(bp.book.name,laws) else message("CODE",e,palette.bad) end
+        end
+      end
+
+    elseif p.id=="search" then
+      local q=prompt("Recherche article / mot / numero")
+      if q~="" then
+        local laws,e=rpc("LAW_LIST",{query=q})
+        if laws then toggleList("RESULTATS: "..q,laws) else message("RECHERCHE",e,palette.bad) end
+      end
+
+    elseif p.id=="selected" then
+      local currentLaws=selectedList()
+      if #currentLaws==0 then
+        message("PANIER","Aucun article selectionne.",palette.warn)
+      else
+        toggleList("SELECTION ACTUELLE",currentLaws)
+      end
+
+    elseif p.id=="clear" then
+      selected={}
+      order={}
+
+    elseif p.id=="done" then
+      return selectedList()
+    end
+  end
+end
+
+
 local roleAllows={
   lawWrite={writer=true,admin=true},
   caseWrite={clerk=true,judge=true,admin=true},
