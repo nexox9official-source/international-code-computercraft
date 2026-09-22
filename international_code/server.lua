@@ -1170,6 +1170,13 @@ local function handleAction(state, actor, action, p)
     bill.closedAt=nil
     bill.votingOpenedAt=common.now()
     bill.updatedAt=common.now()
+    for _,stateId in ipairs(bill.eligibleStateIds) do
+      pushNotice(state,{
+        title="Vote ouvert: "..bill.id,
+        body=bill.title.." / tour "..tostring(bill.votingRound).." / votre Etat doit voter.",
+        severity="action",objectType="bill",objectId=bill.id,targetStateId=stateId
+      })
+    end
     mutate(state,actor,"BILL_OPEN_VOTE",bill.id,bill.title.." / round "..bill.votingRound.." / electorate "..#bill.eligibleStateIds)
     local out=common.deepcopy(bill); out.tally=billTally(state,bill); return out
   end
@@ -1214,6 +1221,14 @@ local function handleAction(state, actor, action, p)
     bill.closedBy=actor.label
     bill.resultSeal=officialSeal("UNS-VOTE",{bill.id,bill.votingRound,bill.result,tally,bill.eligibleStateIds,bill.votes,bill.closedAt})
     bill.updatedAt=common.now()
+    for _,stateId in ipairs(bill.eligibleStateIds or {}) do
+      pushNotice(state,{
+        title="Resultat du scrutin: "..bill.id,
+        body=bill.title.." / "..string.upper(tostring(bill.result)).." / POUR "..tally.yes.." CONTRE "..tally.no.." ABST "..tally.abstain,
+        severity=bill.result=="adopted" and "success" or "info",
+        objectType="bill",objectId=bill.id,targetStateId=stateId
+      })
+    end
     mutate(state,actor,"BILL_CLOSE",bill.id,bill.result.." / yes="..tally.yes.." no="..tally.no.." abst="..tally.abstain)
     local out=common.deepcopy(bill); out.tally=tally; return out
   end
@@ -1289,6 +1304,11 @@ local function handleAction(state, actor, action, p)
     bill.enactedBy=actor.label
     bill.enactmentSeal=officialSeal("UNS-PROM",{bill.id,enactedRefs,bill.enactedAt,bill.enactedBy,bill.resultSeal})
     bill.updatedAt=common.now()
+    pushNotice(state,{
+      title="Promulgation: "..bill.id,
+      body=bill.title.." / "..table.concat(enactedRefs,", "),
+      severity="success",objectType="bill",objectId=bill.id,global=true
+    })
     mutate(state,actor,"BILL_ENACT",bill.id,table.concat(enactedRefs,","))
     local out=common.deepcopy(bill); out.tally=billTally(state,bill); return out
   end
@@ -1391,6 +1411,13 @@ local function handleAction(state, actor, action, p)
     treaty.signingOpenedAt=common.now()
     treaty.signingOpenedBy=actor.label
     treaty.updatedAt=common.now()
+    for _,stateId in ipairs(treaty.parties or {}) do
+      pushNotice(state,{
+        title="Signature requise: "..treaty.id,
+        body=treaty.title.." / texte fige v"..tostring(treaty.version)..".",
+        severity="action",objectType="treaty",objectId=treaty.id,targetStateId=stateId
+      })
+    end
     mutate(state,actor,"TREATY_OPEN_SIGNATURE",treaty.id,treaty.signatureTextSeal)
     local out=common.deepcopy(treaty);out.signatureStatus=treatySignatureStatus(state,treaty);return out
   end
@@ -1422,6 +1449,12 @@ local function handleAction(state, actor, action, p)
     if sigStatus.complete then
       treaty.stage="ready"
       treaty.readyAt=common.now()
+      pushNotice(state,{
+        title="Traite pret a entrer en vigueur",
+        body=treaty.id.." / "..treaty.title.." / toutes les signatures sont reunies.",
+        severity="success",objectType="treaty",objectId=treaty.id,
+        roles={writer=true,admin=true}
+      })
     end
     mutate(state,actor,"TREATY_SIGN",treaty.id,st.id)
     local out=common.deepcopy(treaty);out.signatureStatus=sigStatus;return out
@@ -1437,6 +1470,11 @@ local function handleAction(state, actor, action, p)
     treaty.activatedBy=actor.label
     treaty.activationSeal=officialSeal("UNS-TRT",{treaty.id,treaty.version,treaty.signatureTextSeal,treaty.signatures,treaty.effectiveAt})
     treaty.updatedAt=common.now()
+    pushNotice(state,{
+      title="Traite entre en vigueur",
+      body=treaty.id.." / "..treaty.title,
+      severity="success",objectType="treaty",objectId=treaty.id,global=true
+    })
     mutate(state,actor,"TREATY_ACTIVATE",treaty.id,treaty.activationSeal)
     local out=common.deepcopy(treaty);out.signatureStatus=sigStatus;return out
   end
@@ -1730,6 +1768,12 @@ local function handleAction(state, actor, action, p)
     c.hearings[#c.hearings+1]=hearing
     c.updatedAt=common.now()
     caseEvent(c,actor,"HEARING_CREATED","Audience "..hearing.id,hearing.subject.." / "..hearing.scheduledFor)
+    pushNotice(state,{
+      title="Audience programmee: "..c.id,
+      body=hearing.scheduledFor.." / "..hearing.subject.." / "..hearing.location,
+      severity="action",objectType="case",objectId=c.id,
+      roles={clerk=true,judge=true,admin=true}
+    })
     mutate(state,actor,"CASE_ADD_HEARING",c.id,hearing.id.." "..hearing.subject)
     return common.deepcopy(c)
   end
@@ -1811,6 +1855,12 @@ local function handleAction(state, actor, action, p)
     c.status="appeal"
     c.updatedAt=common.now()
     caseEvent(c,actor,"APPEAL_FILED","Appel "..appeal.id,appeal.appellant.." / "..appeal.request)
+    pushNotice(state,{
+      title="Nouvel appel: "..c.id.." / "..appeal.id,
+      body=appeal.appellant.." / "..appeal.request,
+      severity="action",objectType="case",objectId=c.id,
+      roles={judge=true,admin=true}
+    })
     mutate(state,actor,"CASE_FILE_APPEAL",c.id,appeal.id)
     return common.deepcopy(c)
   end
