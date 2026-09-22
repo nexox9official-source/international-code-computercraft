@@ -1,4 +1,4 @@
-# Architecture v0.8
+# Architecture v0.9
 
 ## Topologie
 
@@ -65,6 +65,7 @@ Le serveur central contient désormais quatre ensembles principaux :
 - `bills` : propositions législatives, ratifications, tours de scrutin et votes par État ;
 - `resolutions` : décisions institutionnelles, scrutins et éventuelle exécution automatique ;
 - `sessions` : calendrier, ordres du jour, présences et procès-verbaux institutionnels ;
+- `missions` : mandats internationaux, États participants, statut opérationnel et rapports ;
 - `treaties` : projets de traités, versions, États parties, signatures et entrée en vigueur ;
 - `cases` : dossiers, preuves, audiences, procès-verbaux, ordonnances, appels et jugements ;
 - `enforcements` : sanctions, réparations et suivi de conformité ;
@@ -77,6 +78,25 @@ Les dossiers disposent de trois niveaux de visibilité. `public` est accessible 
 ## Sceaux applicatifs
 
 Les actes sensibles reçoivent un sceau calculé par le serveur à partir de leur contenu et de leurs métadonnées. Ces sceaux servent à détecter visuellement une incohérence RP et à identifier une version imprimée. Ils ne constituent pas une primitive cryptographique de sécurité.
+
+## Missions internationales
+
+Les missions sont séparées des résolutions qui peuvent les justifier. Une résolution constitue la décision institutionnelle ; une mission constitue son exécution opérationnelle éventuelle.
+
+```text
+RES / TREATY / CASE
+        |
+        v
+    MISSION-...
+      |   |
+      |   +--> participatingStates[] -> STATE
+      |
+      +--> reports[] -> UNS-MISREP-...
+```
+
+Le mandat initial reçoit un sceau distinct. Les rapports sont ajoutés sans réécrire les précédents. Les rapports classés `restricted` sont filtrés **côté serveur** : un lecteur public ne reçoit pas leur contenu dans la réponse Rednet.
+
+Un terminal institutionnel ou un délégué d'un État participant peut consulter les informations qui lui sont autorisées. Les missions publiques restent consultables sur Monitor.
 
 ## Sessions et ordre du jour
 
@@ -164,7 +184,6 @@ Un changement de statut ne réécrit jamais l'état antérieur : une nouvelle en
 
 ## Évolution prévue
 
-- missions internationales et observateurs avec mandat, durée et rapports ;
 - table de peines / sanctions paramétrable ;
 - registre de pièces avec empreintes et chaîne de conservation renforcée ;
 - réplication vers un second serveur de secours ;
