@@ -19,6 +19,15 @@
 - selection d'un article par recherche, reference directe ou parcours `categorie -> titre -> chapitre -> article` ;
 - la sauvegarde locale du brouillon reste active pendant la consultation du Code.
 
+### NorthNet / communications officielles
+- nouveau registre de bulletins internes `NC-NET-AAAA-XXXX` ;
+- cycle brouillon -> publication -> archivage, sans modification silencieuse d'un bulletin publie ;
+- audiences `citizens`, `institutions`, `ministry`, `judicial` et `security` ;
+- publication reservee aux autorites habilitees et filtrage serveur des lectures ;
+- notifications envoyees uniquement aux terminaux qui peuvent voir le bulletin ;
+- sceaux de brouillon, publication, archivage et historique verifies par `NC_VERIFY_SEAL` ;
+- bulletins integres a la recherche nationale.
+
 ## 0.19.0
 
 ### Élections nationales
