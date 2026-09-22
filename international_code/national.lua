@@ -376,7 +376,7 @@ end
 
 local function gazetteVisibilityAllowed(state,actor,entry)
   if not actor or not entry then return false end
-  if technicalNationalAdmin and technicalNationalAdmin(actor) then return true end
+  if actor.role=="admin" and (not actor.nationalRole or actor.nationalRole=="admin") then return true end
   local r=nationalRole(state,actor)
   local visibility=entry.visibility or "internal"
   if visibility=="public" or visibility=="internal" then return hasAccess(state,actor) end
