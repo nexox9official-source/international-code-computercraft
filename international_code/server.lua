@@ -946,6 +946,91 @@ local function listEnforcements(state,actor,payload)
   return out
 end
 
+local function situationSnapshot(state,actor,payload)
+  payload=payload or {}
+  local dimension=common.trim(payload.dimension)
+  if dimension=="" then dimension="minecraft:overworld" end
+
+  local incidents={}
+  for _,incident in ipairs(listIncidents(state,{dimension=dimension},actor)) do
+    if incident.status=="open" or incident.status=="investigating" or incident.status=="contained" then
+      incidents[#incidents+1]=incident
+    end
+  end
+
+  local missions={}
+  for _,m in ipairs(listMissions(state,{status="active"},actor)) do
+    local pos=m.position or {}
+    if not pos.dimension or pos.dimension=="" or pos.dimension==dimension then
+      missions[#missions+1]=m
+    end
+  end
+
+  local enforcements={}
+  for _,e in ipairs(listEnforcements(state,actor,{})) do
+    if e.status=="ordered" or e.status=="active" or e.status=="partial" or e.status=="breached" then
+      enforcements[#enforcements+1]=e
+    end
+  end
+
+  local resolutions={}
+  for _,r in pairs(state.resolutions or {}) do
+    if r.stage=="voting" or r.stage=="adopted" then
+      resolutions[#resolutions+1]={
+        id=r.id,title=r.title,stage=r.stage,resolutionType=r.resolutionType,
+        targetStateId=r.targetStateId,votingRound=r.votingRound,tally=billTally(state,r)
+      }
+    end
+  end
+  table.sort(resolutions,function(a,b) return tostring(a.id)>tostring(b.id) end)
+
+  local sessions={}
+  for _,sess in pairs(state.sessions or {}) do
+    if sess.status=="open" or sess.status=="scheduled" then
+      sessions[#sessions+1]={
+        id=sess.id,title=sess.title,status=sess.status,sessionType=sess.sessionType,
+        scheduledFor=sess.scheduledFor,location=sess.location
+      }
+    end
+  end
+  table.sort(sessions,function(a,b)
+    if a.status~=b.status then return a.status=="open" end
+    return tostring(a.scheduledFor or "")<tostring(b.scheduledFor or "")
+  end)
+
+  local points={}
+  for _,incident in ipairs(incidents) do
+    local pos=incident.position or {}
+    if pos.x and pos.z then
+      points[#points+1]={
+        kind="incident",id=incident.id,title=incident.title,
+        x=pos.x,y=pos.y,z=pos.z,radius=pos.radius,
+        dimension=pos.dimension or dimension,severity=incident.severity,status=incident.status
+      }
+    end
+  end
+  for _,m in ipairs(missions) do
+    local pos=m.position or {}
+    if pos.x and pos.z then
+      points[#points+1]={
+        kind="mission",id=m.id,title=m.title,
+        x=pos.x,y=pos.y,z=pos.z,radius=pos.radius,
+        dimension=pos.dimension or dimension,status=m.status
+      }
+    end
+  end
+
+  return {
+    dimension=dimension,generatedAt=common.now(),
+    counts={
+      incidents=#incidents,missions=#missions,enforcements=#enforcements,
+      resolutions=#resolutions,sessions=#sessions
+    },
+    incidents=incidents,missions=missions,enforcements=enforcements,
+    resolutions=resolutions,sessions=sessions,points=points
+  }
+end
+
 local function handleAction(state, actor, action, p)
   p = p or {}
   if action:match("^CASE_") and action~="CASE_LIST" and action~="CASE_GET" and action~="CASE_CREATE" and p.id then
@@ -982,6 +1067,222 @@ local function handleAction(state, actor, action, p)
     end
     saveState(state)
     return {count=count}
+  end
+
+  if action == "SITUATION_GET" then
+    return situationSnapshot(state,actor,p)
+  end
+
+  if action == "INCIDENT_LIST" then
+    return listIncidents(state,p,actor)
+  end
+
+  if action == "INCIDENT_GET" then
+    local incident=state.incidents[common.trim(p.id):upper()]
+    if not incident then return nil,"Incident introuvable." end
+    if not canViewIncident(actor,incident) then return nil,"Acces refuse a cet incident." end
+    return incidentForActor(actor,incident)
+  end
+
+  if action == "INCIDENT_CREATE" then
+    local title=common.trim(p.title)
+    local summary=common.trim(p.summary)
+    if title=="" or summary=="" then return nil,"Titre et resume obligatoires." end
+
+    local validTypes={
+      border=true,ceasefire_violation=true,diplomatic=true,humanitarian=true,
+      armed_clash=true,cyber=true,contamination=true,infrastructure=true,
+      natural_disaster=true,smuggling=true,other=true
+    }
+    local validSeverity={info=true,minor=true,serious=true,critical=true}
+    local incidentType=validTypes[p.incidentType] and p.incidentType or "other"
+    local severity=validSeverity[p.severity] and p.severity or "minor"
+
+    local involved={}
+    local seen={}
+    for _,raw in ipairs(type(p.involvedStates)=="table" and p.involvedStates or {}) do
+      local stateId=common.trim(raw):upper()
+      if state.states[stateId] and not seen[stateId] then
+        seen[stateId]=true
+        involved[#involved+1]=stateId
+      end
+    end
+
+    local reportingStateId=""
+    if actor.role=="delegate" then
+      local st=getClientState(state,actor)
+      if not st then return nil,"Ce terminal delegue n'est rattache a aucun Etat." end
+      reportingStateId=st.id
+      if not seen[st.id] then involved[#involved+1]=st.id;seen[st.id]=true end
+    else
+      reportingStateId=common.trim(p.reportingStateId):upper()
+      if reportingStateId~="" and not state.states[reportingStateId] then return nil,"Etat declarant introuvable." end
+      if reportingStateId~="" and not seen[reportingStateId] then involved[#involved+1]=reportingStateId;seen[reportingStateId]=true end
+    end
+    table.sort(involved)
+
+    local missionId=common.trim(p.missionId):upper()
+    local resolutionId=common.trim(p.resolutionId):upper()
+    local treatyId=common.trim(p.treatyId):upper()
+    local caseId=common.trim(p.caseId):upper()
+    local enforcementId=common.trim(p.enforcementId):upper()
+    if missionId~="" and not state.missions[missionId] then return nil,"Mission liee introuvable." end
+    if resolutionId~="" and not state.resolutions[resolutionId] then return nil,"Resolution liee introuvable." end
+    if treatyId~="" and not state.treaties[treatyId] then return nil,"Traite lie introuvable." end
+    if caseId~="" and not state.cases[caseId] then return nil,"Dossier lie introuvable." end
+    if enforcementId~="" and not state.enforcements[enforcementId] then return nil,"Mesure d'execution liee introuvable." end
+
+    local id=makeIncidentId(state)
+    local incident={
+      id=id,title=title,incidentType=incidentType,severity=severity,
+      status="open",summary=summary,details=common.trim(p.details),
+      area=common.trim(p.area),position=incidentPosition(p,nil),
+      involvedStates=involved,reportingStateId=reportingStateId,
+      missionId=missionId,resolutionId=resolutionId,treatyId=treatyId,
+      caseId=caseId,enforcementId=enforcementId,
+      visibility=p.visibility=="restricted" and "restricted" or "public",
+      reports={},statusHistory={},
+      createdAt=common.now(),createdBy=actor.label,createdRole=actor.role,updatedAt=common.now()
+    }
+    incident.seal=officialSeal("UNS-INC",{
+      incident.id,incident.title,incident.incidentType,incident.severity,
+      incident.summary,incident.details,incident.area,incident.position,
+      incident.involvedStates,incident.reportingStateId,
+      incident.missionId,incident.resolutionId,incident.treatyId,
+      incident.caseId,incident.enforcementId,incident.createdAt,incident.createdBy
+    })
+    state.incidents[id]=incident
+
+    for _,stateId in ipairs(involved) do
+      pushNotice(state,{
+        title="Incident international: "..id,
+        body=title.." / "..string.upper(severity).." / "..summary,
+        severity=severity=="critical" and "critical" or "warning",
+        objectType="incident",objectId=id,targetStateId=stateId
+      })
+    end
+    if severity=="critical" and incident.visibility=="public" then
+      pushNotice(state,{
+        title="Alerte internationale critique: "..id,
+        body=title.." / "..summary,
+        severity="critical",objectType="incident",objectId=id,global=true
+      })
+    end
+
+    mutate(state,actor,"INCIDENT_CREATE",id,title.." / "..incidentType.." / "..severity)
+    return incidentForActor(actor,incident)
+  end
+
+  if action == "INCIDENT_EDIT" then
+    local incident=state.incidents[common.trim(p.id):upper()]
+    if not incident then return nil,"Incident introuvable." end
+    if incident.status=="closed" then return nil,"Un incident clos ne peut plus etre modifie." end
+
+    local validTypes={
+      border=true,ceasefire_violation=true,diplomatic=true,humanitarian=true,
+      armed_clash=true,cyber=true,contamination=true,infrastructure=true,
+      natural_disaster=true,smuggling=true,other=true
+    }
+    local validSeverity={info=true,minor=true,serious=true,critical=true}
+
+    if p.title~=nil and common.trim(p.title)~="" then incident.title=common.trim(p.title) end
+    if p.summary~=nil and common.trim(p.summary)~="" then incident.summary=common.trim(p.summary) end
+    if p.details~=nil then incident.details=common.trim(p.details) end
+    if p.area~=nil then incident.area=common.trim(p.area) end
+    if p.incidentType~=nil and validTypes[p.incidentType] then incident.incidentType=p.incidentType end
+    if p.severity~=nil and validSeverity[p.severity] then incident.severity=p.severity end
+    if p.visibility~=nil then incident.visibility=p.visibility=="restricted" and "restricted" or "public" end
+    incident.position=incidentPosition(p,incident.position)
+
+    if type(p.involvedStates)=="table" then
+      local involved={}
+      local seen={}
+      for _,raw in ipairs(p.involvedStates) do
+        local stateId=common.trim(raw):upper()
+        if state.states[stateId] and not seen[stateId] then seen[stateId]=true;involved[#involved+1]=stateId end
+      end
+      if incident.reportingStateId~="" and not seen[incident.reportingStateId] then involved[#involved+1]=incident.reportingStateId end
+      table.sort(involved)
+      incident.involvedStates=involved
+    end
+
+    incident.updatedAt=common.now()
+    incident.updatedBy=actor.label
+    mutate(state,actor,"INCIDENT_EDIT",incident.id,incident.title)
+    return incidentForActor(actor,incident)
+  end
+
+  if action == "INCIDENT_ADD_REPORT" then
+    local incident=state.incidents[common.trim(p.id):upper()]
+    if not incident then return nil,"Incident introuvable." end
+    if not canViewIncident(actor,incident) then return nil,"Acces refuse a cet incident." end
+    if actor.role=="delegate" and not incidentFullAccess(actor,incident) then
+      return nil,"Votre Etat n'est pas implique dans cet incident."
+    end
+
+    local body=common.trim(p.body)
+    if body=="" then return nil,"Rapport d'incident vide." end
+    local report={
+      id=string.format("SITREP-%03d",#(incident.reports or {})+1),
+      title=common.trim(p.title),body=body,
+      classification=p.classification=="restricted" and "restricted" or "public",
+      position=incidentPosition(p,incident.position),
+      at=common.now(),by=actor.label,role=actor.role,stateId=actor.stateId
+    }
+    if report.title=="" then report.title="Rapport terrain "..report.id end
+    report.seal=officialSeal("UNS-SITREP",{
+      incident.id,report.id,report.title,report.body,report.classification,
+      report.position,report.at,report.by,report.stateId
+    })
+    incident.reports=incident.reports or {}
+    incident.reports[#incident.reports+1]=report
+    incident.updatedAt=common.now()
+
+    mutate(state,actor,"INCIDENT_ADD_REPORT",incident.id,report.id.." / "..report.title)
+    return incidentForActor(actor,incident)
+  end
+
+  if action == "INCIDENT_SET_STATUS" then
+    local incident=state.incidents[common.trim(p.id):upper()]
+    if not incident then return nil,"Incident introuvable." end
+    local allowed={open=true,investigating=true,contained=true,resolved=true,closed=true}
+    if not allowed[p.status] then return nil,"Statut d'incident invalide." end
+    if incident.status==p.status then return incidentForActor(actor,incident) end
+
+    local transitions={
+      open={investigating=true,contained=true,resolved=true,closed=true},
+      investigating={contained=true,resolved=true,closed=true},
+      contained={investigating=true,resolved=true,closed=true},
+      resolved={investigating=true,closed=true},
+      closed={}
+    }
+    if not (transitions[incident.status] and transitions[incident.status][p.status]) then
+      return nil,"Transition d'incident interdite: "..tostring(incident.status).." -> "..tostring(p.status)
+    end
+
+    local previous=incident.status
+    local reason=common.trim(p.reason)
+    local row={
+      from=previous,to=p.status,reason=reason,at=common.now(),by=actor.label
+    }
+    row.seal=officialSeal("UNS-INCSTAT",{incident.id,row.from,row.to,row.reason,row.at,row.by,incident.seal})
+    incident.statusHistory=incident.statusHistory or {}
+    incident.statusHistory[#incident.statusHistory+1]=row
+    incident.status=p.status
+    incident.updatedAt=common.now()
+    incident.updatedBy=actor.label
+
+    for _,stateId in ipairs(incident.involvedStates or {}) do
+      pushNotice(state,{
+        title="Incident "..incident.id.." : "..p.status,
+        body=incident.title..(reason~="" and (" / "..reason) or ""),
+        severity=p.status=="resolved" and "success" or "info",
+        objectType="incident",objectId=incident.id,targetStateId=stateId
+      })
+    end
+
+    mutate(state,actor,"INCIDENT_SET_STATUS",incident.id,previous.." -> "..p.status..(reason~="" and (" / "..reason) or ""))
+    return incidentForActor(actor,incident)
   end
 
   if action == "ENFORCEMENT_LIST" then
