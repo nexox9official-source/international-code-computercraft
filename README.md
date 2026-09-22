@@ -4,10 +4,10 @@ Système distribué pour **CC:Tweaked / ComputerCraft** destiné au Code interna
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. `North Coalition` est conservé uniquement comme État proposant dans le corpus juridique initial.
 
-## Ce que fait la v0.5
+## Ce que fait la v0.6
 
 - un PC désigné comme **serveur central de stockage** ;
-- des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `viewer`, `admin`) ;
+- des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
 - import initial des **500 articles** du Code UNS en statut `draft` / projet non ratifié ;
 - création automatique de nouveaux numéros `UNS-ART-501`, `UNS-ART-502`, etc. ;
 - modification versionnée des articles avec conservation de l'ancienne version ;
@@ -76,7 +76,7 @@ wget run https://raw.githubusercontent.com/nexox9official-source/international-c
 wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua admin
 ```
 
-## Navigation v0.5
+## Navigation v0.6
 
 Le Code n'affiche plus simplement une liste brute de 500 articles. Le terminal propose maintenant :
 
@@ -237,6 +237,81 @@ ic treaty TREATY-2026-0001
 ```
 
 L'écran indique les États ayant signé, ceux encore en attente, l'état du traité et son entrée en vigueur éventuelle.
+
+## Notifications et centre d'action v0.6
+
+Chaque terminal dispose maintenant d'une boîte de notifications institutionnelle persistante.
+
+Le serveur génère automatiquement des alertes quand :
+
+- un scrutin est ouvert pour un État ;
+- un résultat de vote est publié ;
+- une loi est promulguée ;
+- un traité attend la signature d'un État ;
+- toutes les signatures d'un traité sont réunies ;
+- un traité entre en vigueur ;
+- une audience est programmée ;
+- un appel est déposé ;
+- une mesure d'exécution ou de sanction concerne un État ;
+- le statut d'une mesure d'exécution change.
+
+Les notifications sont ciblées par rôle, terminal ou État. Un délégué de North Coalition ne reçoit donc que les actions adressées à son État, tandis qu'un juge reçoit les alertes judiciaires qui le concernent.
+
+Depuis le bureau :
+
+```text
+CENTRE DE NOTIFICATIONS
+```
+
+ou directement :
+
+```text
+ic inbox
+```
+
+Une notification peut ouvrir directement le scrutin, le traité, le dossier ou la mesure d'exécution concerné. L'état lu/non-lu est conservé séparément pour chaque terminal.
+
+## Exécution des décisions v0.6
+
+Les sanctions et réparations ne s'arrêtent plus au texte du jugement. Le système possède désormais un registre `ENF-AAAA-XXXX` consacré à **l'exécution réelle des décisions**.
+
+Une mesure peut viser un État, une personne, une entreprise ou une autre organisation. Les types prévus comprennent notamment :
+
+- amende ou paiement ;
+- restitution ;
+- indemnisation ;
+- embargo ;
+- embargo militaire ;
+- gel d'avoirs ;
+- restriction commerciale ;
+- suspension de droits ;
+- ordre de cessation ;
+- inspection internationale ;
+- zone démilitarisée ;
+- autre mesure spéciale.
+
+Chaque fiche d'exécution peut être liée à un `CASE-...` et à un jugement précis. Le juge peut créer le suivi immédiatement après avoir rendu la décision.
+
+Cycle possible :
+
+```text
+ordered -> active -> partial -> complied
+                     |
+                     +-> breached
+
+ordered/active -> lifted
+ordered/active -> expired
+```
+
+Le greffe peut ajouter des comptes rendus d'exécution, chacun avec date, auteur, référence/preuve et sceau d'intégrité. Les changements de statut possèdent également leur propre sceau.
+
+Les mesures publiques apparaissent sur le registre Monitor. Une mesure particulière peut être affichée en LIVE :
+
+```text
+ic enforcement ENF-2026-0001
+```
+
+Le document complet peut aussi être imprimé avec son historique de conformité.
 
 ## Imprimante
 
@@ -400,4 +475,4 @@ Les 25 Livres du Code sont automatiquement associés aux articles par groupes de
 
 ## Statut
 
-**v0.5 - institutions complètes : Code, Cour, États, Assemblée, votes, ratification groupée, traités internationaux, signatures d'État, appels et affichages LIVE.** Le code Lua est structuré pour être étendu avec audiences, mandats, appels formels, signatures/quorum, réplication vers un second serveur et écran Monitor public.
+**v0.6 - institutions complètes : Code, Cour, États, Assemblée, votes, ratification groupée, traités internationaux, signatures d'État, appels et affichages LIVE.** Le code Lua est structuré pour être étendu avec audiences, mandats, appels formels, signatures/quorum, réplication vers un second serveur et écran Monitor public.
