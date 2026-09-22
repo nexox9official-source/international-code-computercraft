@@ -1777,12 +1777,28 @@ local function billTextSections(bill)
       (v.at and (" / "..v.at) or "")
   end
   table.sort(votes)
+
+  local typeText="Nouvel article"
+  local targetText=""
+  local proposalText=(bill.proposedTitle or "").."\n\n"..(bill.proposedBody or "")
+  if bill.proposalType=="amendment" then
+    typeText="Amendement"
+    targetText=bill.targetRef or ""
+  elseif bill.proposalType=="ratification_bundle" then
+    typeText="Ratification groupee"
+    targetText=table.concat(bill.targetRefs or {},"\n")
+    proposalText="Activation des articles selectionnes sans modification de leur texte."
+  end
+
+  local promulgated=bill.enactedRefs and #bill.enactedRefs>0 and table.concat(bill.enactedRefs,"\n") or (bill.enactedRef or "-")
+
   return {
     {label="Proposition",text=bill.id.." / "..(bill.title or "")},
     {label="Etape",text=bill.stage or ""},
-    {label="Type",text=bill.proposalType=="amendment" and ("Amendement de "..(bill.targetRef or "")) or "Nouvel article"},
+    {label="Type",text=typeText},
+    {label="Articles cibles",text=targetText},
     {label="Resume",text=bill.summary or ""},
-    {label="Texte propose",text=(bill.proposedTitle or "").."\n\n"..(bill.proposedBody or "")},
+    {label="Texte propose",text=proposalText},
     {label="Classement",text=(bill.proposedBook or "").." / "..(bill.proposedSection or "")},
     {label="Regle de vote",text=thresholdLabel(bill.threshold)},
     {label="Tour de scrutin",text=tostring(bill.votingRound or 0)},
@@ -1791,7 +1807,9 @@ local function billTextSections(bill)
     {label="Resultats",text="Pour "..tostring(tally.yes or 0).." / Contre "..tostring(tally.no or 0)..
       " / Abstention "..tostring(tally.abstain or 0).." / Membres eligibles "..tostring(tally.eligible or 0)},
     {label="Votes par Etat",text=#votes>0 and table.concat(votes,"\n") or "Aucun vote enregistre."},
-    {label="Promulgation",text=bill.enactedRef or "-"}
+    {label="Sceau du scrutin",text=bill.resultSeal or "-"},
+    {label="Promulgation",text=promulgated},
+    {label="Sceau de promulgation",text=bill.enactmentSeal or "-"}
   }
 end
 
@@ -1862,13 +1880,22 @@ local function billDetails(id)
     elseif a.id=="edit" then
       local title=prompt("Titre de la proposition",bill.title)
       local summary=multi("RESUME / EXPOSE DES MOTIFS",bill.summary or "")
-      local proposedTitle=prompt("Titre de l'article",bill.proposedTitle)
-      local proposedBody=multi("TEXTE PROPOSE",bill.proposedBody or "")
       local threshold=chooseThreshold(bill.threshold)
-      local r,e=rpc("BILL_EDIT",{
-        id=bill.id,title=title,summary=summary,proposedTitle=proposedTitle,
-        proposedBody=proposedBody,threshold=threshold
-      })
+      local payload={id=bill.id,title=title,summary=summary,threshold=threshold}
+
+      if bill.proposalType=="ratification_bundle" then
+        local initial={}
+        for _,ref in ipairs(bill.targetRefs or {}) do initial[#initial+1]=ref end
+        local picked=lawBasketBrowser(initial) or {}
+        local refs={}
+        for _,law in ipairs(picked) do refs[#refs+1]=law.ref end
+        payload.targetRefs=refs
+      else
+        payload.proposedTitle=prompt("Titre de l'article",bill.proposedTitle)
+        payload.proposedBody=multi("TEXTE PROPOSE",bill.proposedBody or "")
+      end
+
+      local r,e=rpc("BILL_EDIT",payload)
       message("PROPOSITION",r and "Projet mis a jour." or e,r and palette.ok or palette.bad)
 
     elseif a.id=="stage" then
@@ -1908,7 +1935,12 @@ local function billDetails(id)
       },"Cette operation creera/modifiera une loi active et sera journalisee.")
       if confirm and confirm.id=="yes" then
         local r,e=rpc("BILL_ENACT",{id=bill.id})
-        message("PROMULGATION",r and ("Promulgue: "..tostring(r.enactedRef)) or e,r and palette.ok or palette.bad)
+        local promText=e
+        if r then
+          if r.enactedRefs and #r.enactedRefs>1 then promText=tostring(#r.enactedRefs).." articles ratifies et actives."
+          else promText="Promulgue: "..tostring(r.enactedRef) end
+        end
+        message("PROMULGATION",promText,r and palette.ok or palette.bad)
       end
 
     elseif a.id=="law" then
@@ -1940,14 +1972,18 @@ local function billsScreen(query,stage)
     if p.id=="new" then
       local kind=menu("TYPE DE PROPOSITION",{
         {text="Creer un nouvel article",v="new_law"},
-        {text="Modifier un article existant",v="amendment"}
+        {text="Modifier un article existant",v="amendment"},
+        {text="Ratifier / activer plusieurs articles existants",v="ratification_bundle"}
       })
+
       if kind then
         local target=nil
+        local targetRefs={}
         local proposedTitle=""
         local proposedBody=""
         local proposedBook=""
         local proposedSection=""
+        local canContinue=true
 
         if kind.v=="amendment" then
           local law=referenceBrowser({mode="browse",pick=true})
@@ -1962,7 +1998,17 @@ local function billsScreen(query,stage)
           end
           if not target then
             message("PROPOSITION","Creation annulee: article cible non selectionne.",palette.warn)
+            canContinue=false
           end
+
+        elseif kind.v=="ratification_bundle" then
+          local picked=lawBasketBrowser({}) or {}
+          for _,law in ipairs(picked) do targetRefs[#targetRefs+1]=law.ref end
+          if #targetRefs==0 then
+            message("PROPOSITION","Selection vide: aucun article a ratifier.",palette.warn)
+            canContinue=false
+          end
+
         else
           local books=rpc("LAW_BOOKS",{}) or {}
           local bookItems={}
@@ -1971,16 +2017,20 @@ local function billsScreen(query,stage)
           if bp then proposedBook=bp.book end
         end
 
-        if kind.v=="new_law" or target then
+        if canContinue then
           local title=prompt("Titre de la proposition")
           local summary=multi("EXPOSE DES MOTIFS","")
-          proposedTitle=prompt("Titre juridique propose",proposedTitle)
-          proposedSection=prompt("Section",proposedSection)
-          proposedBody=multi("TEXTE JURIDIQUE PROPOSE",proposedBody)
+
+          if kind.v~="ratification_bundle" then
+            proposedTitle=prompt("Titre juridique propose",proposedTitle)
+            proposedSection=prompt("Section",proposedSection)
+            proposedBody=multi("TEXTE JURIDIQUE PROPOSE",proposedBody)
+          end
+
           local threshold=chooseThreshold("simple_cast")
           local r,e=rpc("BILL_CREATE",{
             title=title,summary=summary,proposalType=kind.v,
-            targetRef=target and target.ref or "",
+            targetRef=target and target.ref or "",targetRefs=targetRefs,
             proposedTitle=proposedTitle,proposedBody=proposedBody,
             proposedBook=proposedBook,proposedSection=proposedSection,
             threshold=threshold
@@ -1988,7 +2038,6 @@ local function billsScreen(query,stage)
           message("PROPOSITION",r and ("Deposee: "..r.id) or e,r and palette.ok or palette.bad)
         end
       end
-
     elseif p.id=="search" then
       query=prompt("Recherche proposition",query)
 
