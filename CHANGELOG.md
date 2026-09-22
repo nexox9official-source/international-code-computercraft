@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.9.0
+
+### Missions internationales
+- registre permanent `MISSION-AAAA-XXXX` ;
+- observation, maintien de la paix, humanitaire, enquête, inspection, monitoring, reconstruction et médiation ;
+- mandat relié à une résolution, un traité ou un dossier judiciaire ;
+- zone, période, État responsable, commandement et États participants ;
+- statuts planned / active / suspended / completed / cancelled ;
+- sceaux du mandat, d'activation, de clôture et d'annulation ;
+- notifications automatiques aux États participants.
+
+### Rapports de mission
+- rapports horodatés et signés par leur auteur ;
+- classification publique ou restreinte ;
+- sceau `UNS-MISREP-...` par rapport ;
+- filtrage serveur des rapports restreints ;
+- impression multipage du dossier de mission.
+
+### Affichage
+- missions actives dans le registre public ;
+- `ic mission MISSION-...` pour le suivi LIVE sur Monitor ;
+- tableau de bord et console serveur enrichis avec le nombre de missions actives ;
+- registre public étendu à dix pages.
+
 ## 0.8.0
 
 ### Calendrier institutionnel
