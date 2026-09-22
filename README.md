@@ -7,7 +7,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** avec deux espaces juridi
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. Les données nationales de North Coalition sont isolées logiquement des registres internationaux et soumises à leur propre contrôle d'accès.
 
-## Ce que fait la v0.14
+## Ce que fait la v0.15
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
@@ -23,9 +23,9 @@ Le projet ne contient aucune référence au nom du serveur Minecraft. Les donné
 - impression multi-pages des articles et dossiers via une **Printer ComputerCraft** ;
 - interface terminal claire, navigable au clavier et à la souris.
 
-## Intranet national North Coalition v0.14
+## Intranet national North Coalition v0.15
 
-La v0.14 fournit un deuxième espace complet, **interne à North Coalition**, sans transformer les 400 lois nationales en articles UNS.
+La v0.15 fournit un deuxième espace complet, **interne à North Coalition**, sans transformer les 400 lois nationales en articles UNS.
 
 Depuis un terminal autorisé :
 
@@ -147,6 +147,42 @@ ou un point libre
 ```
 
 Le corps des participants dépend du type de session. Un Conseil n'accepte par exemple que la Présidence et les membres du Conseil, tandis qu'un Cabinet accueille la Présidence et les ministres.
+
+### Journal officiel national
+
+Les décisions qui produisent un effet institutionnel important sont désormais publiées dans un registre **append-only** distinct :
+
+```text
+NC-GAZ-2026-0001
+NC-GAZ-2026-0002
+...
+```
+
+Le Journal officiel reçoit automatiquement notamment :
+
+- les promulgations de lois ;
+- les décrets et leurs abrogations ;
+- les nominations et fins de fonctions ministérielles ;
+- les résultats de scrutins ministériels ;
+- les procès-verbaux de sessions clôturées ;
+- les jugements définitifs et décisions d'appel selon leur niveau de confidentialité ;
+- la clôture de la phase fondatrice.
+
+Chaque publication conserve l'objet source, un résumé, la date, l'autorité de publication, le sceau de l'acte source et son **propre sceau `NC-GAZ-...`**.
+
+Une publication du Journal officiel n'est pas modifiée lorsque l'acte source évolue ensuite : elle constitue la trace historique de ce qui a été officiellement publié à cet instant.
+
+### Vérification des sceaux nationaux
+
+Le système peut vérifier les sceaux émis par North Coalition depuis l'intranet ou directement avec :
+
+```text
+ic nc-verify <SCEAU>
+```
+
+La vérification couvre les actes fondateurs, identités civiles, nominations, élections, projets de loi, promulgations, décrets, sessions, publications du Journal officiel, preuves, audiences, ordonnances, jugements et appels.
+
+Pour un objet auquel le terminal n'a pas le droit d'accéder, le serveur peut confirmer qu'un sceau est **valide** sans révéler le contenu confidentiel correspondant.
 
 ### Notifications nationales
 
@@ -273,7 +309,7 @@ wget run https://raw.githubusercontent.com/nexox9official-source/international-c
 wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua admin
 ```
 
-## Navigation v0.14
+## Navigation v0.15
 
 Le Code n'affiche plus simplement une liste brute de 500 articles. Le terminal propose maintenant :
 
