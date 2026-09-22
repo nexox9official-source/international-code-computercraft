@@ -906,7 +906,7 @@ local function handleAction(state, actor, action, p)
     return { meta=state.meta, clientsCount=(function() local n=0 for _ in pairs(state.clients) do n=n+1 end return n end)() }
   end
   if action == "DASHBOARD" then
-    local lc, cc, openCases, activeLaws, sc, votingBills, activeTreaties, signingTreaties = 0, 0, 0, 0, 0, 0, 0, 0
+    local lc, cc, openCases, activeLaws, sc, votingBills, activeTreaties, signingTreaties, activeEnforcements = 0, 0, 0, 0, 0, 0, 0, 0, 0
     for _,law in pairs(state.laws) do lc=lc+1 if law.status=="active" then activeLaws=activeLaws+1 end end
     for _,c in pairs(state.cases) do
       if canViewCase(actor,c) then
@@ -920,9 +920,16 @@ local function handleAction(state, actor, action, p)
       if t.stage=="in_force" then activeTreaties=activeTreaties+1 end
       if t.stage=="signing" or t.stage=="ready" then signingTreaties=signingTreaties+1 end
     end
+    for _,e in pairs(state.enforcements or {}) do
+      if canViewEnforcement(actor,e) and (e.status=="ordered" or e.status=="active" or e.status=="partial" or e.status=="breached") then
+        activeEnforcements=activeEnforcements+1
+      end
+    end
     return {
       laws=lc, activeLaws=activeLaws, cases=cc, openCases=openCases,
       states=sc, votingBills=votingBills, activeTreaties=activeTreaties, signingTreaties=signingTreaties,
+      activeEnforcements=activeEnforcements, unreadNotices=countUnreadNotices(state,actor),
+      stateId=actor.stateId,
       revision=state.meta.revision, codeStatus=state.meta.codeStatus
     }
   end
