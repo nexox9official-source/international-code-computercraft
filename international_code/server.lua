@@ -872,6 +872,40 @@ local function handleAction(state, actor, action, p)
       end
     end
 
+    for _,e in pairs(state.enforcements or {}) do
+      if tostring(e.seal or ""):upper()==seal then
+        local visible=canViewEnforcement(actor,e)
+        return {
+          valid=true,kind="enforcement",seal=seal,parentId=e.caseId~="" and e.caseId or e.id,
+          title=visible and (e.summary~="" and e.summary or e.targetName) or "Mesure d'execution confidentielle",
+          reference=e.id,status=e.status,issuedAt=e.createdAt,
+          issuedBy=visible and e.createdBy or nil,confidential=not visible
+        }
+      end
+      for _,row in ipairs(e.progress or {}) do
+        if tostring(row.seal or ""):upper()==seal then
+          local visible=canViewEnforcement(actor,e)
+          return {
+            valid=true,kind="enforcement_log",seal=seal,parentId=e.id,
+            title=visible and ("Suivi d'execution #"..tostring(row.id or "?")) or "Suivi d'execution confidentiel",
+            reference=tostring(row.id or "?"),status=e.status,issuedAt=row.at,
+            issuedBy=visible and row.by or nil,confidential=not visible
+          }
+        end
+      end
+      for i,row in ipairs(e.statusHistory or {}) do
+        if tostring(row.seal or ""):upper()==seal then
+          local visible=canViewEnforcement(actor,e)
+          return {
+            valid=true,kind="enforcement_status",seal=seal,parentId=e.id,
+            title=visible and ("Changement de statut "..tostring(row.from).." -> "..tostring(row.to)) or "Suivi d'execution confidentiel",
+            reference=tostring(i),status=row.to,issuedAt=row.at,
+            issuedBy=visible and row.by or nil,confidential=not visible
+          }
+        end
+      end
+    end
+
     for _,bill in pairs(state.bills or {}) do
       if tostring(bill.resultSeal or ""):upper()==seal then
         return {valid=true,kind="vote_result",seal=seal,parentId=bill.id,title=bill.title,status=bill.result,issuedAt=bill.closedAt,issuedBy=bill.closedBy}
