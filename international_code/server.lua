@@ -320,14 +320,19 @@ end
 
 local function backup(state, reason)
   common.ensureLayout()
-  local stamp = tostring(common.nowMs())
-  local path = common.BACKUPS .. "/state-" .. stamp .. ".tbl"
-  common.saveTableAtomic(path, state)
-  local files = fs.list(common.BACKUPS)
-  table.sort(files)
-  while #files > 12 do
-    fs.delete(common.BACKUPS .. "/" .. table.remove(files, 1))
+  common.pruneBackups(1)
+
+  local serialized=textutils.serialize(state,{compact=true})
+  local free=fs.getFreeSpace("/")
+  local reserve=32768
+  if type(free)=="number" and free<(#serialized+reserve) then
+    return nil,"backup ignore: espace disque insuffisant"
   end
+
+  local stamp=tostring(common.nowMs())
+  local path=common.BACKUPS.."/state-"..stamp..".tbl"
+  common.writeAll(path,serialized)
+  common.pruneBackups(2)
   return path
 end
 
@@ -345,7 +350,7 @@ end
 local function mutate(state, actor, action, objectId, details)
   audit(state, actor, action, objectId, details)
   saveState(state)
-  if state.meta.revision % 10 == 0 then backup(state, "revision") end
+  if state.meta.revision % 25 == 0 then backup(state, "revision") end
 end
 
 local function lawSearchScore(law, query)
