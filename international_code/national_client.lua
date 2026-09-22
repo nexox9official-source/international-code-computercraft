@@ -1452,6 +1452,47 @@ local function sessionsScreen(info)
   end
 end
 
+
+local function verifyNationalSealScreen(initial)
+  local sealValue=common.trim(initial or "")
+  while true do
+    if sealValue=="" then sealValue=prompt("Sceau NC a verifier") end
+    if sealValue=="" then return end
+    local out,err=rpc("NC_VERIFY_SEAL",{seal=sealValue})
+    if not out then
+      message("VERIFICATION",err,palette.bad)
+      return
+    end
+    if not out.valid then
+      local a=menu("SCEAU INVALIDE",{
+        {text="Verifier un autre sceau",id="again"},{text="Retour",id="back"}
+      },"Aucun acte national correspondant: "..sealValue)
+      if not a or a.id=="back" then return end
+      sealValue=""
+    else
+      local status=out.confidential and "VALIDE / CONTENU RESTREINT" or "VALIDE"
+      local a=menu("SCEAU "..status,{
+        {text="Lire les informations de verification",id="read"},
+        {text="Verifier un autre sceau",id="again"},
+        {text="Retour",id="back"}
+      },out.kind.." / "..tostring(out.objectId or ""))
+      if not a or a.id=="back" then return end
+      if a.id=="again" then sealValue=""
+      elseif a.id=="read" then
+        textPage("VERIFICATION OFFICIELLE",{
+          {label="Resultat",text=status},
+          {label="Sceau",text=out.seal or sealValue},
+          {label="Nature",text=out.kind or ""},
+          {label="Objet",text=out.objectId or "-"},
+          {label="Titre",text=out.title or "-"},
+          {label="Date",text=out.issuedAt or (out.confidential and "[restreinte]" or "-")},
+          {label="Auteur / autorite",text=out.issuedBy or (out.confidential and "[restreint]" or "-")}
+        })
+      end
+    end
+  end
+end
+
 local function nationalNotices(info)
   while true do
     local rows,err=rpc("NC_NOTICE_LIST",{})
@@ -1567,7 +1608,8 @@ function C.run()
       {text="LEGISLATION / PROJETS / VOTES",id="bills"},
       {text="ELECTIONS MINISTERIELLES",id="elections"},
       {text="DECRETS / REGLEMENTS",id="decrees"},
-      {text="JUSTICE / DOSSIERS NATIONAUX",id="cases"}
+      {text="JUSTICE / DOSSIERS NATIONAUX",id="cases"},
+      {text="VERIFIER UN SCEAU NATIONAL",id="verify"}
     }
     if dash.nationalRole=="admin" or dash.nationalRole=="president" or dash.nationalRole=="council" or dash.nationalRole=="judge" then
       items[#items+1]={text="JOURNAL D'AUDIT NATIONAL",id="audit"}
@@ -1585,8 +1627,34 @@ function C.run()
     elseif p.id=="elections" then C.electionsScreen()
     elseif p.id=="decrees" then decreesScreen(info)
     elseif p.id=="cases" then casesScreen()
+    elseif p.id=="verify" then verifyNationalSealScreen("")
     elseif p.id=="audit" then auditScreen() end
   end
+end
+
+function C.verify(sealValue)
+  cfg=common.loadConfig()
+  if not cfg or cfg.role=="server" then error("Terminal client requis.",0) end
+  common.openModems()
+  sealValue=common.trim(sealValue or "")
+  if sealValue=="" then error("Usage: ic nc-verify <SCEAU>",0) end
+  local out,err=rpc("NC_VERIFY_SEAL",{seal=sealValue})
+  if not out then error(err,0) end
+  if not out.valid then
+    print("SCEAU NATIONAL INVALIDE: "..sealValue)
+    return false
+  end
+  print("SCEAU NATIONAL VALIDE")
+  print("Type: "..tostring(out.kind or "?"))
+  print("Objet: "..tostring(out.objectId or "?"))
+  print("Titre: "..tostring(out.title or "?"))
+  if not out.confidential then
+    print("Date: "..tostring(out.issuedAt or "?"))
+    print("Autorite: "..tostring(out.issuedBy or "?"))
+  else
+    print("Contenu: RESTREINT")
+  end
+  return true
 end
 
 return C
