@@ -1354,6 +1354,17 @@ local function auditScreen()
   end
 end
 
+local function helpScreen()
+  textPage("AIDE / RACCOURCIS",{
+    {label="Navigation du Code",text="Parcourez par Livre, utilisez la recherche plein texte ou filtrez par statut. Un article peut etre ouvert, imprime et son historique de versions consulte."},
+    {label="Editeur juridique",text="F2: Livres / categories\nF3: Recherche d'article\nF4: Inserer une citation a la position du curseur\nF6: Panier juridique multi-selection\nF7: Recuperer un brouillon autosauvegarde\nF5: Terminer la redaction\nEchap: menu de sortie"},
+    {label="Dossiers",text="Le panier juridique permet d'ajouter ou retirer plusieurs articles d'un dossier. Chaque fait, preuve, changement de statut et jugement alimente la chronologie."},
+    {label="Jugements",text="Lors de l'enregistrement, le systeme fige la reference, le titre et la version des articles cites. Un jugement peut ensuite etre relu ou imprime seul."},
+    {label="Impression",text="Une imprimante ComputerCraft connectee permet d'imprimer le dossier complet, sa chronologie, un article ou un jugement individuel sur plusieurs pages."},
+    {label="Sauvegarde",text="Les textes en cours sont autosauvegardes localement. Le serveur reste la source de verite pour les lois, dossiers, jugements et le journal d'audit."}
+  })
+end
+
 local function networkScreen()
   local info,e=rpc("SERVER_INFO",{})
   local available,pname=printer.available()
@@ -1367,6 +1378,11 @@ local function networkScreen()
   if info then
     at(2,10,"Revision serveur: "..tostring(info.meta.revision),palette.muted)
     at(2,11,"Etat du code: "..tostring(info.meta.codeStatus),palette.muted)
+    local sv=tostring(info.meta.version or "?")
+    at(2,12,"Version serveur: "..sv,sv==common.VERSION and palette.ok or palette.warn)
+    if sv~=common.VERSION then
+      at(2,13,"Mise a jour conseillee sur serveur/client.",palette.warn)
+    end
   else
     at(2,10,"Erreur: "..tostring(e),palette.bad)
   end
@@ -1430,7 +1446,7 @@ function C.run()
   while true do
     local dash,err=rpc("DASHBOARD",{})
     local subtitle=dash and
-      ("Role "..cfg.role.." | "..dash.laws.." articles | "..dash.cases.." dossiers | rev "..dash.revision)
+      ("Role "..cfg.role.." | "..dash.laws.." art. ("..tostring(dash.activeLaws or 0).." actifs) | "..tostring(dash.openCases or dash.cases).." dossiers ouverts | rev "..dash.revision)
       or ("HORS LIGNE - "..tostring(err))
 
     local items={
@@ -1441,6 +1457,7 @@ function C.run()
     if allowed("audit") then
       items[#items+1]={text="JOURNAL D'AUDIT",id="audit"}
     end
+    items[#items+1]={text="AIDE / RACCOURCIS",id="help"}
     items[#items+1]={text="RESEAU / IMPRIMANTE / DIAGNOSTIC",id="network"}
     items[#items+1]={text="QUITTER",id="quit"}
 
@@ -1461,6 +1478,8 @@ function C.run()
       elseif kind then casesScreen(q) end
     elseif p.id=="audit" then
       auditScreen()
+    elseif p.id=="help" then
+      helpScreen()
     elseif p.id=="network" then
       networkScreen()
     end
