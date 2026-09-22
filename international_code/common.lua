@@ -6,7 +6,7 @@ M.CONFIG = M.ROOT .. "/config.tbl"
 M.STATE = M.DATA .. "/state.tbl"
 M.BACKUPS = M.DATA .. "/backups"
 M.PROTOCOL = "uns_icu_v1"
-M.VERSION = "0.4.0"
+M.VERSION = "0.5.0"
 
 local randomReady = false
 
