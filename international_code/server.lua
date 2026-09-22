@@ -703,6 +703,60 @@ local function incidentPosition(payload,current)
   return {dimension=dimension,x=x,y=y,z=z,radius=radius}
 end
 
+local function canViewConflict(actor,conflict)
+  if not actor or not conflict then return false end
+  if actor.role=="admin" or actor.role=="writer" or actor.role=="judge" or actor.role=="clerk" then return true end
+  if actor.stateId then
+    for _,id in ipairs(conflict.involvedStates or {}) do
+      if id==actor.stateId then return true end
+    end
+  end
+  return (conflict.visibility or "public")=="public"
+end
+
+local function listConflicts(state,payload,actor)
+  payload=payload or {}
+  local q=common.trim(payload.query)
+  local status=common.trim(payload.status)
+  local conflictType=common.trim(payload.conflictType)
+  local stateId=common.trim(payload.stateId):upper()
+  local visibility=common.trim(payload.visibility)
+  local out={}
+  for _,conflict in pairs(state.conflicts or {}) do
+    local hit=(q=="" or common.contains(conflict.id,q) or common.contains(conflict.title,q) or
+      common.contains(conflict.summary,q) or common.contains(conflict.partiesText,q))
+    local statusHit=(status=="" or conflict.status==status)
+    local typeHit=(conflictType=="" or conflict.conflictType==conflictType)
+    local visibilityHit=(visibility=="" or (conflict.visibility or "public")==visibility)
+    local stateHit=(stateId=="")
+    if not stateHit then
+      for _,id in ipairs(conflict.involvedStates or {}) do if id==stateId then stateHit=true break end end
+    end
+    if hit and statusHit and typeHit and visibilityHit and stateHit and canViewConflict(actor,conflict) then
+      out[#out+1]=common.deepcopy(conflict)
+    end
+  end
+  table.sort(out,function(a,b)
+    local rank={active=5,ceasefire=4,peace_process=3,tension=2,ended=1}
+    local ra=rank[a.status] or 0
+    local rb=rank[b.status] or 0
+    if ra~=rb then return ra>rb end
+    return tostring(a.id)>tostring(b.id)
+  end)
+  return out
+end
+
+local function makeConflictId(state)
+  local year=os.date and os.date("%Y") or "0000"
+  local n=(state.conflictCounters[year] or 0)+1
+  state.conflictCounters[year]=n
+  return string.format("CONFLICT-%s-%04d",year,n)
+end
+
+local function conflictZonePosition(payload,current)
+  return incidentPosition(payload,current)
+end
+
 local function listTreaties(state,payload)
   payload=payload or {}
   local q=common.trim(payload.query)
