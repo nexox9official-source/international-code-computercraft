@@ -1,4 +1,4 @@
-# Architecture v0.3
+# Architecture v0.4
 
 ## Topologie
 
@@ -12,14 +12,14 @@
           +-----------------------+-----------------------+
           |                       |                       |
   +-------v-------+       +-------v-------+       +-------v-------+
-  | WRITER        |       | GREFFE/JUGE   |       | VIEWER        |
-  | lois/version  |       | dossiers      |       | consultation  |
-  +---------------+       +-------+-------+       +---------------+
-                                  |
-                           +------v------+
-                           | PRINTER CC  |
-                           | multi-pages |
-                           +-------------+
+  | WRITER        |       | GREFFE/JUGE   |       | DELEGATE      |
+  | lois + BILL   |       | dossiers      |       | vote / Etat   |
+  +---------------+       +-------+-------+       +-------+-------+
+                                  |                       |
+                           +------v------+          +-----v------+
+                           | PRINTER CC  |          | VIEWER /   |
+                           | multi-pages |          | MONITOR    |
+                           +-------------+          +------------+
 ```
 
 ## Invariants importants
@@ -45,15 +45,33 @@
 
 ## Rôles
 
-- `viewer` : lecture seule.
-- `writer` : législation et historique des textes.
-- `clerk` : dossiers, faits, preuves, citations.
-- `judge` : fonctions du greffe + jugements.
-- `admin` : toutes les permissions.
+- `viewer` : Code, États, propositions et dossiers publics.
+- `writer` : législation, propositions, débats, clôture des scrutins et promulgation.
+- `delegate` : vote officiel au nom d'un État membre rattaché au terminal.
+- `clerk` : dossiers, faits, preuves, citations, audiences et dépôts d'appel.
+- `judge` : fonctions du greffe + jugements, ordonnances, visibilité sensible et décisions d'appel.
+- `admin` : toutes les permissions et gestion du registre des États / rattachement des délégués.
 
 ## Sécurité et intégrité
 
 Le serveur central est la seule source de vérité et valide toutes les opérations. Les clients sont appairés par code à usage unique puis utilisent une identité et un jeton local. Cela fournit un contrôle d'accès adapté au RP, mais Rednet n'est pas un canal cryptographiquement sûr face à un joueur capable d'intercepter le trafic.
+
+## Registres v0.4
+
+Le serveur central contient désormais quatre ensembles principaux :
+
+- `laws` : articles versionnés du Code ;
+- `states` : États et statuts d'adhésion ;
+- `bills` : propositions, tours de scrutin et votes par État ;
+- `cases` : dossiers, preuves, audiences, ordonnances, appels et jugements.
+
+Les scrutins figent la liste des États éligibles au début de chaque tour. Une modification ultérieure du nombre de membres ne modifie donc pas rétroactivement le corps électoral de ce tour.
+
+Les dossiers disposent de trois niveaux de visibilité. `public` est accessible aux lecteurs et Monitors ; `restricted` est réservé au circuit judiciaire ; `sealed` est réservé aux juges et administrateurs.
+
+## Sceaux applicatifs
+
+Les actes sensibles reçoivent un sceau calculé par le serveur à partir de leur contenu et de leurs métadonnées. Ces sceaux servent à détecter visuellement une incohérence RP et à identifier une version imprimée. Ils ne constituent pas une primitive cryptographique de sécurité.
 
 ## Évolution prévue
 
