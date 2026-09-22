@@ -95,6 +95,16 @@ function P.caseFile(case)
     lines[#lines+1] = ""
   end
 
+  if case.appeals and #case.appeals>0 then
+    lines[#lines+1]="APPELS"
+    for _,a in ipairs(case.appeals) do
+      for _,l in ipairs(common.wrap((a.id or "?").." "..(a.appellant or "").." ["..(a.status or "?").."]",25)) do lines[#lines+1]=l end
+      if a.result then for _,l in ipairs(common.wrap("Decision: "..a.result,25)) do lines[#lines+1]=l end end
+      if a.decisionSeal then for _,l in ipairs(common.wrap("Sceau: "..a.decisionSeal,25)) do lines[#lines+1]=l end end
+    end
+    lines[#lines+1]=""
+  end
+
   if case.timeline and #case.timeline>0 then
     lines[#lines+1]="CHRONOLOGIE"
     for i,event in ipairs(case.timeline) do
@@ -136,6 +146,7 @@ function P.judgment(case, judgment)
   end
   appendWrapped(lines, "ARTICLES APPLIQUES", table.concat(refs,"\n"), 25)
   appendWrapped(lines, "CARACTERE", judgment.final and "Decision finale" or "Decision intermediaire", 25)
+  appendWrapped(lines, "SCEAU OFFICIEL", judgment.seal or "Ancienne decision sans sceau v0.4", 25)
   return printLines((case.id or "DOSSIER").."-J"..tostring(judgment.id or 1), lines)
 end
 
@@ -168,6 +179,7 @@ function P.hearingNotice(case, hearing)
   appendWrapped(lines,"STATUT",hearing.status or "-",25)
   appendWrapped(lines,"NOTES",hearing.notes or "",25)
   appendWrapped(lines,"EMIS PAR",hearing.createdBy or "-",25)
+  appendWrapped(lines,"SCEAU OFFICIEL",hearing.seal or "-",25)
   return printLines((case.id or "DOSSIER").."-"..(hearing.id or "AUDIENCE"),lines)
 end
 
@@ -184,6 +196,7 @@ function P.order(case, order)
   appendWrapped(lines,"EXPIRATION",order.expiresAt or "-",25)
   appendWrapped(lines,"JUGE",order.createdBy or "-",25)
   appendWrapped(lines,"DATE",order.createdAt or "-",25)
+  appendWrapped(lines,"SCEAU OFFICIEL",order.seal or "-",25)
   return printLines((case.id or "DOSSIER").."-"..(order.id or "ORDRE"),lines)
 end
 
@@ -206,10 +219,35 @@ function P.bill(bill)
       "Pour: "..tostring(bill.tally.yes or 0)..
       " / Contre: "..tostring(bill.tally.no or 0)..
       " / Abstention: "..tostring(bill.tally.abstain or 0)..
-      " / Membres: "..tostring(bill.tally.eligible or 0),25)
+      " / Membres: "..tostring(bill.tally.eligible or 0)..
+      " / Quorum: "..(bill.tally.quorumMet and "oui" or "non"),25)
   end
+  if bill.resultSeal then appendWrapped(lines,"SCEAU DU SCRUTIN",bill.resultSeal,25) end
   if bill.enactedRef then appendWrapped(lines,"PROMULGUE",bill.enactedRef,25) end
+  if bill.enactmentSeal then appendWrapped(lines,"SCEAU DE PROMULGATION",bill.enactmentSeal,25) end
   return printLines(bill.id or "PROPOSITION",lines)
+end
+
+
+function P.appeal(case, appeal)
+  if not appeal then return false,"Appel introuvable." end
+  local lines={}
+  appendWrapped(lines,"ACTE D'APPEL",case.id or "-",25)
+  appendWrapped(lines,"REFERENCE",appeal.id or "-",25)
+  appendWrapped(lines,"AFFAIRE",case.title or "-",25)
+  appendWrapped(lines,"APPELANT",appeal.appellant or "-",25)
+  appendWrapped(lines,"MOTIFS",appeal.grounds or "",25)
+  appendWrapped(lines,"DEMANDE",appeal.request or "",25)
+  appendWrapped(lines,"DEPOT",(appeal.filedAt or "").." / "..(appeal.filedBy or ""),25)
+  appendWrapped(lines,"STATUT",appeal.status or "-",25)
+  appendWrapped(lines,"SCEAU DEPOT",appeal.seal or "-",25)
+  if appeal.result then
+    appendWrapped(lines,"DECISION D'APPEL",appeal.result,25)
+    appendWrapped(lines,"MOTIVATION",appeal.reasoning or "",25)
+    appendWrapped(lines,"JUGE D'APPEL",(appeal.decidedBy or "").." / "..(appeal.decidedAt or ""),25)
+    appendWrapped(lines,"SCEAU DECISION",appeal.decisionSeal or "-",25)
+  end
+  return printLines((case.id or "DOSSIER").."-"..(appeal.id or "APPEL"),lines)
 end
 
 return P
