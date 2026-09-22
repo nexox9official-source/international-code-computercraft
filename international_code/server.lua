@@ -517,6 +517,28 @@ local function canViewMission(actor,m)
   return (m.visibility or "public")=="public"
 end
 
+local function missionFullAccess(actor,m)
+  if not actor or not m then return false end
+  if actor.role=="admin" or actor.role=="writer" or actor.role=="judge" or actor.role=="clerk" then return true end
+  if actor.stateId then
+    if m.leadStateId==actor.stateId then return true end
+    for _,id in ipairs(m.participatingStates or {}) do if id==actor.stateId then return true end end
+  end
+  return false
+end
+
+local function missionForActor(actor,m)
+  local copy=common.deepcopy(m)
+  if not missionFullAccess(actor,m) then
+    local reports={}
+    for _,r in ipairs(copy.reports or {}) do
+      if r.classification~="restricted" then reports[#reports+1]=r end
+    end
+    copy.reports=reports
+  end
+  return copy
+end
+
 local function listMissions(state,payload,actor)
   payload=payload or {}
   local q=common.trim(payload.query)
@@ -533,7 +555,7 @@ local function listMissions(state,payload,actor)
       if m.leadStateId==stateId then stateHit=true end
       for _,id in ipairs(m.participatingStates or {}) do if id==stateId then stateHit=true break end end
     end
-    if hit and statusHit and typeHit and stateHit and canViewMission(actor,m) then out[#out+1]=common.deepcopy(m) end
+    if hit and statusHit and typeHit and stateHit and canViewMission(actor,m) then out[#out+1]=missionForActor(actor,m) end
   end
   table.sort(out,function(a,b) return tostring(a.id)>tostring(b.id) end)
   return out
@@ -2051,7 +2073,7 @@ local function handleAction(state, actor, action, p)
     local m=state.missions[common.trim(p.id):upper()]
     if not m then return nil,"Mission introuvable." end
     if not canViewMission(actor,m) then return nil,"Acces refuse a cette mission." end
-    return common.deepcopy(m)
+    return missionForActor(actor,m)
   end
 
   if action == "MISSION_CREATE" then
