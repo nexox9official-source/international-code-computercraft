@@ -1,6 +1,7 @@
 local common = dofile("/international_code/common.lua")
 local services = dofile("/international_code/national_services.lua")
 local finance = dofile("/international_code/national_finance.lua")
+local democracy = dofile("/international_code/national_democracy.lua")
 
 local N = {}
 local CORPUS_PATH = "/international_code/national/corpus_v2.json"
@@ -185,6 +186,8 @@ function N.newState()
     organizations={},nextOrganization=1,
     licenses={},licenseCounters={},
     fines={},fineCounters={},
+    generalElections={},generalElectionCounters={},
+    mandates={},mandateCounters={},councilMembers={},
     nationalAudit={}
   }
 end
@@ -192,6 +195,7 @@ end
 function N.ensure(state)
   if not state.national then
     state.national=N.newState()
+    democracy.ensure(state.national)
     return state.national,true
   end
 
@@ -227,6 +231,7 @@ function N.ensure(state)
   n.nextCitizen=math.max(tonumber(n.nextCitizen) or 1,maxCitizen+1)
   services.ensure(n)
   finance.ensure(n)
+  democracy.ensure(n)
   n.nationalAudit=n.nationalAudit or {}
 
   local corpus=loadCorpus()
@@ -904,7 +909,9 @@ function N.handle(state,actor,action,p,ctx)
       country=n.meta.country,corpusId=n.meta.corpusId,corpusVersion=n.meta.corpusVersion,
       status=n.meta.status,stateId=n.meta.stateId,foundingMode=n.meta.foundingMode,
       foundingAccount=n.meta.foundingAccount,presidentIdentity=n.meta.presidentIdentity,
-      presidentClientId=n.meta.presidentClientId,nationalRole=nationalRole(state,actor),
+      presidentCitizenId=n.meta.presidentCitizenId,presidentClientId=n.meta.presidentClientId,
+      councilMembers=copy(n.councilMembers or {}),defaultCouncilSeats=n.meta.defaultCouncilSeats,
+      nationalRole=nationalRole(state,actor),
       nationalIdentity=identity(actor),citizenId=actor.citizenId,
       citizenStatus=(citizenForClient(n,actor) or {}).status,ministryCode=actor.ministryCode,
       fallbackNoVoteHours=n.meta.fallbackNoVoteHours
@@ -920,6 +927,7 @@ function N.handle(state,actor,action,p,ctx)
     local founder=select(1,createCitizen(n,actor.nationalIdentity,"citizen",actor.nationalIdentity,"Compte fondateur de North Coalition"))
     actor.citizenId=founder and founder.id or actor.citizenId
     n.meta.presidentClientId=actor.clientId
+    n.meta.presidentCitizenId=actor.citizenId
     n.meta.presidentIdentity=actor.nationalIdentity
     n.meta.bootstrapAt=n.meta.bootstrapAt or common.now()
     n.meta.foundingMode=true
@@ -1072,6 +1080,12 @@ function N.handle(state,actor,action,p,ctx)
     end
     local openElections=0
     for _,e in pairs(n.elections) do if e.stage=="open" then openElections=openElections+1 end end
+    local nationalElections=0
+    for _,e in pairs(n.generalElections or {}) do
+      if e.stage=="candidacy" or e.stage=="voting" or e.stage=="runoff_ready" or e.stage=="runoff_voting" then nationalElections=nationalElections+1 end
+    end
+    local activeMandates=0
+    for _,m in pairs(n.mandates or {}) do if m.status=="active" then activeMandates=activeMandates+1 end end
     local votingBills=0
     for _,b in pairs(n.bills) do if b.stage=="voting" then votingBills=votingBills+1 end end
     local publishedDecrees=0
@@ -1096,7 +1110,8 @@ function N.handle(state,actor,action,p,ctx)
       laws=total,activeLaws=active,draftLaws=draft,repealedLaws=repealed,
       categories=#(n.categories or {}),ministries=ministriesTotal,filledMinistries=filled,
       citizens=citizens,activeCitizens=activeCitizens,
-      openElections=openElections,votingBills=votingBills,publishedDecrees=publishedDecrees,
+      openElections=openElections,nationalElections=nationalElections,activeMandates=activeMandates,
+      councilSeats=#(n.councilMembers or {}),votingBills=votingBills,publishedDecrees=publishedDecrees,
       openCases=openCases,openSessions=openSessions,scheduledSessions=scheduledSessions,
       pendingRequests=pendingRequests,unreadNotices=unreadNational,
       treasuryBalanceUB=finSummary.balanceUB,treasuryUnit=finSummary.unit,
@@ -2213,6 +2228,17 @@ function N.handle(state,actor,action,p,ctx)
     appeal.gazetteId=gaz.id
     mutate(ctx,state,actor,"NC_CASE_DECIDE_APPEAL",case.id,appeal.id.." / "..appeal.result.." / "..gaz.id)
     return copy(case)
+  end
+
+  do
+    local handled,data,err=democracy.handle(state,actor,action,p,{
+      mutate=function(a,obj,details) return mutate(ctx,state,actor,a,obj,details) end,
+      notice=function(spec) return notice(ctx,state,spec) end,
+      gazette=function(kind,objectId,title,summary,sourceSeal,visibility)
+        return publishGazette(n,actor,kind,objectId,title,summary,sourceSeal,visibility)
+      end
+    })
+    if handled then return data,err end
   end
 
   do
