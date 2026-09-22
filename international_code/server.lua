@@ -560,7 +560,7 @@ local function handleAction(state, actor, action, p)
     return { meta=state.meta, clientsCount=(function() local n=0 for _ in pairs(state.clients) do n=n+1 end return n end)() }
   end
   if action == "DASHBOARD" then
-    local lc, cc, openCases, activeLaws, sc, votingBills = 0, 0, 0, 0, 0, 0
+    local lc, cc, openCases, activeLaws, sc, votingBills, activeTreaties, signingTreaties = 0, 0, 0, 0, 0, 0, 0, 0
     for _,law in pairs(state.laws) do lc=lc+1 if law.status=="active" then activeLaws=activeLaws+1 end end
     for _,c in pairs(state.cases) do
       if canViewCase(actor,c) then
@@ -570,9 +570,13 @@ local function handleAction(state, actor, action, p)
     end
     for _,st in pairs(state.states or {}) do if st.status=="member" then sc=sc+1 end end
     for _,bill in pairs(state.bills or {}) do if bill.stage=="voting" then votingBills=votingBills+1 end end
+    for _,t in pairs(state.treaties or {}) do
+      if t.stage=="in_force" then activeTreaties=activeTreaties+1 end
+      if t.stage=="signing" or t.stage=="ready" then signingTreaties=signingTreaties+1 end
+    end
     return {
       laws=lc, activeLaws=activeLaws, cases=cc, openCases=openCases,
-      states=sc, votingBills=votingBills,
+      states=sc, votingBills=votingBills, activeTreaties=activeTreaties, signingTreaties=signingTreaties,
       revision=state.meta.revision, codeStatus=state.meta.codeStatus
     }
   end
