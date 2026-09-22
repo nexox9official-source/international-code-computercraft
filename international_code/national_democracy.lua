@@ -57,6 +57,15 @@ function D.ensure(n)
   ensure(n)
 end
 
+local function sovereignLeadershipActive(n)
+  return n and n.meta and n.meta.sovereignAuthorityActive~=false and
+    trim(n.meta.sovereignAuthorityIdentity or "NexoFr_")~=""
+end
+
+local function presidencyLockedError()
+  return "La direction de North Coalition est occupee de maniere permanente par NexoFr_. Une election presidentielle ne devient possible qu'apres sa renonciation volontaire enregistree."
+end
+
 local function activeCitizen(n,citizenId)
   local c=n.citizens and n.citizens[citizenId]
   return c and c.status=="citizen" and c or nil
@@ -215,6 +224,7 @@ local function linkedClients(state,citizenId)
 end
 
 local function installPresident(n,state,e,citizenId,ctx,actor)
+  if sovereignLeadershipActive(n) then return nil,presidencyLockedError() end
   local previous=n.meta.presidentCitizenId
   if not previous and n.meta.presidentClientId and state.clients[n.meta.presidentClientId] then
     previous=state.clients[n.meta.presidentClientId].citizenId
@@ -414,6 +424,7 @@ function D.handle(state,actor,action,p,ctx)
   if action=="NC_GE_CREATE" then
     if not manager(actor) then return true,nil,"Creation d'election reservee a la Presidence, au Conseil ou a l'administration technique." end
     local office=p.office=="council" and "council" or "president"
+    if office=="president" and sovereignLeadershipActive(n) then return true,nil,presidencyLockedError() end
     local seats=office=="council" and math.max(1,math.min(15,tonumber(p.seats) or n.meta.defaultCouncilSeats or 5)) or 1
     local id=nextId(n.generalElectionCounters,"NC-GE")
     local e={
@@ -433,6 +444,7 @@ function D.handle(state,actor,action,p,ctx)
     if not manager(actor) then return true,nil,"Ouverture des candidatures non autorisee." end
     local e=n.generalElections[trim(p.id):upper()]
     if not e then return true,nil,"Election introuvable." end
+    if e.office=="president" and sovereignLeadershipActive(n) then return true,nil,presidencyLockedError() end
     if e.stage~="draft" then return true,nil,"Election non ouvrable aux candidatures." end
     e.stage="candidacy";e.candidacyOpenedAt=now();e.candidacyOpenedBy=identity(actor)
     e.candidacySeal=seal("NC-GE-CAND",{e.id,e.seal,e.candidacyOpenedAt,e.candidacyOpenedBy})
@@ -475,6 +487,7 @@ function D.handle(state,actor,action,p,ctx)
     if not manager(actor) then return true,nil,"Ouverture du vote non autorisee." end
     local e=n.generalElections[trim(p.id):upper()]
     if not e then return true,nil,"Election introuvable." end
+    if e.office=="president" and sovereignLeadershipActive(n) then return true,nil,presidencyLockedError() end
     if e.stage~="candidacy" then return true,nil,"Election hors phase de candidature." end
     local minCandidates=e.office=="president" and 2 or e.seats
     if #e.candidates<minCandidates then return true,nil,"Nombre de candidats insuffisant." end
@@ -514,6 +527,7 @@ function D.handle(state,actor,action,p,ctx)
     if not manager(actor) then return true,nil,"Cloture du vote non autorisee." end
     local e=n.generalElections[trim(p.id):upper()]
     if not e then return true,nil,"Election introuvable." end
+    if e.office=="president" and sovereignLeadershipActive(n) then return true,nil,presidencyLockedError() end
     local useRunoff=e.stage=="runoff_voting"
     if e.stage~="voting" and not useRunoff then return true,nil,"Aucun vote ouvert." end
 
@@ -556,6 +570,7 @@ function D.handle(state,actor,action,p,ctx)
     if not manager(actor) then return true,nil,"Ouverture du second tour non autorisee." end
     local e=n.generalElections[trim(p.id):upper()]
     if not e then return true,nil,"Election introuvable." end
+    if e.office=="president" and sovereignLeadershipActive(n) then return true,nil,presidencyLockedError() end
     if e.stage~="runoff_ready" then return true,nil,"Aucun second tour requis." end
     if #(e.runoffCandidates or {})<2 then return true,nil,"Second tour impossible: candidats insuffisants." end
     e.runoffVotes={};e.stage="runoff_voting";e.runoffOpenedAt=now();e.runoffOpenedBy=identity(actor)
