@@ -376,6 +376,7 @@ local function handleAction(state, actor, action, p)
     if not law then return nil, "Article introuvable." end
     local allowed = {draft=true, active=true, suspended=true, repealed=true}
     if not allowed[p.status] then return nil, "Statut invalide." end
+    if law.status==p.status then return common.deepcopy(law) end
     law.history = law.history or {}
     law.history[#law.history+1] = {
       version=law.version, status=law.status,
@@ -497,8 +498,9 @@ local function handleAction(state, actor, action, p)
     for i=#c.citedArticles,1,-1 do
       if c.citedArticles[i] == ref then table.remove(c.citedArticles,i) removed=true end
     end
+    if not removed then return common.deepcopy(c) end
     c.updatedAt=common.now()
-    if removed then caseEvent(c,actor,"ARTICLE_REMOVED","Article retire",ref) end
+    caseEvent(c,actor,"ARTICLE_REMOVED","Article retire",ref)
     mutate(state, actor, "CASE_REMOVE_ARTICLE", c.id, ref)
     return common.deepcopy(c)
   end
@@ -539,6 +541,7 @@ local function handleAction(state, actor, action, p)
     local allowed={open=true,investigation=true,hearing=true,judged=true,appeal=true,closed=true,archived=true}
     if not allowed[p.status] then return nil, "Statut invalide." end
     ensureCaseShape(c)
+    if c.status==p.status then return common.deepcopy(c) end
     local previous=c.status
     c.status=p.status
     c.updatedAt=common.now()
