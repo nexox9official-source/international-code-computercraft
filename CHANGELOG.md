@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.7.0
+
+### Résolutions de l'Union
+- registre `RES-AAAA-XXXX` distinct du Code législatif ;
+- types général, sanctions, paix/sécurité, adhésion, humanitaire, urgence, enquête, cessez-le-feu, observation et économique ;
+- brouillon, débat, scrutin, adoption/rejet, absence de quorum et exécution ;
+- une voix par État avec corps électoral figé à l'ouverture du tour ;
+- mêmes règles de quorum et de majorité que les propositions de loi ;
+- notifications automatiques aux délégations lors de l'ouverture et de la clôture ;
+- sceau du scrutin `UNS-RESVOTE-...` ;
+- sceau d'exécution `UNS-RES-...` ;
+- impression multipage d'une résolution ;
+- recherche et navigation depuis le bureau juridique ;
+- `ic resolution RES-...` pour suivre un scrutin en direct sur Monitor.
+
+### Résolutions exécutoires
+- une résolution adoptée peut créer automatiquement une mesure `ENF-...` ;
+- possibilité de viser un État et de lier un dossier judiciaire ;
+- embargo, gel d'avoirs, amende, restriction commerciale, inspection, zone démilitarisée ou mesure personnalisée ;
+- notifications automatiques à l'État visé ;
+- lien direct entre la résolution et sa mesure d'exécution.
+
+### Cour
+- procès-verbal d'audience officiel avec participants, compte rendu et issue ;
+- sceau `CIU-PV-...` vérifiable ;
+- lecture et impression séparée du procès-verbal ;
+- procès-verbaux et ordonnances intégrés au dossier papier complet.
+
+### Affichage public
+- page des résolutions ouvertes dans le registre Monitor ;
+- huit pages publiques synchronisées au clavier, au timer et au toucher ;
+- compteur global des scrutins législatifs + résolutions.
+
 ## 0.6.0
 
 ### Notifications institutionnelles
