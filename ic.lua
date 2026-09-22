@@ -13,10 +13,13 @@ local function help()
   print("ic setup writer            Appairer un poste de redaction")
   print("ic setup clerk             Appairer un greffe")
   print("ic setup judge             Appairer un poste de juge")
+  print("ic setup delegate          Appairer un delegue d'Etat")
   print("ic setup viewer            Appairer un lecteur")
   print("ic setup admin             Appairer un poste administrateur")
   print("ic pair <role>             Creer un code (serveur arrete)")
   print("ic backup                  Backup manuel (serveur)")
+  print("ic public                  Affichage public sur Monitor")
+  print("ic display <CASE-ID>       Afficher un dossier public au tribunal")
   print("ic doctor                  Diagnostic terminal/reseau")
   print("ic update                  Mettre a jour sans perdre la configuration")
   print("ic help                    Afficher cette aide")
@@ -26,12 +29,17 @@ if cmd=="help" or cmd=="--help" or cmd=="-h" then help();return end
 if cmd=="setup" then
   local role=args[2]
   if role=="server" then dofile(ROOT.."/server.lua").setupServer();return end
-  if role=="writer" or role=="clerk" or role=="judge" or role=="viewer" or role=="admin" then dofile(ROOT.."/client.lua").setupClient(role);return end
-  error("Role inconnu. Utilisez: server, writer, clerk, judge, viewer, admin",0)
+  if role=="writer" or role=="clerk" or role=="judge" or role=="delegate" or role=="viewer" or role=="admin" then dofile(ROOT.."/client.lua").setupClient(role);return end
+  error("Role inconnu. Utilisez: server, writer, clerk, judge, delegate, viewer, admin",0)
 end
 if cmd=="server" then dofile(ROOT.."/server.lua").run();return end
 if cmd=="pair" then dofile(ROOT.."/server.lua").manualPair(args[2] or "viewer");return end
 if cmd=="backup" then dofile(ROOT.."/server.lua").backupNow();return end
+if cmd=="public" then dofile(ROOT.."/public.lua").run();return end
+if cmd=="display" then
+  if not args[2] then error("Usage: ic display CASE-AAAA-0001",0) end
+  dofile(ROOT.."/public.lua").caseDisplay(args[2]);return
+end
 if cmd=="doctor" then dofile(ROOT.."/client.lua").doctor();return end
 if cmd=="update" then
   local url="https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua"
