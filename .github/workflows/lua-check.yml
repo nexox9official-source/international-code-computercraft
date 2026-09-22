@@ -25,6 +25,10 @@ jobs:
             luac5.3 -p "$file"
           done
 
+      - name: Run project self-test
+        run: |
+          lua5.3 tests/selftest.lua
+
       - name: Verify initial legal corpus
         run: |
           set -e
