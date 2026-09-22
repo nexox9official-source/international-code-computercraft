@@ -1614,6 +1614,51 @@ local function handleAction(state, actor, action, p)
       end
     end
 
+    for _,conflict in pairs(state.conflicts or {}) do
+      if tostring(conflict.seal or ""):upper()==seal then
+        local visible=canViewConflict(actor,conflict)
+        return {
+          valid=true,kind="conflict",seal=seal,parentId=conflict.id,
+          title=visible and conflict.title or "Conflit international confidentiel",
+          reference=conflict.id,status=conflict.status,issuedAt=conflict.createdAt,
+          issuedBy=visible and conflict.createdBy or nil,confidential=not visible
+        }
+      end
+      for i,row in ipairs(conflict.statusHistory or {}) do
+        if tostring(row.seal or ""):upper()==seal then
+          local visible=canViewConflict(actor,conflict)
+          return {
+            valid=true,kind="conflict_status",seal=seal,parentId=conflict.id,
+            title=visible and ("Statut conflit "..tostring(row.from).." -> "..tostring(row.to)) or "Conflit confidentiel",
+            reference=tostring(i),status=row.to,issuedAt=row.at,
+            issuedBy=visible and row.by or nil,confidential=not visible
+          }
+        end
+      end
+      for _,zone in ipairs(conflict.zones or {}) do
+        if tostring(zone.seal or ""):upper()==seal then
+          local visible=canViewConflict(actor,conflict)
+          return {
+            valid=true,kind="conflict_zone",seal=seal,parentId=conflict.id,
+            title=visible and zone.name or "Zone de conflit confidentielle",
+            reference=zone.id,status=zone.status,issuedAt=zone.updatedAt or zone.createdAt,
+            issuedBy=visible and (zone.updatedBy or zone.createdBy) or nil,confidential=not visible
+          }
+        end
+        for _,old in ipairs(zone.history or {}) do
+          if tostring(old.seal or ""):upper()==seal then
+            local visible=canViewConflict(actor,conflict)
+            return {
+              valid=true,kind="conflict_zone_history",seal=seal,parentId=conflict.id,
+              title=visible and (zone.name.." / ancienne version") or "Zone de conflit confidentielle",
+              reference=zone.id.." v"..tostring(old.version or "?"),status=old.status,issuedAt=old.archivedAt,
+              issuedBy=visible and old.archivedBy or nil,confidential=not visible
+            }
+          end
+        end
+      end
+    end
+
     for _,incident in pairs(state.incidents or {}) do
       if tostring(incident.seal or ""):upper()==seal then
         local visible=canViewIncident(actor,incident)
@@ -1755,7 +1800,7 @@ local function handleAction(state, actor, action, p)
     return { meta=state.meta, clientsCount=(function() local n=0 for _ in pairs(state.clients) do n=n+1 end return n end)() }
   end
   if action == "DASHBOARD" then
-    local lc, cc, openCases, activeLaws, sc, votingBills, votingResolutions, openSessions, scheduledSessions, activeMissions, activeIncidents, criticalIncidents, activeTreaties, signingTreaties, activeEnforcements = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    local lc, cc, openCases, activeLaws, sc, votingBills, votingResolutions, openSessions, scheduledSessions, activeMissions, activeIncidents, criticalIncidents, activeConflicts, activeTreaties, signingTreaties, activeEnforcements = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     for _,law in pairs(state.laws) do lc=lc+1 if law.status=="active" then activeLaws=activeLaws+1 end end
     for _,c in pairs(state.cases) do
       if canViewCase(actor,c) then
@@ -1779,6 +1824,9 @@ local function handleAction(state, actor, action, p)
         if incident.severity=="critical" then criticalIncidents=criticalIncidents+1 end
       end
     end
+    for _,conflict in pairs(state.conflicts or {}) do
+      if canViewConflict(actor,conflict) and conflict.status~="ended" then activeConflicts=activeConflicts+1 end
+    end
     for _,t in pairs(state.treaties or {}) do
       if t.stage=="in_force" then activeTreaties=activeTreaties+1 end
       if t.stage=="signing" or t.stage=="ready" then signingTreaties=signingTreaties+1 end
@@ -1792,7 +1840,7 @@ local function handleAction(state, actor, action, p)
       laws=lc, activeLaws=activeLaws, cases=cc, openCases=openCases,
       states=sc, votingBills=votingBills, votingResolutions=votingResolutions,
       openSessions=openSessions, scheduledSessions=scheduledSessions, activeMissions=activeMissions,
-      activeIncidents=activeIncidents, criticalIncidents=criticalIncidents,
+      activeIncidents=activeIncidents, criticalIncidents=criticalIncidents, activeConflicts=activeConflicts,
       activeTreaties=activeTreaties, signingTreaties=signingTreaties,
       activeEnforcements=activeEnforcements, unreadNotices=countUnreadNotices(state,actor),
       stateId=actor.stateId,
@@ -3752,7 +3800,7 @@ local function serverUI(state, lastEvent)
   term.setCursorPos(2,4)
   term.write("Revision  : " .. tostring(state.meta.revision))
 
-  local lc,cc,cl,sc,bv,rv,sopen,ssched,mis,inc,crit,tr,enf=0,0,0,0,0,0,0,0,0,0,0,0,0
+  local lc,cc,cl,sc,bv,rv,sopen,ssched,mis,inc,crit,cf,tr,enf=0,0,0,0,0,0,0,0,0,0,0,0,0,0
   for _ in pairs(state.laws) do lc=lc+1 end
   for _ in pairs(state.cases) do cc=cc+1 end
   for _ in pairs(state.clients) do cl=cl+1 end
@@ -3769,6 +3817,7 @@ local function serverUI(state, lastEvent)
       if incident.severity=="critical" then crit=crit+1 end
     end
   end
+  for _,conflict in pairs(state.conflicts or {}) do if conflict.status~="ended" then cf=cf+1 end end
   for _,t in pairs(state.treaties or {}) do if t.stage=="in_force" then tr=tr+1 end end
   for _,e in pairs(state.enforcements or {}) do
     if e.status=="ordered" or e.status=="active" or e.status=="partial" or e.status=="breached" then enf=enf+1 end
@@ -3781,7 +3830,7 @@ local function serverUI(state, lastEvent)
   term.setCursorPos(2,7)
   term.write("Sessions: "..sopen.." ouvertes / "..ssched.." prevues")
   term.setCursorPos(2,8)
-  term.write("Missions: "..mis.." Incidents: "..inc..(crit>0 and (" ("..crit.." CRIT)") or ""))
+  term.write("Missions: "..mis.." Conflits: "..cf.." Incidents: "..inc..(crit>0 and (" ("..crit.." CRIT)") or ""))
   term.setCursorPos(2,9)
   term.write("Execution: "..enf.." Notifications: "..tostring(#(state.notices or {})))
   term.setTextColor(colors.cyan)
