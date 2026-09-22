@@ -19,6 +19,8 @@ local CORPUS_SHARDS = {
 }
 local NORTH_STATE_ID = "STATE-001"
 
+local RAW_BASE="https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/"
+
 local function readJson(path)
   local raw=common.readAll(path)
   if not raw or raw=="" then return nil,"Fichier absent ou vide: "..path end
@@ -28,50 +30,61 @@ local function readJson(path)
   return data
 end
 
+local function remoteJson(path)
+  if not http or not http.get then return nil,"HTTP indisponible pour "..path end
+  local rel=tostring(path):gsub("^/","")
+  local h,err=http.get(RAW_BASE..rel)
+  if not h then return nil,"Telechargement impossible: "..rel.." / "..tostring(err) end
+  local raw=h.readAll();h.close()
+  local ok,data=pcall(textutils.unserializeJSON,raw)
+  raw=nil
+  if not ok or type(data)~="table" then return nil,"JSON distant invalide: "..rel end
+  return data
+end
+
+local function readJsonLocalOrRemote(path)
+  if fs.exists(path) then
+    local data,err=readJson(path)
+    if data then return data end
+  end
+  return remoteJson(path)
+end
+
 local function loadCorpusMeta()
-  local meta,err=readJson(CORPUS_META_PATH)
+  local meta,err=readJsonLocalOrRemote(CORPUS_META_PATH)
   if meta then return meta end
 
-  -- Compatibilite avec une ancienne installation avant le corpus fragmente.
-  local legacy,legacyErr=readJson(CORPUS_PATH)
-  if not legacy then return nil,err or legacyErr end
-  legacy.articles=nil
-  return legacy
+  -- Compatibilite ultime avec une vieille installation qui garde encore le monolithe.
+  if fs.exists(CORPUS_PATH) then
+    local legacy,legacyErr=readJson(CORPUS_PATH)
+    if legacy then
+      legacy.articles=nil
+      return legacy
+    end
+    return nil,legacyErr
+  end
+  return nil,err
 end
 
 local function eachCorpusArticle(fn)
   local total=0
-  local haveShards=true
+
+  -- Chaque fragment est lu localement s'il existe, sinon directement depuis
+  -- GitHub. Il n'est jamais necessaire de stocker les 4 fragments sur disque.
   for _,path in ipairs(CORPUS_SHARDS) do
-    if not fs.exists(path) then haveShards=false break end
-  end
-
-  if haveShards then
-    for _,path in ipairs(CORPUS_SHARDS) do
-      local rows,err=readJson(path)
-      if not rows then return nil,err end
-      for _,seed in ipairs(rows) do
-        total=total+1
-        fn(seed)
-      end
-      rows=nil
-      if collectgarbage then pcall(collectgarbage,"collect") end
+    local rows,err=readJsonLocalOrRemote(path)
+    if not rows then return nil,err end
+    for _,seed in ipairs(rows) do
+      total=total+1
+      fn(seed)
     end
-    if total~=400 then return nil,"Corpus national incomplet: "..tostring(total).."/400 articles." end
-    return total
+    rows=nil
+    if collectgarbage then pcall(collectgarbage,"collect") end
   end
 
-  -- Fallback temporaire pour les installations qui n'ont pas encore lance ic update.
-  local raw=common.readAll(CORPUS_PATH)
-  if not raw or raw=="" then return nil,"Corpus national absent. Lancez la mise a jour depuis le centre de controle." end
-  local ok,legacy=pcall(textutils.unserializeJSON,raw)
-  raw=nil
-  if not ok or type(legacy)~="table" or type(legacy.articles)~="table" then
-    return nil,"Corpus national historique invalide."
+  if total~=400 then
+    return nil,"Corpus national incomplet: "..tostring(total).."/400 articles."
   end
-  for _,seed in ipairs(legacy.articles) do total=total+1;fn(seed) end
-  legacy=nil
-  if collectgarbage then pcall(collectgarbage,"collect") end
   return total
 end
 
