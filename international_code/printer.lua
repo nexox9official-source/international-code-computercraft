@@ -95,6 +95,28 @@ function P.caseFile(case)
     lines[#lines+1] = ""
   end
 
+  if case.hearings and #case.hearings>0 then
+    lines[#lines+1]="AUDIENCES"
+    for _,h in ipairs(case.hearings) do
+      for _,l in ipairs(common.wrap((h.id or "?").." "..(h.scheduledFor or "").." ["..(h.status or "?").."]",25)) do lines[#lines+1]=l end
+      for _,l in ipairs(common.wrap(h.subject or "",25)) do lines[#lines+1]=l end
+      if h.recordSeal then
+        for _,l in ipairs(common.wrap("PV: "..(h.recordSeal or "-"),25)) do lines[#lines+1]=l end
+      end
+      lines[#lines+1]=""
+    end
+  end
+
+  if case.orders and #case.orders>0 then
+    lines[#lines+1]="ORDONNANCES / MANDATS"
+    for _,o in ipairs(case.orders) do
+      for _,l in ipairs(common.wrap((o.id or "?").." "..(o.orderType or "").." ["..(o.status or "?").."]",25)) do lines[#lines+1]=l end
+      for _,l in ipairs(common.wrap(o.subject or "",25)) do lines[#lines+1]=l end
+      for _,l in ipairs(common.wrap("Sceau: "..(o.seal or "-"),25)) do lines[#lines+1]=l end
+      lines[#lines+1]=""
+    end
+  end
+
   if case.appeals and #case.appeals>0 then
     lines[#lines+1]="APPELS"
     for _,a in ipairs(case.appeals) do
