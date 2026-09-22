@@ -4,10 +4,10 @@
 
 ### Navigation juridique
 - navigation par Livres / catégories ;
-- recherche par référence, titre, catégorie et contenu ;
+- recherche par référence, titre, catégorie et contenu, insensible aux accents et classée par pertinence ;
 - recherche insensible aux accents et classement par pertinence ;
 - filtres par statut : actif, brouillon, suspendu, abrogé ;
-- accès à l'historique des versions d'un article ;
+- accès à l'historique des versions d'un article avec auteur et motif de modification ;
 - navigation directe vers les autres articles du même Livre.
 
 ### Éditeur juridique
