@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.10.0
+
+### Incidents internationaux
+- registre permanent `INC-AAAA-XXXX` ;
+- incidents frontaliers, diplomatiques, humanitaires, cessez-le-feu, cyber, contamination, infrastructures, catastrophes, contrebande et autres ;
+- gravités info / minor / serious / critical ;
+- cycle open / investigating / contained / resolved / closed ;
+- États impliqués et État déclarant ;
+- liens vers MISSION, RES, TREATY, CASE et ENF ;
+- visibilité publique ou restreinte ;
+- sceau initial `UNS-INC-...` ;
+- historique de statut scellé.
+
+### Géolocalisation Minecraft
+- dimension + coordonnées X/Y/Z + rayon pour les incidents ;
+- coordonnées centrales pour les missions ;
+- coordonnées propres aux rapports de mission ;
+- positions propres aux SITREP terrain ;
+- support Overworld, Nether, End ou dimension personnalisée.
+
+### Rapports de situation
+- rapports `SITREP-...` ;
+- classification publique/restreinte ;
+- auteur, rôle et État d'origine ;
+- sceau `UNS-SITREP-...` ;
+- filtrage serveur du contenu restreint ;
+- impression multipage des incidents et rapports.
+
+### Centre de situation
+- action serveur `SITUATION_GET` ;
+- synthèse incidents / missions / exécution / résolutions / sessions ;
+- cartographie dynamique X/Z ;
+- `ic situation [dimension]` ;
+- `ic incident INC-...` ;
+- incidents publics ajoutés au registre public rotatif ;
+- registre public étendu à onze pages ;
+- missions et incidents utilisables dans les ordres du jour SESSION.
+
+### Sécurité
+- filtres explicites `visibility=public` pour les affichages publics de missions et incidents ;
+- compteurs publics calculés à partir des seuls éléments publics afin d'éviter de révéler l'existence d'un dossier restreint.
+
 ## 0.9.0
 
 ### Missions internationales
