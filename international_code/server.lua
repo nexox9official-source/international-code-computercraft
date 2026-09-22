@@ -124,35 +124,69 @@ local bookNames = {
   "LIVRE XXV - URGENCES, APOCALYPSE, RECONSTRUCTION, ARCHIVES ET DISPOSITIONS FINALES"
 }
 
+local SEED_RAW_BASE="https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/"
+
+local function executeSeedSource(source,name)
+  local env=_ENV
+  if not env and getfenv then env=getfenv() end
+  local fn,err
+  if load then
+    fn,err=load(source,"@"..tostring(name or "seed"),"t",env)
+  elseif loadstring then
+    fn,err=loadstring(source,"@"..tostring(name or "seed"))
+    if fn and setfenv and env then setfenv(fn,env) end
+  end
+  if not fn then return nil,err end
+  local ok,res=pcall(fn)
+  if not ok then return nil,res end
+  return res
+end
+
+local function loadSeedChunk(i)
+  local rel=string.format("international_code/seed/%03d.lua",i)
+  local path="/"..rel
+  if fs.exists(path) then
+    local ok,chunk=pcall(dofile,path)
+    if ok and type(chunk)=="table" then return chunk end
+  end
+
+  if not http or not http.get then return nil,"HTTP indisponible pour "..rel end
+  local h,err=http.get(SEED_RAW_BASE..rel)
+  if not h then return nil,"Telechargement impossible: "..rel.." / "..tostring(err) end
+  local source=h.readAll();h.close()
+  local chunk,loadErr=executeSeedSource(source,rel)
+  source=nil
+  if type(chunk)~="table" then return nil,"Seed distant invalide: "..tostring(loadErr or rel) end
+  return chunk
+end
+
 local function loadSeed()
   local laws = {}
   for i = 1, 5 do
-    local path = string.format("/international_code/seed/%03d.lua", i)
-    if fs.exists(path) then
-      local ok, chunk = pcall(dofile, path)
-      if ok and type(chunk) == "table" then
-        for _, entry in ipairs(chunk) do
-          local law = entry
-          if entry.number == nil and type(entry[1]) == "number" then
-            local n = entry[1]
-            law = {
-              number = n,
-              ref = string.format("UNS-ART-%03d", n),
-              title = entry[2] or ("Article " .. n),
-              body = entry[3] or "",
-              book = bookNames[math.ceil(n / 20)] or "",
-              section = "",
-              status = "active",
-              version = 1,
-              history = {}
-            }
-          end
-          if type(law) == "table" and law.number and law.ref then
-            laws[#laws + 1] = law
-          end
-        end
+    local chunk,err=loadSeedChunk(i)
+    if not chunk then error(err,0) end
+    for _, entry in ipairs(chunk) do
+      local law = entry
+      if entry.number == nil and type(entry[1]) == "number" then
+        local n = entry[1]
+        law = {
+          number = n,
+          ref = string.format("UNS-ART-%03d", n),
+          title = entry[2] or ("Article " .. n),
+          body = entry[3] or "",
+          book = bookNames[math.ceil(n / 20)] or "",
+          section = "",
+          status = "active",
+          version = 1,
+          history = {}
+        }
+      end
+      if type(law) == "table" and law.number and law.ref then
+        laws[#laws + 1] = law
       end
     end
+    chunk=nil
+    if collectgarbage then pcall(collectgarbage,"collect") end
   end
   table.sort(laws, function(a,b) return (a.number or 0) < (b.number or 0) end)
   return laws
