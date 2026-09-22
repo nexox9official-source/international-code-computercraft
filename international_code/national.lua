@@ -34,8 +34,6 @@ local function nationalRole(state,actor)
   if not actor then return nil end
   if actor.role=="admin" then return actor.nationalRole or "admin" end
   if actor.nationalRole and actor.nationalRole~="" then return actor.nationalRole end
-  local n=state.national
-  if n and actor.stateId and actor.stateId==(n.meta.stateId or NORTH_STATE_ID) then return "citizen" end
   return nil
 end
 
@@ -45,9 +43,8 @@ end
 
 local function isNationalMember(state,actor)
   if not actor then return false end
-  if actor.nationalRole and actor.nationalRole~="" then return true end
-  local n=state.national
-  return n and actor.stateId and actor.stateId==(n.meta.stateId or NORTH_STATE_ID) or false
+  if actor.role=="admin" and (actor.nationalRole=="admin" or not actor.nationalRole) then return true end
+  return actor.nationalRole~=nil and actor.nationalRole~=""
 end
 
 local function roleIs(state,actor,...)
