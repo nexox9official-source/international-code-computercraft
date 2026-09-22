@@ -380,4 +380,42 @@ function P.hearingMinutes(case, hearing)
   return printLines((case.id or "DOSSIER").."-"..(hearing.id or "AUDIENCE").."-PV",lines)
 end
 
+
+function P.resolution(r)
+  if not r then return false,"Resolution introuvable." end
+  local lines={}
+  appendWrapped(lines,"RESOLUTION DE L'UNION",r.id or "-",25)
+  appendWrapped(lines,"TITRE",r.title or "-",25)
+  appendWrapped(lines,"TYPE",r.resolutionType or "-",25)
+  appendWrapped(lines,"ETAPE",r.stage or "-",25)
+  if r.targetStateId and r.targetStateId~="" then appendWrapped(lines,"ETAT CIBLE",r.targetStateId,25) end
+  if r.linkedCaseId and r.linkedCaseId~="" then appendWrapped(lines,"DOSSIER LIE",r.linkedCaseId,25) end
+  appendWrapped(lines,"RESUME",r.summary or "",25)
+  appendWrapped(lines,"TEXTE",r.body or "",25)
+  appendWrapped(lines,"REGLE DE VOTE",r.threshold or "",25)
+
+  if r.tally then
+    appendWrapped(lines,"SCRUTIN",
+      "Pour: "..tostring(r.tally.yes or 0)..
+      " / Contre: "..tostring(r.tally.no or 0)..
+      " / Abstention: "..tostring(r.tally.abstain or 0)..
+      " / Participation: "..tostring(r.tally.participation or 0).."/"..tostring(r.tally.eligible or 0)..
+      " / Quorum: "..(r.tally.quorumMet and "oui" or "non"),25)
+  end
+
+  if r.resultSeal then appendWrapped(lines,"SCEAU DU SCRUTIN",r.resultSeal,25) end
+
+  if r.createsEnforcement then
+    appendWrapped(lines,"EXECUTION PREVUE",
+      (r.enforcementType or "other")..
+      ((r.enforcementAmount and r.enforcementAmount~="") and (" / "..r.enforcementAmount) or "")..
+      ((r.enforcementDeadline and r.enforcementDeadline~="") and (" / echeance "..r.enforcementDeadline) or ""),25)
+    appendWrapped(lines,"CONDITIONS D'EXECUTION",r.enforcementTerms or "",25)
+  end
+
+  if r.enforcementId then appendWrapped(lines,"MESURE D'EXECUTION",r.enforcementId,25) end
+  if r.executionSeal then appendWrapped(lines,"SCEAU D'EXECUTION",r.executionSeal,25) end
+  return printLines(r.id or "RESOLUTION",lines)
+end
+
 return P
