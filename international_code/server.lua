@@ -179,6 +179,30 @@ local function mutate(state, actor, action, objectId, details)
   if state.meta.revision % 10 == 0 then backup(state, "revision") end
 end
 
+local function lawSearchScore(law, query)
+  local q=common.normalizeSearch(query)
+  if q=="" then return 0 end
+
+  local ref=common.normalizeSearch(law.ref or "")
+  local title=common.normalizeSearch(law.title or "")
+  local body=common.normalizeSearch(law.body or "")
+  local section=common.normalizeSearch(law.section or "")
+  local book=common.normalizeSearch(law.book or "")
+
+  if ref==q then return 1000 end
+  if string.find(ref,q,1,true) then return 900 end
+  if title==q then return 850 end
+  if title:sub(1,#q)==q then return 800 end
+  if string.find(title,q,1,true) then return 750 end
+  if string.find(section,q,1,true) then return 650 end
+  if string.find(book,q,1,true) then return 600 end
+  if string.find(body,q,1,true) then return 500 end
+
+  local combined=table.concat({ref,title,section,book,body}," ")
+  if common.containsAllTokens(combined,q) then return 350 end
+  return -1
+end
+
 local function listLaws(state, payload)
   payload = payload or {}
   local q = common.trim(payload.query)
@@ -186,15 +210,21 @@ local function listLaws(state, payload)
   local book = common.trim(payload.book)
   local items = {}
   for _, law in pairs(state.laws) do
-    local hit = (q == "" or common.contains(law.ref, q) or common.contains(law.title, q) or common.contains(law.body, q))
+    local score=lawSearchScore(law,q)
+    local hit = (q == "" or score>=0)
     local statusHit = (status == "" or law.status == status)
     local bookHit = (book == "" or law.book == book)
     if hit and statusHit and bookHit then items[#items + 1] = {
       ref=law.ref, number=law.number, title=law.title, status=law.status,
-      version=law.version, book=law.book, section=law.section, updatedAt=law.updatedAt
+      version=law.version, book=law.book, section=law.section, updatedAt=law.updatedAt,
+      _score=score
     } end
   end
-  table.sort(items, function(a,b) return (a.number or 0) < (b.number or 0) end)
+  table.sort(items, function(a,b)
+    if q~="" and (a._score or 0)~=(b._score or 0) then return (a._score or 0)>(b._score or 0) end
+    return (a.number or 0) < (b.number or 0)
+  end)
+  for _,item in ipairs(items) do item._score=nil end
   return items
 end
 
