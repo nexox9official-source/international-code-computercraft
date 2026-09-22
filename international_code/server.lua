@@ -14,7 +14,7 @@ local permissions = {
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
-    BILL_LIST=true, BILL_GET=true, BILL_CREATE=true, BILL_EDIT=true,
+    BILL_LIST=true, BILL_GET=true, BILL_CREATE=true, BILL_EDIT=true, BILL_SET_STAGE=true,
     BILL_OPEN_VOTE=true, BILL_CLOSE=true, BILL_ENACT=true,
     LAW_CREATE=true, LAW_AMEND=true, LAW_REPEAL=true, LAW_SET_STATUS=true,
     AUDIT_LIST=true
@@ -600,6 +600,21 @@ local function handleAction(state, actor, action, p)
     bill.updatedAt=common.now()
     mutate(state,actor,"BILL_EDIT",bill.id,bill.title)
     local out=common.deepcopy(bill); out.tally=billTally(state,bill); return out
+  end
+
+  if action == "BILL_SET_STAGE" then
+    local bill=state.bills[common.trim(p.id):upper()]
+    if not bill then return nil,"Proposition introuvable." end
+    if p.stage~="draft" and p.stage~="debate" then return nil,"Etape legislative invalide." end
+    if bill.stage~="draft" and bill.stage~="debate" then return nil,"Cette proposition ne peut plus revenir en phase de redaction/debat." end
+    if bill.stage==p.stage then
+      local out=common.deepcopy(bill);out.tally=billTally(state,bill);return out
+    end
+    local previous=bill.stage
+    bill.stage=p.stage
+    bill.updatedAt=common.now()
+    mutate(state,actor,"BILL_SET_STAGE",bill.id,previous.." -> "..bill.stage)
+    local out=common.deepcopy(bill);out.tally=billTally(state,bill);return out
   end
 
   if action == "BILL_OPEN_VOTE" then
