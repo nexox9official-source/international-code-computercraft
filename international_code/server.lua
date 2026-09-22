@@ -1074,6 +1074,36 @@ local function handleAction(state, actor, action, p)
       end
     end
 
+    for _,m in pairs(state.missions or {}) do
+      if tostring(m.mandateSeal or ""):upper()==seal then
+        return {valid=true,kind="mission_mandate",seal=seal,parentId=m.id,title=m.title,status=m.status,issuedAt=m.updatedAt or m.createdAt,issuedBy=m.updatedBy or m.createdBy}
+      end
+      if tostring(m.activationSeal or ""):upper()==seal then
+        return {valid=true,kind="mission_activation",seal=seal,parentId=m.id,title=m.title,status=m.status,issuedAt=m.activatedAt,issuedBy=m.updatedBy or m.createdBy}
+      end
+      if tostring(m.completionSeal or ""):upper()==seal then
+        return {valid=true,kind="mission_completion",seal=seal,parentId=m.id,title=m.title,status=m.status,issuedAt=m.completedAt,issuedBy=m.updatedBy}
+      end
+      if tostring(m.cancellationSeal or ""):upper()==seal then
+        return {valid=true,kind="mission_cancellation",seal=seal,parentId=m.id,title=m.title,status=m.status,issuedAt=m.cancelledAt,issuedBy=m.updatedBy}
+      end
+      for _,report in ipairs(m.reports or {}) do
+        if tostring(report.seal or ""):upper()==seal then
+          local visible=report.classification~="restricted" or actor.role=="admin" or actor.role=="writer" or actor.role=="judge" or actor.role=="clerk" or (actor.stateId and (function()
+            if m.leadStateId==actor.stateId then return true end
+            for _,id in ipairs(m.participatingStates or {}) do if id==actor.stateId then return true end end
+            return false
+          end)())
+          return {
+            valid=true,kind="mission_report",seal=seal,parentId=m.id,
+            title=visible and report.title or "Rapport de mission confidentiel",
+            reference=report.id,status=m.status,issuedAt=report.at,
+            issuedBy=visible and report.by or nil,confidential=not visible
+          }
+        end
+      end
+    end
+
     for _,sess in pairs(state.sessions or {}) do
       if tostring(sess.noticeSeal or ""):upper()==seal then
         return {
@@ -1151,7 +1181,7 @@ local function handleAction(state, actor, action, p)
     return { meta=state.meta, clientsCount=(function() local n=0 for _ in pairs(state.clients) do n=n+1 end return n end)() }
   end
   if action == "DASHBOARD" then
-    local lc, cc, openCases, activeLaws, sc, votingBills, votingResolutions, openSessions, scheduledSessions, activeTreaties, signingTreaties, activeEnforcements = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    local lc, cc, openCases, activeLaws, sc, votingBills, votingResolutions, openSessions, scheduledSessions, activeMissions, activeTreaties, signingTreaties, activeEnforcements = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     for _,law in pairs(state.laws) do lc=lc+1 if law.status=="active" then activeLaws=activeLaws+1 end end
     for _,c in pairs(state.cases) do
       if canViewCase(actor,c) then
@@ -1166,6 +1196,9 @@ local function handleAction(state, actor, action, p)
       if sess.status=="open" then openSessions=openSessions+1 end
       if sess.status=="scheduled" then scheduledSessions=scheduledSessions+1 end
     end
+    for _,m in pairs(state.missions or {}) do
+      if canViewMission(actor,m) and m.status=="active" then activeMissions=activeMissions+1 end
+    end
     for _,t in pairs(state.treaties or {}) do
       if t.stage=="in_force" then activeTreaties=activeTreaties+1 end
       if t.stage=="signing" or t.stage=="ready" then signingTreaties=signingTreaties+1 end
@@ -1178,7 +1211,7 @@ local function handleAction(state, actor, action, p)
     return {
       laws=lc, activeLaws=activeLaws, cases=cc, openCases=openCases,
       states=sc, votingBills=votingBills, votingResolutions=votingResolutions,
-      openSessions=openSessions, scheduledSessions=scheduledSessions,
+      openSessions=openSessions, scheduledSessions=scheduledSessions, activeMissions=activeMissions,
       activeTreaties=activeTreaties, signingTreaties=signingTreaties,
       activeEnforcements=activeEnforcements, unreadNotices=countUnreadNotices(state,actor),
       stateId=actor.stateId,
