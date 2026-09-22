@@ -1832,7 +1832,22 @@ function N.handle(state,actor,action,p,ctx)
     if not isPresident(state,actor) then return nil,"La promulgation est reservee a la Presidence." end
     local b=n.bills[common.trim(p.id):upper()]
     if not b then return nil,"Projet introuvable." end
-    if b.stage~="adopted" then return nil,"Le projet doit etre adopte avant promulgation." end
+    if b.stage~="adopted" then
+      if actor.nationalRoot==true and
+        (b.stage=="draft" or b.stage=="debate" or b.stage=="no_quorum" or b.stage=="rejected") then
+        b.stage="adopted"
+        b.result="sovereign_adoption"
+        b.closedAt=common.now()
+        b.closedBy=identity(actor)
+        b.resultSeal=seal("NC-BILL-SOVEREIGN",{b.id,b.proposalType,b.closedAt,b.closedBy,b.proposedTitle,b.proposedText,b.targetRef,b.targetRefs})
+        noticeAll(ctx,state,n,"Adoption souveraine "..b.id,
+          b.title.." adopte directement par "..b.closedBy..".",
+          "success","nc_bill",b.id)
+        mutate(ctx,state,actor,"NC_BILL_SOVEREIGN_ADOPT",b.id,b.resultSeal)
+      else
+        return nil,"Le projet doit etre adopte avant promulgation."
+      end
+    end
     local enacted={}
     if b.proposalType=="amendment" then
       local law=n.laws[b.targetRef]
