@@ -1357,6 +1357,370 @@ local function casesScreen(query,status)
   end
 end
 
+local function stateDetails(st)
+  while true do
+    local full,err=rpc("STATE_GET",{id=st.id})
+    if not full then message("ETAT",err,palette.bad);return end
+
+    local actions={
+      {text="Lire la fiche officielle",id="read"}
+    }
+    if allowed("institutionAdmin") then
+      actions[#actions+1]={text="Modifier la fiche",id="edit"}
+      actions[#actions+1]={text="Changer le statut",id="status"}
+      actions[#actions+1]={text="Rattacher un terminal delegue",id="delegate"}
+    end
+
+    local a=menu(full.id.." - "..full.name,actions,
+      "Statut "..tostring(full.status).." | representant "..tostring(full.representative or "-"))
+    if not a then return end
+
+    if a.id=="read" then
+      textPage(full.id,{
+        {label="Nom officiel",text=full.name or ""},
+        {label="Nom court",text=full.shortName or ""},
+        {label="Statut UNS",text=full.status or ""},
+        {label="Gouvernement",text=full.government or ""},
+        {label="Representant",text=full.representative or ""},
+        {label="Notes",text=full.notes or ""},
+        {label="Creation / mise a jour",text=(full.createdAt or "").." / "..(full.updatedAt or "")}
+      })
+
+    elseif a.id=="edit" then
+      local government=prompt("Gouvernement",full.government or "")
+      local representative=prompt("Representant",full.representative or "")
+      local notes=multi("NOTES OFFICIELLES",full.notes or "")
+      local r,e=rpc("STATE_UPDATE",{
+        id=full.id,government=government,representative=representative,notes=notes
+      })
+      message("ETAT",r and "Fiche mise a jour." or e,r and palette.ok or palette.bad)
+
+    elseif a.id=="status" then
+      local s=menu("STATUT DE L'ETAT",{
+        {text="Candidat",v="candidate"},
+        {text="Membre",v="member"},
+        {text="Suspendu",v="suspended"},
+        {text="Retire",v="withdrawn"},
+        {text="Exclu",v="excluded"}
+      })
+      if s then
+        local r,e=rpc("STATE_UPDATE",{id=full.id,status=s.v})
+        message("ETAT",r and ("Nouveau statut: "..r.status) or e,r and palette.ok or palette.bad)
+      end
+
+    elseif a.id=="delegate" then
+      local clients,e=rpc("CLIENT_LIST",{})
+      if not clients then
+        message("TERMINAUX",e,palette.bad)
+      else
+        local items={}
+        for _,cl in ipairs(clients) do
+          if cl.role=="delegate" then
+            items[#items+1]={
+              text=cl.label.." / PC #"..tostring(cl.computerId)..
+                (cl.stateId and (" / "..cl.stateId) or " / aucun Etat"),
+              client=cl
+            }
+          end
+        end
+        if #items==0 then
+          message("DELEGUES","Aucun terminal avec le role delegate. Appairez-en un depuis le serveur.",palette.warn)
+        else
+          local p=menu("RATTACHER UN DELEGUE",items,"Un terminal delegue represente un seul Etat pour les votes.")
+          if p then
+            local r,er=rpc("CLIENT_SET_STATE",{clientId=p.client.clientId,stateId=full.id})
+            message("DELEGUE",r and (p.client.label.." -> "..full.name) or er,r and palette.ok or palette.bad)
+          end
+        end
+      end
+    end
+  end
+end
+
+local function statesScreen(query,status)
+  query=query or ""
+  status=status or ""
+  while true do
+    local states,err=rpc("STATE_LIST",{query=query,status=status})
+    if not states then message("ETATS",err,palette.bad);return end
+    local items={}
+    if allowed("institutionAdmin") then
+      items[#items+1]={text="[+] Enregistrer un Etat",id="new"}
+    end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer par statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
+    if query~="" or status~="" then items[#items+1]={text="[R] Reinitialiser les filtres",id="reset"} end
+
+    for _,st in ipairs(states) do
+      items[#items+1]={text=st.id.."  "..st.name.."  ["..st.status.."]",state=st}
+    end
+
+    local p=menu("REGISTRE DES ETATS",items,#states.." Etat(s) visible(s)")
+    if not p then return end
+
+    if p.id=="new" then
+      local name=prompt("Nom officiel")
+      local shortName=prompt("Nom court",name)
+      local government=prompt("Gouvernement / regime")
+      local representative=prompt("Representant principal")
+      local notes=multi("NOTES D'ADHESION / REGISTRE","")
+      local st=menu("STATUT INITIAL",{
+        {text="Candidat",v="candidate"},
+        {text="Membre",v="member"}
+      })
+      local r,e=rpc("STATE_CREATE",{
+        name=name,shortName=shortName,government=government,
+        representative=representative,notes=notes,status=st and st.v or "candidate"
+      })
+      message("ETAT",r and ("Enregistre: "..r.id) or e,r and palette.ok or palette.bad)
+
+    elseif p.id=="search" then
+      query=prompt("Recherche Etat / representant",query)
+
+    elseif p.id=="status" then
+      local st=menu("FILTRER LES ETATS",{
+        {text="Tous",v=""},{text="Candidats",v="candidate"},{text="Membres",v="member"},
+        {text="Suspendus",v="suspended"},{text="Retires",v="withdrawn"},{text="Exclus",v="excluded"}
+      })
+      if st then status=st.v end
+
+    elseif p.id=="reset" then
+      query="";status=""
+
+    elseif p.state then
+      stateDetails(p.state)
+    end
+  end
+end
+
+local function thresholdLabel(v)
+  local labels={
+    simple_cast="Majorite simple des votes exprimes",
+    absolute_members="Majorite absolue de tous les membres",
+    two_thirds_cast="Deux tiers des votes exprimes",
+    three_quarters_members="Trois quarts de tous les membres"
+  }
+  return labels[v] or tostring(v or "")
+end
+
+local function billTextSections(bill)
+  local tally=bill.tally or {}
+  local votes={}
+  for stateId,v in pairs(bill.votes or {}) do
+    votes[#votes+1]=(v.stateName or stateId).." : "..string.upper(v.choice or "?")..
+      (v.at and (" / "..v.at) or "")
+  end
+  table.sort(votes)
+  return {
+    {label="Proposition",text=bill.id.." / "..(bill.title or "")},
+    {label="Etape",text=bill.stage or ""},
+    {label="Type",text=bill.proposalType=="amendment" and ("Amendement de "..(bill.targetRef or "")) or "Nouvel article"},
+    {label="Resume",text=bill.summary or ""},
+    {label="Texte propose",text=(bill.proposedTitle or "").."\n\n"..(bill.proposedBody or "")},
+    {label="Classement",text=(bill.proposedBook or "").." / "..(bill.proposedSection or "")},
+    {label="Regle de vote",text=thresholdLabel(bill.threshold)},
+    {label="Resultats",text="Pour "..tostring(tally.yes or 0).." / Contre "..tostring(tally.no or 0)..
+      " / Abstention "..tostring(tally.abstain or 0).." / Membres eligibles "..tostring(tally.eligible or 0)},
+    {label="Votes par Etat",text=#votes>0 and table.concat(votes,"\n") or "Aucun vote enregistre."},
+    {label="Promulgation",text=bill.enactedRef or "-"}
+  }
+end
+
+local function chooseThreshold(current)
+  local p=menu("REGLE DE MAJORITE",{
+    {text="Majorite simple des votes exprimes",v="simple_cast"},
+    {text="Majorite absolue de tous les membres",v="absolute_members"},
+    {text="Deux tiers des votes exprimes",v="two_thirds_cast"},
+    {text="Trois quarts de tous les membres",v="three_quarters_members"}
+  },"Regle actuelle: "..thresholdLabel(current))
+  return p and p.v or current or "simple_cast"
+end
+
+local function billDetails(id)
+  while true do
+    local bill,err=rpc("BILL_GET",{id=id})
+    if not bill then message("PROPOSITION",err,palette.bad);return end
+
+    local actions={
+      {text="Lire la proposition et les resultats",id="read"},
+      {text="Imprimer la proposition",id="print"}
+    }
+
+    if allowed("delegateVote") and bill.stage=="voting" then
+      actions[#actions+1]={text="Voter au nom de mon Etat",id="vote"}
+    end
+    if allowed("legislature") and (bill.stage=="draft" or bill.stage=="debate") then
+      actions[#actions+1]={text="Modifier le projet",id="edit"}
+      actions[#actions+1]={text="Ouvrir le vote",id="open"}
+    end
+    if allowed("legislature") and bill.stage=="voting" then
+      actions[#actions+1]={text="Clore et depouiller le vote",id="close"}
+    end
+    if allowed("legislature") and bill.stage=="adopted" then
+      actions[#actions+1]={text="Promulguer dans le Code",id="enact"}
+    end
+    if bill.enactedRef and bill.enactedRef~="" then
+      actions[#actions+1]={text="Ouvrir l'article promulgue",id="law"}
+    end
+
+    local tally=bill.tally or {}
+    local a=menu(bill.id.." - "..bill.title,actions,
+      "["..bill.stage.."] Pour "..tostring(tally.yes or 0).." / Contre "..tostring(tally.no or 0).." / Abst. "..tostring(tally.abstain or 0))
+    if not a then return end
+
+    if a.id=="read" then
+      textPage(bill.id,billTextSections(bill))
+
+    elseif a.id=="print" then
+      local ok,r=printer.bill(bill)
+      message("IMPRESSION",ok and ("Proposition imprimee: "..r.." page(s).") or r,ok and palette.ok or palette.bad)
+
+    elseif a.id=="vote" then
+      local v=menu("VOTE OFFICIEL",{
+        {text="POUR",v="yes"},
+        {text="CONTRE",v="no"},
+        {text="ABSTENTION",v="abstain"}
+      },"Le vote est rattache a l'Etat attribue a ce terminal.")
+      if v then
+        local r,e=rpc("BILL_VOTE",{id=bill.id,choice=v.v})
+        message("VOTE",r and ("Vote enregistre. Pour "..r.tally.yes.." / Contre "..r.tally.no.." / Abst. "..r.tally.abstain) or e,r and palette.ok or palette.bad)
+      end
+
+    elseif a.id=="edit" then
+      local title=prompt("Titre de la proposition",bill.title)
+      local summary=multi("RESUME / EXPOSE DES MOTIFS",bill.summary or "")
+      local proposedTitle=prompt("Titre de l'article",bill.proposedTitle)
+      local proposedBody=multi("TEXTE PROPOSE",bill.proposedBody or "")
+      local threshold=chooseThreshold(bill.threshold)
+      local r,e=rpc("BILL_EDIT",{
+        id=bill.id,title=title,summary=summary,proposedTitle=proposedTitle,
+        proposedBody=proposedBody,threshold=threshold
+      })
+      message("PROPOSITION",r and "Projet mis a jour." or e,r and palette.ok or palette.bad)
+
+    elseif a.id=="open" then
+      local r,e=rpc("BILL_OPEN_VOTE",{id=bill.id})
+      message("ASSEMBLEE",r and "Vote officiellement ouvert." or e,r and palette.ok or palette.bad)
+
+    elseif a.id=="close" then
+      local confirm=menu("CLOTURER LE VOTE",{
+        {text="Clore maintenant et calculer le resultat",id="yes"},
+        {text="Annuler",id="no"}
+      },"La regle appliquee sera: "..thresholdLabel(bill.threshold))
+      if confirm and confirm.id=="yes" then
+        local r,e=rpc("BILL_CLOSE",{id=bill.id})
+        message("RESULTAT",r and (r.result=="adopted" and "PROPOSITION ADOPTEE" or "PROPOSITION REJETEE") or e,
+          r and (r.result=="adopted" and palette.ok or palette.warn) or palette.bad)
+      end
+
+    elseif a.id=="enact" then
+      local confirm=menu("PROMULGATION",{
+        {text="Promulguer et appliquer au Code",id="yes"},
+        {text="Annuler",id="no"}
+      },"Cette operation creera/modifiera une loi active et sera journalisee.")
+      if confirm and confirm.id=="yes" then
+        local r,e=rpc("BILL_ENACT",{id=bill.id})
+        message("PROMULGATION",r and ("Promulgue: "..tostring(r.enactedRef)) or e,r and palette.ok or palette.bad)
+      end
+
+    elseif a.id=="law" then
+      viewLaw(bill.enactedRef)
+    end
+  end
+end
+
+local function billsScreen(query,stage)
+  query=query or ""
+  stage=stage or ""
+  while true do
+    local bills,err=rpc("BILL_LIST",{query=query,stage=stage})
+    if not bills then message("ASSEMBLEE",err,palette.bad);return end
+
+    local items={}
+    if allowed("legislature") then items[#items+1]={text="[+] Deposer une proposition de loi",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[E] Filtrer par etape"..(stage~="" and (" ["..stage.."]") or ""),id="stage"}
+    if query~="" or stage~="" then items[#items+1]={text="[R] Reinitialiser les filtres",id="reset"} end
+
+    for _,bill in ipairs(bills) do
+      items[#items+1]={text=bill.id.."  "..bill.title.."  ["..bill.stage.."]",bill=bill}
+    end
+
+    local p=menu("ASSEMBLEE / PROPOSITIONS",items,#bills.." proposition(s)")
+    if not p then return end
+
+    if p.id=="new" then
+      local kind=menu("TYPE DE PROPOSITION",{
+        {text="Creer un nouvel article",v="new_law"},
+        {text="Modifier un article existant",v="amendment"}
+      })
+      if kind then
+        local target=nil
+        local proposedTitle=""
+        local proposedBody=""
+        local proposedBook=""
+        local proposedSection=""
+
+        if kind.v=="amendment" then
+          local law=referenceBrowser({mode="browse",pick=true})
+          if law then
+            target=rpc("LAW_GET",{ref=law.ref})
+            if target then
+              proposedTitle=target.title or ""
+              proposedBody=target.body or ""
+              proposedBook=target.book or ""
+              proposedSection=target.section or ""
+            end
+          end
+          if not target then
+            message("PROPOSITION","Creation annulee: article cible non selectionne.",palette.warn)
+          end
+        else
+          local books=rpc("LAW_BOOKS",{}) or {}
+          local bookItems={}
+          for _,b in ipairs(books) do bookItems[#bookItems+1]={text=bookLabel(b),book=b.name} end
+          local bp=menu("LIVRE DU FUTUR ARTICLE",bookItems)
+          if bp then proposedBook=bp.book end
+        end
+
+        if kind.v=="new_law" or target then
+          local title=prompt("Titre de la proposition")
+          local summary=multi("EXPOSE DES MOTIFS","")
+          proposedTitle=prompt("Titre juridique propose",proposedTitle)
+          proposedSection=prompt("Section",proposedSection)
+          proposedBody=multi("TEXTE JURIDIQUE PROPOSE",proposedBody)
+          local threshold=chooseThreshold("simple_cast")
+          local r,e=rpc("BILL_CREATE",{
+            title=title,summary=summary,proposalType=kind.v,
+            targetRef=target and target.ref or "",
+            proposedTitle=proposedTitle,proposedBody=proposedBody,
+            proposedBook=proposedBook,proposedSection=proposedSection,
+            threshold=threshold
+          })
+          message("PROPOSITION",r and ("Deposee: "..r.id) or e,r and palette.ok or palette.bad)
+        end
+      end
+
+    elseif p.id=="search" then
+      query=prompt("Recherche proposition",query)
+
+    elseif p.id=="stage" then
+      local e=menu("ETAPE LEGISLATIVE",{
+        {text="Toutes",v=""},{text="Brouillons",v="draft"},{text="En debat",v="debate"},
+        {text="Vote ouvert",v="voting"},{text="Adoptees",v="adopted"},{text="Rejetees",v="rejected"},
+        {text="Promulguees",v="enacted"}
+      })
+      if e then stage=e.v end
+
+    elseif p.id=="reset" then
+      query="";stage=""
+
+    elseif p.bill then
+      billDetails(p.bill.id)
+    end
+  end
+end
+
 local function auditScreen()
   local rows,err=rpc("AUDIT_LIST",{limit=100})
   if not rows then message("JOURNAL",err,palette.bad);return end
