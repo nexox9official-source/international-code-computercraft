@@ -1,4 +1,4 @@
-# Architecture v0.14
+# Architecture v0.15
 
 ## Topologie
 
@@ -43,6 +43,7 @@ state
          +-- citizens[NC-CIT-...]
          +-- cases[NC-CASE-...]
          +-- sessions[NC-SESSION-...]
+         +-- gazette[NC-GAZ-...]
          +-- nationalAudit
 ```
 
@@ -171,6 +172,45 @@ Les décrets constituent une couche réglementaire séparée des lois.
 
 Le serveur vérifie le portefeuille du ministre avant publication d'un décret ministériel. Les décrets nationaux restent réservés à la Présidence. La publication et l'abrogation sont scellées et auditées.
 
+## Journal officiel national
+
+Le Journal officiel constitue un registre dérivé mais **persistant**. Une opération juridique crée l'acte source, puis ajoute une nouvelle entrée `NC-GAZ` avant que la mutation soit sauvegardée.
+
+```text
+NC-BILL / NC-DEC / MIN / NC-SESSION / NC-CASE
+                     |
+                     +---- effet officiel
+                              |
+                              v
+                       NC-GAZ-AAAA-XXXX
+                         |          |
+                         |          +-- seal propre
+                         +-- sourceSeal
+```
+
+Le Journal n'est jamais utilisé pour remplacer la source de vérité juridique : il sert de publication officielle et d'archive chronologique.
+
+Les niveaux de visibilité sont revalidés côté serveur :
+
+- `public` et `internal` : terminaux nationaux autorisés ;
+- `restricted` : Présidence / Conseil ;
+- `judicial` : circuit juge / parquet.
+
+Ainsi, un jugement scellé peut laisser une trace de publication vérifiable sans exposer son contenu au Gouvernement.
+
+## Vérification de sceau
+
+`NC_VERIFY_SEAL` recherche le sceau dans les registres nationaux. Le résultat contient la nature, l'objet, le titre, la date et l'autorité lorsque le terminal a le droit de les connaître.
+
+Pour un objet judiciaire ou institutionnel restreint, la réponse devient volontairement minimale :
+
+```text
+valid = true
+confidential = true
+```
+
+Le mécanisme reste un dispositif d'intégrité RP, pas une signature cryptographique forte.
+
 ## Invariants importants
 
 1. Un numéro d'article n'est jamais réutilisé.
@@ -196,6 +236,7 @@ Le serveur vérifie le portefeuille du ministre avant publication d'un décret m
 - Citoyen : `NC-CIT-0001`
 - Dossier national : `NC-CASE-AAAA-0001`
 - Session nationale : `NC-SESSION-AAAA-0001`
+- Publication officielle : `NC-GAZ-AAAA-0001`
 - Dossier international : `CASE-AAAA-0001`
 - Terminal : `CLIENT-<computerId>-<suffixe>`
 
