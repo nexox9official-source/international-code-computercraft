@@ -7,7 +7,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** avec deux espaces juridi
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. Les données nationales de North Coalition sont isolées logiquement des registres internationaux et soumises à leur propre contrôle d'accès.
 
-## Ce que fait la v0.12
+## Ce que fait la v0.14
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
@@ -23,15 +23,23 @@ Le projet ne contient aucune référence au nom du serveur Minecraft. Les donné
 - impression multi-pages des articles et dossiers via une **Printer ComputerCraft** ;
 - interface terminal claire, navigable au clavier et à la souris.
 
-## Intranet national North Coalition v0.12
+## Intranet national North Coalition v0.14
 
-La v0.12 ajoute un deuxième espace complet, **interne à North Coalition**, sans transformer les 400 lois nationales en articles UNS.
+La v0.14 fournit un deuxième espace complet, **interne à North Coalition**, sans transformer les 400 lois nationales en articles UNS.
 
 Depuis un terminal autorisé :
 
 ```text
 ic nc
 ```
+
+Pour un grand Monitor institutionnel interne :
+
+```text
+ic nc-display
+```
+
+Le Monitor tourne entre Gouvernement, scrutins, législation, Journal officiel, sessions nationales, justice et catégories du Code.
 
 Le premier terminal administrateur peut enregistrer la Présidence fondatrice sous l'identité officielle **NexoFr_**. Ensuite, l'accès national est attribué terminal par terminal.
 
@@ -64,12 +72,87 @@ L'intranet ne se contente pas du rôle international du terminal. Il possède se
 - Président de la Coalition ;
 - membre du Conseil de la Coalition ;
 - ministre ;
-- justice ;
+- juge ;
+- parquet / procureur ;
 - police / sécurité ;
 - administration ;
 - citoyen.
 
 Les terminaux étrangers ou non enregistrés ne peuvent pas ouvrir le registre national. L'administration internationale garde un accès de secours, mais **un terminal administrateur non enregistré n'est pas compté comme électeur national ni comme candidat à un ministère**.
+
+### Registre civil et identités permanentes
+
+L'accès national repose maintenant sur un **registre civil propre à North Coalition**.
+
+Chaque personne enregistrée reçoit un identifiant permanent :
+
+```text
+NC-CIT-0001
+NC-CIT-0002
+...
+```
+
+Une fiche conserve l'identité officielle, le nom d'affichage, le statut (`citizen`, `resident`, `suspended`, `deceased`), son sceau initial et l'historique des modifications.
+
+Les terminaux ComputerCraft sont **rattachés** à une fiche citoyenne. Les votes ne sont plus dédupliqués à partir d'un simple pseudo : le serveur utilise le `NC-CIT-...` permanent. Plusieurs PC rattachés au même citoyen ne donnent donc jamais plusieurs voix.
+
+Le Président et le **MIN-INT** peuvent administrer le registre civil. Retirer la citoyenneté d'un titulaire de fonction importante est bloqué tant que la fonction n'a pas été régulièrement transférée ou libérée.
+
+### Justice nationale
+
+North Coalition possède maintenant ses propres dossiers `NC-CASE-AAAA-XXXX`, séparés de la Cour internationale.
+
+Le circuit national comprend :
+
+- dossiers pénaux, civils, administratifs et constitutionnels ;
+- visibilité publique, restreinte ou scellée ;
+- faits `FACT-...` et preuves `EVID-...` scellés ;
+- citations d'articles `NC-ART-...` ;
+- audiences et procès-verbaux ;
+- ordonnances de perquisition, saisie, arrestation, libération, protection ou injonction ;
+- jugements motivés ;
+- appels ;
+- chronologie du dossier ;
+- impression du dossier complet ou d'un jugement.
+
+Lorsqu'un jugement est rendu, le système **fige la version exacte** de chaque article national cité. Une modification ultérieure du Code ne change donc pas rétroactivement le droit utilisé dans l'ancienne décision.
+
+Le rôle présidentiel n'obtient pas automatiquement les pouvoirs judiciaires dans l'interface nationale : juge, parquet et police disposent de compétences distinctes.
+
+### Sessions du Conseil et du Gouvernement
+
+Les institutions nationales utilisent des sessions `NC-SESSION-AAAA-XXXX`.
+
+Types pris en charge :
+
+- Conseil de la Coalition ;
+- Conseil des ministres ;
+- session d'urgence ;
+- commission ;
+- audition publique.
+
+Une session comporte convocation, date, salle, visibilité, ordre du jour, présence par `NC-CIT`, état de chaque point, procès-verbal, conclusions et sceaux d'ouverture/clôture.
+
+L'ordre du jour peut pointer directement vers :
+
+```text
+NC-ART
+NC-BILL
+NC-ELECT
+NC-DEC
+NC-CASE
+MIN
+NC-CIT
+ou un point libre
+```
+
+Le corps des participants dépend du type de session. Un Conseil n'accepte par exemple que la Présidence et les membres du Conseil, tandis qu'un Cabinet accueille la Présidence et les ministres.
+
+### Notifications nationales
+
+Les événements importants alimentent un centre de notifications propre à l'intranet : ouverture de vote, résultat, promulgation, décret, nomination ministérielle, audience, jugement, appel, modification du registre civil ou session institutionnelle.
+
+Les notifications ciblées restent liées au terminal et à l'identité concernée, et peuvent ouvrir directement l'objet correspondant.
 
 ### Gouvernement et ministres
 
@@ -125,8 +208,9 @@ Les actes réglementaires utilisent des références `NC-DEC-AAAA-XXXX`.
           +-------------+-------------+
           |                           |
       ESPACE UNS                 ESPACE NC
-   UNS-ART / CASE / RES       NC-ART / NC-BILL
-   TREATY / MISSION / ENF     MIN / NC-ELECT / NC-DEC
+   UNS-ART / CASE / RES       NC-ART / NC-BILL / NC-CASE
+   TREATY / MISSION / ENF     NC-CIT / MIN / NC-ELECT / NC-DEC
+                              NC-SESSION
           |                           |
    droits internationaux       habilitations nationales
 ```
@@ -189,7 +273,7 @@ wget run https://raw.githubusercontent.com/nexox9official-source/international-c
 wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua admin
 ```
 
-## Navigation v0.12
+## Navigation v0.14
 
 Le Code n'affiche plus simplement une liste brute de 500 articles. Le terminal propose maintenant :
 
