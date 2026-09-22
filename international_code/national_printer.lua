@@ -245,4 +245,47 @@ function P.judgment(case,judgment)
   return printLines((case.id or "NC-CASE").." JUGEMENT",lines)
 end
 
+
+function P.session(sess)
+  if not sess then return false,"Session introuvable." end
+  local lines={}
+  append(lines,"SESSION NATIONALE",sess.id.." / "..(sess.title or ""),25)
+  append(lines,"TYPE / STATUT",(sess.sessionType or "-").." / "..(sess.status or "-"),25)
+  append(lines,"VISIBILITE",sess.visibility or "-",25)
+  append(lines,"DATE / HEURE",sess.scheduledFor or "-",25)
+  append(lines,"LIEU",sess.location or "-",25)
+  append(lines,"DESCRIPTION",sess.description or "",25)
+  append(lines,"SCEAU CONVOCATION",sess.convocationSeal or "-",25)
+
+  lines[#lines+1]="ORDRE DU JOUR"
+  for _,item in ipairs(sess.agenda or {}) do
+    for _,l in ipairs(common.wrap((item.id or "?").." ["..(item.status or "?").."] "..(item.kind or "").." "..(item.ref or ""),25)) do lines[#lines+1]=l end
+    for _,l in ipairs(common.wrap(item.title or "",25)) do lines[#lines+1]=l end
+    if item.sessionNotes and item.sessionNotes~="" then
+      for _,l in ipairs(common.wrap("Notes: "..item.sessionNotes,25)) do lines[#lines+1]=l end
+    end
+    lines[#lines+1]=""
+  end
+
+  lines[#lines+1]="PRESENCES"
+  local attendance={}
+  for _,row in pairs(sess.attendance or {}) do attendance[#attendance+1]=row end
+  table.sort(attendance,function(a,b) return tostring(a.identity)<tostring(b.identity) end)
+  for _,row in ipairs(attendance) do
+    for _,l in ipairs(common.wrap((row.identity or "?").." / "..(row.role or "?")..
+      (row.ministryCode and (" / "..row.ministryCode) or "").." / "..(row.checkedInAt or ""),25)) do
+      lines[#lines+1]=l
+    end
+  end
+  if #attendance==0 then lines[#lines+1]="Aucune presence enregistree." end
+  lines[#lines+1]=""
+
+  if sess.openSeal then append(lines,"SCEAU OUVERTURE",sess.openSeal,25) end
+  if sess.minutes then append(lines,"PROCES-VERBAL",sess.minutes,25) end
+  if sess.conclusions then append(lines,"CONCLUSIONS",sess.conclusions,25) end
+  if sess.closeSeal then append(lines,"SCEAU DE CLOTURE",sess.closeSeal,25) end
+  if sess.cancelReason then append(lines,"ANNULATION",sess.cancelReason.."\n"..(sess.cancelSeal or "-"),25) end
+  return printLines(sess.id or "NC-SESSION",lines)
+end
+
 return P
