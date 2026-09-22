@@ -711,6 +711,58 @@ local function decreesScreen(info)
   end
 end
 
+
+local function nationalNotices(info)
+  while true do
+    local rows,err=rpc("NC_NOTICE_LIST",{})
+    if not rows then message("NOTIFICATIONS NC",err,palette.bad);return end
+    local items={{text="[✓] Marquer toutes comme lues",id="all"}}
+    for _,n in ipairs(rows) do
+      items[#items+1]={
+        text=(n.read and "    " or "[!] ")..(n.title or "Notification").." / "..(n.createdAt or ""),
+        notice=n
+      }
+    end
+    local p=menu("NOTIFICATIONS NORTH COALITION",items,#rows.." notification(s)")
+    if not p then return end
+    if p.id=="all" then
+      local count=0
+      for _,n in ipairs(rows) do
+        if not n.read then
+          local ok=rpc("NOTICE_MARK_READ",{id=n.id})
+          if ok then count=count+1 end
+        end
+      end
+      message("NOTIFICATIONS",tostring(count).." notification(s) marquee(s) comme lue(s).",palette.accent)
+    elseif p.notice then
+      local n=p.notice
+      if not n.read then rpc("NOTICE_MARK_READ",{id=n.id}) end
+      local actions={{text="Lire la notification",id="read"}}
+      if n.objectType=="nc_election" then actions[#actions+1]={text="Ouvrir le scrutin",id="open"}
+      elseif n.objectType=="nc_bill" then actions[#actions+1]={text="Ouvrir le projet de loi",id="open"}
+      elseif n.objectType=="nc_decree" then actions[#actions+1]={text="Ouvrir le decret",id="open"}
+      elseif n.objectType=="nc_ministry" then actions[#actions+1]={text="Ouvrir le ministere",id="open"}
+      elseif n.objectType=="nc_government" then actions[#actions+1]={text="Ouvrir le Gouvernement",id="open"} end
+      local a=menu(n.title or n.id,actions,(n.severity or "info").." / "..(n.createdAt or ""))
+      if a and a.id=="read" then
+        textPage(n.id,{
+          {label="Notification",text=n.title or ""},
+          {label="Date",text=n.createdAt or ""},
+          {label="Niveau",text=n.severity or "info"},
+          {label="Message",text=n.body or ""},
+          {label="Objet",text=(n.objectType or "-").." / "..(n.objectId or "-")}
+        })
+      elseif a and a.id=="open" then
+        if n.objectType=="nc_election" then C.electionDetails(n.objectId)
+        elseif n.objectType=="nc_bill" then billDetails(n.objectId)
+        elseif n.objectType=="nc_decree" then decreeDetails(n.objectId)
+        elseif n.objectType=="nc_ministry" then ministryDetails(n.objectId)
+        elseif n.objectType=="nc_government" then governmentScreen(info) end
+      end
+    end
+  end
+end
+
 local function auditScreen()
   local rows,err=rpc("NC_AUDIT_LIST",{limit=150})
   if not rows then message("AUDIT NATIONAL",err,palette.bad);return end
@@ -758,9 +810,10 @@ function C.run()
     info=rpc("NC_INFO",{}) or info
     local subtitle=roleLabel(dash.nationalRole).." / "..tostring(dash.nationalIdentity)..
       (dash.ministryCode and (" / "..dash.ministryCode) or "")..
-      " | "..dash.activeLaws.." lois actives / "..dash.openElections.." scrutin(s)"
+      " | "..dash.activeLaws.." lois actives / "..dash.openElections.." scrutin(s) / "..tostring(dash.unreadNotices or 0).." notif."
 
     local items={
+      {text=(dash.unreadNotices or 0)>0 and ("[!] NOTIFICATIONS NATIONALES ("..dash.unreadNotices..")") or "NOTIFICATIONS NATIONALES",id="notices"},
       {text="CODE NATIONAL / CATEGORIES / RECHERCHE",id="code"},
       {text="GOUVERNEMENT / MINISTERES / FONCTIONS",id="gov"},
       {text="LEGISLATION / PROJETS / VOTES",id="bills"},
@@ -774,7 +827,8 @@ function C.run()
 
     local p=menu("INTRANET NATIONAL",items,subtitle)
     if not p or p.id=="back" then clear();return end
-    if p.id=="code" then codeScreen()
+    if p.id=="notices" then nationalNotices(info)
+    elseif p.id=="code" then codeScreen()
     elseif p.id=="gov" then governmentScreen(info)
     elseif p.id=="bills" then billsScreen()
     elseif p.id=="elections" then C.electionsScreen()
