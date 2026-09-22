@@ -1,4 +1,4 @@
-# Architecture v0.10
+# Architecture v0.11
 
 ## Topologie
 
@@ -67,6 +67,7 @@ Le serveur central contient désormais quatre ensembles principaux :
 - `sessions` : calendrier, ordres du jour, présences et procès-verbaux institutionnels ;
 - `missions` : mandats internationaux, États participants, coordonnées, statut opérationnel et rapports ;
 - `incidents` : événements internationaux, géolocalisation, États impliqués, SITREP et historique ;
+- `conflicts` : crises longues, États impliqués, zones versionnées et historique de cessez-le-feu ;
 - `treaties` : projets de traités, versions, États parties, signatures et entrée en vigueur ;
 - `cases` : dossiers, preuves, audiences, procès-verbaux, ordonnances, appels et jugements ;
 - `enforcements` : sanctions, réparations et suivi de conformité ;
@@ -79,6 +80,28 @@ Les dossiers disposent de trois niveaux de visibilité. `public` est accessible 
 ## Sceaux applicatifs
 
 Les actes sensibles reçoivent un sceau calculé par le serveur à partir de leur contenu et de leurs métadonnées. Ces sceaux servent à détecter visuellement une incohérence RP et à identifier une version imprimée. Ils ne constituent pas une primitive cryptographique de sécurité.
+
+## Conflits et zones versionnées
+
+Le registre `conflicts` représente une situation durable. Les événements ponctuels restent dans `incidents`, ce qui évite de confondre la guerre elle-même avec chacune de ses occurrences.
+
+```text
+CONFLICT
+   |
+   +--> involvedStates[] -> STATE
+   +--> zones[] ----------> coordonnées Minecraft
+   +--> statusHistory[]
+   +--> resolutionId -----> RES
+   +--> treatyId ---------> TREATY
+   +--> caseId -----------> CASE
+   |
+   +<-- INCIDENT.conflictId
+   +<-- MISSION.conflictId
+```
+
+Une zone est versionnée : toute modification archive le nom, la description, le statut, la position et le sceau précédents avant de produire une nouvelle version. Les anciens documents papier restent donc vérifiables.
+
+Le centre de situation transforme les zones non fermées en points cartographiques `kind="conflict"`. Les coordonnées restent des données RP Minecraft et ne sont pas interprétées comme des coordonnées géographiques réelles.
 
 ## Centre de situation
 
