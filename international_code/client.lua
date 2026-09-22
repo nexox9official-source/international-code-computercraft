@@ -814,6 +814,7 @@ local roleAllows={
   caseWrite={clerk=true,judge=true,admin=true},
   judgment={judge=true,admin=true},
   orderWrite={judge=true,admin=true},
+  visibilityWrite={judge=true,admin=true},
   legislature={writer=true,admin=true},
   delegateVote={delegate=true},
   institutionAdmin={admin=true},
@@ -1295,6 +1296,8 @@ local function caseDetails(id)
       actions[#actions+1]={text="Gerer les articles cites / panier juridique",id="articles"}
       actions[#actions+1]={text="Modifier le contexte",id="summary"}
       actions[#actions+1]={text="Changer le statut",id="status"}
+    end
+    if allowed("visibilityWrite") then
       actions[#actions+1]={text="Changer la visibilite",id="visibility"}
     end
     if allowed("judgment") then
@@ -1906,7 +1909,9 @@ local function helpScreen()
   textPage("AIDE / RACCOURCIS",{
     {label="Navigation du Code",text="Parcourez par Livre, utilisez la recherche plein texte ou filtrez par statut. Un article peut etre ouvert, imprime et son historique de versions consulte."},
     {label="Editeur juridique",text="F2: Livres / categories\nF3: Recherche d'article\nF4: Inserer une citation a la position du curseur\nF6: Panier juridique multi-selection\nF7: Recuperer un brouillon autosauvegarde\nF5: Terminer la redaction\nEchap: menu de sortie"},
-    {label="Dossiers",text="Le panier juridique permet d'ajouter ou retirer plusieurs articles d'un dossier. Chaque fait, preuve, changement de statut et jugement alimente la chronologie."},
+    {label="Assemblee",text="Les propositions BILL peuvent creer un article ou amender un texte existant. Les terminaux delegate rattaches a un Etat votent POUR, CONTRE ou ABSTENTION. Apres cloture, une proposition adoptee peut etre promulguee dans le Code."},
+    {label="Etats membres",text="Le registre STATE conserve le statut, le gouvernement et le representant des pays. Un administrateur peut rattacher un terminal delegate a un Etat pour ses votes officiels."},
+    {label="Dossiers",text="Le panier juridique permet d'ajouter ou retirer plusieurs articles d'un dossier. Chaque fait, preuve, audience, ordonnance, changement de statut et jugement alimente la chronologie."},
     {label="Jugements",text="Lors de l'enregistrement, le systeme fige la reference, le titre et la version des articles cites. Un jugement peut ensuite etre relu ou imprime seul."},
     {label="Impression",text="Une imprimante ComputerCraft connectee permet d'imprimer le dossier complet, sa chronologie, un article ou un jugement individuel sur plusieurs pages."},
     {label="Sauvegarde",text="Les textes en cours sont autosauvegardes localement. Le serveur reste la source de verite pour les lois, dossiers, jugements et le journal d'audit."}
@@ -1994,11 +1999,13 @@ function C.run()
   while true do
     local dash,err=rpc("DASHBOARD",{})
     local subtitle=dash and
-      ("Role "..cfg.role.." | "..dash.laws.." art. ("..tostring(dash.activeLaws or 0).." actifs) | "..tostring(dash.openCases or dash.cases).." dossiers ouverts | rev "..dash.revision)
+      ("Role "..cfg.role.." | "..dash.laws.." art. | "..tostring(dash.states or 0).." Etats | "..tostring(dash.votingBills or 0).." vote(s) | "..tostring(dash.openCases or dash.cases).." dossiers | rev "..dash.revision)
       or ("HORS LIGNE - "..tostring(err))
 
     local items={
       {text="CODE INTERNATIONAL / ARTICLES",id="laws"},
+      {text="ASSEMBLEE / PROPOSITIONS / VOTES",id="bills"},
+      {text="REGISTRE DES ETATS MEMBRES",id="states"},
       {text="DOSSIERS JUDICIAIRES",id="cases"},
       {text="RECHERCHE GLOBALE",id="search"}
     }
@@ -2014,6 +2021,10 @@ function C.run()
 
     if p.id=="laws" then
       lawsScreen("")
+    elseif p.id=="bills" then
+      billsScreen("","")
+    elseif p.id=="states" then
+      statesScreen("","")
     elseif p.id=="cases" then
       casesScreen("")
     elseif p.id=="search" then
