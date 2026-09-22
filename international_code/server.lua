@@ -9,7 +9,7 @@ local permissions = {
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
-    BILL_LIST=true, BILL_GET=true, TREATY_LIST=true, TREATY_GET=true
+    BILL_LIST=true, BILL_GET=true, RESOLUTION_LIST=true, RESOLUTION_GET=true, TREATY_LIST=true, TREATY_GET=true
   },
   writer = {
     PING=true, DASHBOARD=true, SERVER_INFO=true, VERIFY_SEAL=true,
@@ -18,8 +18,9 @@ local permissions = {
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
-    BILL_LIST=true, BILL_GET=true, TREATY_LIST=true, TREATY_GET=true, BILL_CREATE=true, BILL_EDIT=true, BILL_SET_STAGE=true,
+    BILL_LIST=true, BILL_GET=true, RESOLUTION_LIST=true, RESOLUTION_GET=true, TREATY_LIST=true, TREATY_GET=true, BILL_CREATE=true, BILL_EDIT=true, BILL_SET_STAGE=true,
     BILL_OPEN_VOTE=true, BILL_CLOSE=true, BILL_ENACT=true,
+    RESOLUTION_CREATE=true, RESOLUTION_EDIT=true, RESOLUTION_OPEN_VOTE=true, RESOLUTION_CLOSE=true, RESOLUTION_EXECUTE=true,
     TREATY_CREATE=true, TREATY_EDIT=true, TREATY_OPEN_SIGNATURE=true, TREATY_ACTIVATE=true, TREATY_TERMINATE=true,
     LAW_CREATE=true, LAW_AMEND=true, LAW_REPEAL=true, LAW_SET_STATUS=true,
     AUDIT_LIST=true
@@ -34,7 +35,7 @@ local permissions = {
     CASE_REMOVE_ARTICLE=true, CASE_SET_STATUS=true,
     CASE_ADD_HEARING=true, CASE_SET_HEARING_STATUS=true, CASE_RECORD_HEARING=true, CASE_FILE_APPEAL=true,
     ENFORCEMENT_ADD_PROGRESS=true,
-    STATE_LIST=true, STATE_GET=true, BILL_LIST=true, BILL_GET=true, TREATY_LIST=true, TREATY_GET=true,
+    STATE_LIST=true, STATE_GET=true, BILL_LIST=true, BILL_GET=true, RESOLUTION_LIST=true, RESOLUTION_GET=true, TREATY_LIST=true, TREATY_GET=true,
     AUDIT_LIST=true
   },
   judge = {
@@ -48,7 +49,7 @@ local permissions = {
     CASE_ADD_HEARING=true, CASE_SET_HEARING_STATUS=true, CASE_RECORD_HEARING=true, CASE_FILE_APPEAL=true, CASE_DECIDE_APPEAL=true,
     CASE_ADD_ORDER=true, CASE_SET_ORDER_STATUS=true,
     ENFORCEMENT_CREATE=true, ENFORCEMENT_UPDATE=true, ENFORCEMENT_ADD_PROGRESS=true,
-    STATE_LIST=true, STATE_GET=true, BILL_LIST=true, BILL_GET=true, TREATY_LIST=true, TREATY_GET=true,
+    STATE_LIST=true, STATE_GET=true, BILL_LIST=true, BILL_GET=true, RESOLUTION_LIST=true, RESOLUTION_GET=true, TREATY_LIST=true, TREATY_GET=true,
     AUDIT_LIST=true
   },
   delegate = {
@@ -58,7 +59,7 @@ local permissions = {
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
-    BILL_LIST=true, BILL_GET=true, TREATY_LIST=true, TREATY_GET=true, TREATY_SIGN=true, BILL_VOTE=true
+    BILL_LIST=true, BILL_GET=true, RESOLUTION_LIST=true, RESOLUTION_GET=true, TREATY_LIST=true, TREATY_GET=true, TREATY_SIGN=true, BILL_VOTE=true, RESOLUTION_VOTE=true
   },
   admin = { ["*"]=true }
 }
@@ -166,6 +167,8 @@ local function freshState()
     nextState = 2,
     bills = {},
     billCounters = {},
+    resolutions = {},
+    resolutionCounters = {},
     treaties = {},
     treatyCounters = {},
     enforcements = {},
@@ -194,6 +197,8 @@ local function loadState()
   state.states = state.states or {}
   state.bills = state.bills or {}
   state.billCounters = state.billCounters or {}
+  state.resolutions = state.resolutions or {}
+  state.resolutionCounters = state.resolutionCounters or {}
   state.treaties = state.treaties or {}
   state.treatyCounters = state.treatyCounters or {}
   state.enforcements = state.enforcements or {}
@@ -226,7 +231,7 @@ local function loadState()
   end
 
   state.meta.version = common.VERSION
-  state.meta.schema = math.max(tonumber(state.meta.schema) or 1,3)
+  state.meta.schema = math.max(tonumber(state.meta.schema) or 1,4)
   return state
 end
 
