@@ -1,4 +1,5 @@
 local common = dofile("/international_code/common.lua")
+local national = dofile("/international_code/national.lua")
 local S = {}
 
 local permissions = {
@@ -90,7 +91,9 @@ local permissions = {
 
 local function can(role, action)
   local p = permissions[role or ""]
-  return p and (p["*"] or p[action]) or false
+  if not p then return false end
+  if tostring(action or ""):sub(1,3)=="NC_" then return true end
+  return p["*"] or p[action] or false
 end
 
 local bookNames = {
@@ -205,6 +208,7 @@ local function freshState()
     treatyCounters = {},
     enforcements = {},
     enforcementCounters = {},
+    national = national.newState(),
     notices = {},
     noticeCounter = 0,
     clients = {},
@@ -243,6 +247,7 @@ local function loadState()
   state.treatyCounters = state.treatyCounters or {}
   state.enforcements = state.enforcements or {}
   state.enforcementCounters = state.enforcementCounters or {}
+  local _,nationalCreated = national.ensure(state)
   state.notices = state.notices or {}
   state.noticeCounter = state.noticeCounter or 0
   state.meta = state.meta or {}
@@ -271,7 +276,8 @@ local function loadState()
   end
 
   state.meta.version = common.VERSION
-  state.meta.schema = math.max(tonumber(state.meta.schema) or 1,8)
+  state.meta.schema = math.max(tonumber(state.meta.schema) or 1,9)
+  if nationalCreated then common.saveTableAtomic(common.STATE,state) end
   return state
 end
 
@@ -1144,6 +1150,13 @@ end
 
 local function handleAction(state, actor, action, p)
   p = p or {}
+  if tostring(action or ""):sub(1,3)=="NC_" then
+    return national.handle(state,actor,action,p,{
+      mutate=mutate,
+      saveState=saveState,
+      audit=audit
+    })
+  end
   if action:match("^CASE_") and action~="CASE_LIST" and action~="CASE_GET" and action~="CASE_CREATE" and p.id then
     local guarded=state.cases[common.trim(p.id):upper()]
     if guarded and not canViewCase(actor,guarded) then return nil,"Acces refuse a ce dossier." end
