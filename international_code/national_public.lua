@@ -60,7 +60,8 @@ local function overview(t,info,dash)
   fill(t,y," CABINET          "..tostring(dash.filledMinistries or 0).."/"..tostring(dash.ministries or 0),colors.cyan);y=y+1
   fill(t,y," SCRUTINS OUVERTS "..tostring(dash.openElections or 0),colors.yellow);y=y+1
   fill(t,y," VOTES LEGISLATIFS "..tostring(dash.votingBills or 0),colors.yellow);y=y+1
-  fill(t,y," DECRETS PUBLIES  "..tostring(dash.publishedDecrees or 0),colors.white);y=y+2
+  fill(t,y," DECRETS PUBLIES  "..tostring(dash.publishedDecrees or 0),colors.white);y=y+1
+  fill(t,y," DOSSIERS OUVERTS "..tostring(dash.openCases or 0),colors.cyan);y=y+2
   fill(t,y," Identite terminal: "..tostring(dash.nationalIdentity or "-"),colors.lightGray)
   local _,h=t.getSize()
   fill(t,h," Intranet national / v"..common.VERSION,colors.gray)
@@ -137,6 +138,26 @@ local function decrees(t,rows)
   fill(t,h," Registre des actes reglementaires",colors.gray)
 end
 
+local function cases(t,rows)
+  t.setBackgroundColor(colors.black);t.clear()
+  header(t,"JUSTICE NATIONALE","Dossiers visibles depuis ce terminal")
+  local _,h=t.getSize()
+  local y=4
+  if #rows==0 then
+    fill(t,y," Aucun dossier visible.",colors.lightGray)
+  else
+    for _,case in ipairs(rows) do
+      if y>=h then break end
+      local fg=case.status=="appeal" and colors.yellow or
+        (case.status=="judged" and colors.lime or colors.cyan)
+      fill(t,y," "..case.id.." ["..tostring(case.status or "?").."]",fg);y=y+1
+      if y<h then fill(t,y,"   "..tostring(case.title or ""),colors.white);y=y+1 end
+      if y<h then fill(t,y,"   "..tostring(case.complainant or "-").." / "..tostring(case.accused or "-"),colors.lightGray);y=y+1 end
+    end
+  end
+  fill(t,h," Tribunal national / acces filtre",colors.gray)
+end
+
 local function categories(t,rows)
   t.setBackgroundColor(colors.black);t.clear()
   header(t,"CODE NATIONAL","Categories juridiques")
@@ -171,6 +192,7 @@ function P.run()
       local electionsOpen=rpc(cfg,"NC_ELECTION_LIST",{stage="open"},4) or {}
       local billsVoting=rpc(cfg,"NC_BILL_LIST",{stage="voting"},4) or {}
       local decreesPublished=rpc(cfg,"NC_DECREE_LIST",{status="published"},4) or {}
+      local visibleCases=rpc(cfg,"NC_CASE_LIST",{},4) or {}
       local cats=rpc(cfg,"NC_CATEGORY_LIST",{},4) or {}
 
       if page==1 then overview(target,info,dash)
@@ -178,14 +200,15 @@ function P.run()
       elseif page==3 then elections(target,electionsOpen)
       elseif page==4 then bills(target,billsVoting)
       elseif page==5 then decrees(target,decreesPublished)
+      elseif page==6 then cases(target,visibleCases)
       else categories(target,cats) end
     end
 
     local timer=os.startTimer(5)
     while true do
       local ev,a=os.pullEvent()
-      if ev=="timer" and a==timer then page=page%6+1;break
-      elseif ev=="monitor_touch" then page=page%6+1;break
+      if ev=="timer" and a==timer then page=page%7+1;break
+      elseif ev=="monitor_touch" then page=page%7+1;break
       elseif ev=="key" and (a==keys.q or a==keys.escape) then
         term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
       end
