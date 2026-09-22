@@ -2932,7 +2932,7 @@ local function sovereignAuthorityScreen(info)
         {label="Limite internationale",text="Cette habilitation est interne a North Coalition et ne confere aucun privilege particulier dans l'Union des Nations Souveraines."}
       })
     elseif p.id=="relinquish" then
-      local first=menu("RENUNTIATION VOLONTAIRE",{
+      local first=menu("RENONCIATION VOLONTAIRE",{
         {text="NON - conserver la direction",id="no"},
         {text="OUI - poursuivre la procedure",id="yes"}
       },"Cette operation met fin a la direction souveraine de NexoFr_ et ouvre la voie a une succession.")
