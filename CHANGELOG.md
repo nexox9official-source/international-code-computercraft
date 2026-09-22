@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.6.0
+
+### Notifications institutionnelles
+- centre de notifications persistant par terminal ;
+- ciblage par rôle, État ou terminal ;
+- alertes automatiques pour scrutins, résultats, promulgations, signatures de traités, audiences, appels et exécution ;
+- compteur de notifications non lues sur le tableau de bord ;
+- ouverture directe de l'élément concerné depuis une notification ;
+- commande `ic inbox`.
+
+### Exécution des décisions
+- registre `ENF-AAAA-XXXX` ;
+- mesures liées à un dossier et, si nécessaire, à un jugement ;
+- cibles : État, personne, entreprise/organisation ou autre ;
+- amendes, restitutions, indemnisations, embargos, gels d'avoirs, restrictions, suspensions, inspections, zones démilitarisées et mesures libres ;
+- statuts ordered / active / partial / complied / breached / lifted / expired ;
+- comptes rendus d'exécution scellés ;
+- historique des changements de statut avec sceaux ;
+- notifications automatiques aux États concernés ;
+- impression multipage d'une fiche d'exécution ;
+- consultation des mesures depuis la fiche d'un État ou un dossier ;
+- création du suivi d'exécution directement après un jugement.
+
+### Affichage
+- mesures d'exécution publiques ajoutées au registre Monitor ;
+- `ic enforcement ENF-...` pour un tableau LIVE d'une mesure ;
+- correction du cycle tactile du registre public pour toutes les pages.
+
 ## 0.5.0
 
 ### Traités internationaux
