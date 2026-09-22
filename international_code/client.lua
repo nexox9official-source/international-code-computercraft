@@ -838,6 +838,8 @@ local roleAllows={
   visibilityWrite={judge=true,admin=true},
   appealDecide={judge=true,admin=true},
   legislature={writer=true,admin=true},
+  diplomacy={writer=true,admin=true},
+  treatySign={delegate=true},
   delegateVote={delegate=true},
   institutionAdmin={admin=true},
   audit={writer=true,clerk=true,judge=true,admin=true}
@@ -2055,6 +2057,247 @@ local function billsScreen(query,stage)
 
     elseif p.bill then
       billDetails(p.bill.id)
+    end
+  end
+end
+
+local function stateBasketBrowser(initial)
+  local selected={}
+  for _,id in ipairs(initial or {}) do selected[id]=true end
+
+  while true do
+    local states,err=rpc("STATE_LIST",{})
+    if not states then message("ETATS",err,palette.bad);return nil end
+
+    local items={
+      {text="[OK] Valider les Etats parties",id="done"},
+      {text="[M] Selectionner tous les Etats membres",id="members"},
+      {text="[X] Vider la selection",id="clear"}
+    }
+    local count=0
+    for _,st in ipairs(states) do
+      if selected[st.id] then count=count+1 end
+      items[#items+1]={
+        text=(selected[st.id] and "[X] " or "[ ] ")..st.id.." "..st.name.." ["..st.status.."]",
+        state=st
+      }
+    end
+
+    local p=menu("ETATS PARTIES",items,count.." Etat(s) selectionne(s)")
+    if not p then
+      local out={}
+      for _,st in ipairs(states) do if selected[st.id] then out[#out+1]=st.id end end
+      return out
+    end
+
+    if p.id=="done" then
+      local out={}
+      for _,st in ipairs(states) do if selected[st.id] then out[#out+1]=st.id end end
+      return out
+
+    elseif p.id=="members" then
+      for _,st in ipairs(states) do if st.status=="member" then selected[st.id]=true end end
+
+    elseif p.id=="clear" then
+      selected={}
+
+    elseif p.state then
+      if selected[p.state.id] then selected[p.state.id]=nil else selected[p.state.id]=true end
+    end
+  end
+end
+
+local function treatyTypeLabel(v)
+  local labels={
+    bilateral="Accord bilateral",multilateral="Traite multilateral",
+    defense="Defense / alliance",trade="Commerce",border="Frontiere",
+    ceasefire="Cessez-le-feu",non_aggression="Non-agression",other="Autre"
+  }
+  return labels[v] or tostring(v or "")
+end
+
+local function chooseTreatyType(current)
+  local p=menu("TYPE DE TRAITE",{
+    {text="Accord bilateral",v="bilateral"},
+    {text="Traite multilateral",v="multilateral"},
+    {text="Defense / alliance",v="defense"},
+    {text="Commerce",v="trade"},
+    {text="Frontiere",v="border"},
+    {text="Cessez-le-feu",v="ceasefire"},
+    {text="Non-agression",v="non_aggression"},
+    {text="Autre",v="other"}
+  },"Actuel: "..treatyTypeLabel(current))
+  return p and p.v or current or "other"
+end
+
+local function treatySections(t)
+  local status=t.signatureStatus or {}
+  local sigs={}
+  for stateId,sig in pairs(t.signatures or {}) do
+    sigs[#sigs+1]=(sig.stateName or stateId).." / "..(sig.at or "").." / "..(sig.seal or "-")
+  end
+  table.sort(sigs)
+
+  local history={}
+  for _,h in ipairs(t.history or {}) do
+    history[#history+1]="v"..tostring(h.version or "?").." / "..tostring(h.archivedAt or "").." / "..tostring(h.archivedBy or "")
+  end
+
+  return {
+    {label="Traite",text=t.id.." / "..(t.title or "")},
+    {label="Type / version",text=treatyTypeLabel(t.treatyType).." / v"..tostring(t.version or 1)},
+    {label="Statut",text=t.stage or ""},
+    {label="Etats parties",text=table.concat(t.parties or {},"\n")},
+    {label="Signatures",text=tostring(status.signed or 0).."/"..tostring(status.required or 0)..
+      (status.complete and " / COMPLET" or " / incomplet")},
+    {label="Resume",text=t.summary or ""},
+    {label="Texte integral",text=t.body or ""},
+    {label="Sceau du texte",text=t.signatureTextSeal or "-"},
+    {label="Signatures officielles",text=#sigs>0 and table.concat(sigs,"\n") or "Aucune signature."},
+    {label="Entree en vigueur",text=(t.effectiveAt or "-").." / sceau "..(t.activationSeal or "-")},
+    {label="Fin du traite",text=(t.terminationReason or "-")..(t.terminatedAt and (" / "..t.terminatedAt) or "")},
+    {label="Historique des versions",text=#history>0 and table.concat(history,"\n") or "Version initiale."}
+  }
+end
+
+local function treatyDetails(id)
+  while true do
+    local t,err=rpc("TREATY_GET",{id=id})
+    if not t then message("TRAITE",err,palette.bad);return end
+
+    local sig=t.signatureStatus or {}
+    local actions={
+      {text="Lire le traite integral",id="read"},
+      {text="Imprimer le traite",id="print"}
+    }
+
+    if allowed("treatySign") and t.stage=="signing" then
+      actions[#actions+1]={text="Signer au nom de mon Etat",id="sign"}
+    end
+
+    if allowed("diplomacy") and t.stage=="draft" then
+      actions[#actions+1]={text="Modifier le projet",id="edit"}
+      actions[#actions+1]={text="Ouvrir les signatures",id="open"}
+    end
+
+    if allowed("diplomacy") and t.stage=="ready" then
+      actions[#actions+1]={text="Faire entrer le traite en vigueur",id="activate"}
+    end
+
+    if allowed("diplomacy") and t.stage=="in_force" then
+      actions[#actions+1]={text="Mettre fin au traite",id="terminate"}
+    end
+
+    local a=menu(t.id.." - "..t.title,actions,
+      "["..t.stage.."] signatures "..tostring(sig.signed or 0).."/"..tostring(sig.required or 0).." / v"..tostring(t.version or 1))
+    if not a then return end
+
+    if a.id=="read" then
+      textPage(t.id,treatySections(t))
+
+    elseif a.id=="print" then
+      local ok,r=printer.treaty(t)
+      message("IMPRESSION",ok and ("Traite imprime: "..r.." page(s).") or r,ok and palette.ok or palette.bad)
+
+    elseif a.id=="sign" then
+      local confirm=menu("SIGNATURE OFFICIELLE",{
+        {text="Signer ce texte au nom de mon Etat",id="yes"},
+        {text="Annuler",id="no"}
+      },"Le serveur verifiera que votre Etat fait partie des signataires.")
+      if confirm and confirm.id=="yes" then
+        local r,e=rpc("TREATY_SIGN",{id=t.id})
+        message("SIGNATURE",r and "Signature officielle enregistree." or e,r and palette.ok or palette.bad)
+      end
+
+    elseif a.id=="edit" then
+      local title=prompt("Titre du traite",t.title)
+      local treatyType=chooseTreatyType(t.treatyType)
+      local summary=multi("RESUME / PREAMBULE",t.summary or "")
+      local parties=stateBasketBrowser(t.parties or {}) or t.parties
+      local body=multi("TEXTE DU TRAITE",t.body or "")
+      local r,e=rpc("TREATY_EDIT",{
+        id=t.id,title=title,treatyType=treatyType,summary=summary,parties=parties,body=body
+      })
+      message("TRAITE",r and ("Version "..r.version.." enregistree.") or e,r and palette.ok or palette.bad)
+
+    elseif a.id=="open" then
+      local confirm=menu("OUVRIR LES SIGNATURES",{
+        {text="Figer ce texte et ouvrir les signatures",id="yes"},
+        {text="Annuler",id="no"}
+      },"Apres ouverture, le texte ne pourra plus etre modifie.")
+      if confirm and confirm.id=="yes" then
+        local r,e=rpc("TREATY_OPEN_SIGNATURE",{id=t.id})
+        message("TRAITE",r and ("Signatures ouvertes / sceau "..tostring(r.signatureTextSeal)) or e,r and palette.ok or palette.bad)
+      end
+
+    elseif a.id=="activate" then
+      local r,e=rpc("TREATY_ACTIVATE",{id=t.id})
+      message("TRAITE",r and "Traite entre en vigueur et archive avec son sceau." or e,r and palette.ok or palette.bad)
+
+    elseif a.id=="terminate" then
+      local reason=multi("MOTIF DE FIN DU TRAITE","")
+      local r,e=rpc("TREATY_TERMINATE",{id=t.id,reason=reason})
+      message("TRAITE",r and "Fin du traite enregistree." or e,r and palette.ok or palette.bad)
+    end
+  end
+end
+
+local function treatiesScreen(query,stage,stateId)
+  query=query or ""
+  stage=stage or ""
+  stateId=stateId or ""
+
+  while true do
+    local treaties,err=rpc("TREATY_LIST",{query=query,stage=stage,stateId=stateId})
+    if not treaties then message("TRAITES",err,palette.bad);return end
+
+    local items={}
+    if allowed("diplomacy") then items[#items+1]={text="[+] Rediger un nouveau traite",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer par statut"..(stage~="" and (" ["..stage.."]") or ""),id="stage"}
+    if query~="" or stage~="" then items[#items+1]={text="[R] Reinitialiser les filtres",id="reset"} end
+
+    for _,t in ipairs(treaties) do
+      items[#items+1]={
+        text=t.id.."  "..t.title.."  ["..t.stage.."]",
+        treaty=t
+      }
+    end
+
+    local p=menu("TRAITES / DIPLOMATIE",items,#treaties.." traite(s)")
+    if not p then return end
+
+    if p.id=="new" then
+      local title=prompt("Titre du traite")
+      local treatyType=chooseTreatyType("other")
+      local parties=stateBasketBrowser({})
+      if not parties or #parties<2 then
+        message("TRAITE","Il faut selectionner au moins deux Etats parties.",palette.warn)
+      else
+        local summary=multi("RESUME / PREAMBULE","")
+        local body=multi("TEXTE DU TRAITE","")
+        local r,e=rpc("TREATY_CREATE",{
+          title=title,treatyType=treatyType,parties=parties,summary=summary,body=body
+        })
+        message("TRAITE",r and ("Projet cree: "..r.id) or e,r and palette.ok or palette.bad)
+      end
+
+    elseif p.id=="search" then
+      query=prompt("Recherche traite",query)
+
+    elseif p.id=="stage" then
+      local st=menu("STATUT DU TRAITE",{
+        {text="Tous",v=""},{text="Brouillons",v="draft"},{text="Signatures ouvertes",v="signing"},
+        {text="Pret a entrer en vigueur",v="ready"},{text="En vigueur",v="in_force"},
+        {text="Termines",v="terminated"}
+      })
+      if st then stage=st.v end
+
+    elseif p.id=="reset" then
+      query="";stage=""
+
+    elseif p.treaty then
+      treatyDetails(p.treaty.id)
     end
   end
 end
