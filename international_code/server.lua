@@ -634,6 +634,11 @@ local function listIncidents(state,payload,actor)
   local stateId=common.trim(payload.stateId):upper()
   local dimension=common.trim(payload.dimension)
   local visibility=common.trim(payload.visibility)
+  local missionId=common.trim(payload.missionId):upper()
+  local caseId=common.trim(payload.caseId):upper()
+  local enforcementId=common.trim(payload.enforcementId):upper()
+  local resolutionId=common.trim(payload.resolutionId):upper()
+  local treatyId=common.trim(payload.treatyId):upper()
   local out={}
   for _,incident in pairs(state.incidents or {}) do
     local hit=(q=="" or common.contains(incident.id,q) or common.contains(incident.title,q) or
@@ -643,12 +648,19 @@ local function listIncidents(state,payload,actor)
     local severityHit=(severity=="" or incident.severity==severity)
     local dimensionHit=(dimension=="" or ((incident.position or {}).dimension or "")==dimension)
     local visibilityHit=(visibility=="" or (incident.visibility or "public")==visibility)
+    local missionHit=(missionId=="" or incident.missionId==missionId)
+    local caseHit=(caseId=="" or incident.caseId==caseId)
+    local enforcementHit=(enforcementId=="" or incident.enforcementId==enforcementId)
+    local resolutionHit=(resolutionId=="" or incident.resolutionId==resolutionId)
+    local treatyHit=(treatyId=="" or incident.treatyId==treatyId)
     local stateHit=(stateId=="")
     if not stateHit then
       if incident.reportingStateId==stateId then stateHit=true end
       for _,id in ipairs(incident.involvedStates or {}) do if id==stateId then stateHit=true break end end
     end
-    if hit and statusHit and typeHit and severityHit and dimensionHit and visibilityHit and stateHit and canViewIncident(actor,incident) then
+    if hit and statusHit and typeHit and severityHit and dimensionHit and visibilityHit and
+       missionHit and caseHit and enforcementHit and resolutionHit and treatyHit and
+       stateHit and canViewIncident(actor,incident) then
       out[#out+1]=incidentForActor(actor,incident)
     end
   end
