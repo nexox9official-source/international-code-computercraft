@@ -561,17 +561,19 @@ local function listMissions(state,payload,actor)
   local status=common.trim(payload.status)
   local missionType=common.trim(payload.missionType)
   local stateId=common.trim(payload.stateId):upper()
+  local visibility=common.trim(payload.visibility)
   local out={}
   for _,m in pairs(state.missions or {}) do
     local hit=(q=="" or common.contains(m.id,q) or common.contains(m.title,q) or common.contains(m.mandate,q) or common.contains(m.area,q))
     local statusHit=(status=="" or m.status==status)
     local typeHit=(missionType=="" or m.missionType==missionType)
+    local visibilityHit=(visibility=="" or (m.visibility or "public")==visibility)
     local stateHit=stateId==""
     if not stateHit then
       if m.leadStateId==stateId then stateHit=true end
       for _,id in ipairs(m.participatingStates or {}) do if id==stateId then stateHit=true break end end
     end
-    if hit and statusHit and typeHit and stateHit and canViewMission(actor,m) then out[#out+1]=missionForActor(actor,m) end
+    if hit and statusHit and typeHit and visibilityHit and stateHit and canViewMission(actor,m) then out[#out+1]=missionForActor(actor,m) end
   end
   table.sort(out,function(a,b) return tostring(a.id)>tostring(b.id) end)
   return out
@@ -631,6 +633,7 @@ local function listIncidents(state,payload,actor)
   local severity=common.trim(payload.severity)
   local stateId=common.trim(payload.stateId):upper()
   local dimension=common.trim(payload.dimension)
+  local visibility=common.trim(payload.visibility)
   local out={}
   for _,incident in pairs(state.incidents or {}) do
     local hit=(q=="" or common.contains(incident.id,q) or common.contains(incident.title,q) or
@@ -639,12 +642,13 @@ local function listIncidents(state,payload,actor)
     local typeHit=(incidentType=="" or incident.incidentType==incidentType)
     local severityHit=(severity=="" or incident.severity==severity)
     local dimensionHit=(dimension=="" or ((incident.position or {}).dimension or "")==dimension)
+    local visibilityHit=(visibility=="" or (incident.visibility or "public")==visibility)
     local stateHit=(stateId=="")
     if not stateHit then
       if incident.reportingStateId==stateId then stateHit=true end
       for _,id in ipairs(incident.involvedStates or {}) do if id==stateId then stateHit=true break end end
     end
-    if hit and statusHit and typeHit and severityHit and dimensionHit and stateHit and canViewIncident(actor,incident) then
+    if hit and statusHit and typeHit and severityHit and dimensionHit and visibilityHit and stateHit and canViewIncident(actor,incident) then
       out[#out+1]=incidentForActor(actor,incident)
     end
   end
