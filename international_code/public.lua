@@ -66,7 +66,8 @@ local function drawOverview(t,dash,states,bills,cases)
   fillLine(t,y," ETATS MEMBRES    "..tostring(dash.states or #states),colors.cyan);y=y+2
   fillLine(t,y," ARTICLES ACTIFS  "..tostring(dash.activeLaws or 0),colors.white);y=y+1
   fillLine(t,y," DOSSIERS PUBLICS "..tostring(dash.openCases or #cases),colors.white);y=y+1
-  fillLine(t,y," VOTES OUVERTS    "..tostring(dash.votingBills or #bills),colors.yellow);y=y+2
+  fillLine(t,y," VOTES OUVERTS    "..tostring(dash.votingBills or #bills),colors.yellow);y=y+1
+  fillLine(t,y," EXECUTIONS ACT.  "..tostring(dash.activeEnforcements or 0),colors.orange);y=y+2
   fillLine(t,y," Revision registre: "..tostring(dash.revision or "?"),colors.lightGray);y=y+1
   fillLine(t,y," Projet juridique: "..tostring(dash.codeStatus or "?"),colors.lightGray)
   local _,h=t.getSize()
@@ -144,6 +145,24 @@ local function drawTreaties(t,treaties)
   fillLine(t,h," Registre des traites internationaux",colors.gray)
 end
 
+local function drawEnforcements(t,rows)
+  t.setBackgroundColor(colors.black);t.clear()
+  header(t,"EXECUTION DES DECISIONS","Mesures publiques actives")
+  local _,h=t.getSize()
+  local y=4
+  if #rows==0 then
+    fillLine(t,y," Aucune mesure publique active.",colors.lightGray)
+  else
+    for _,e in ipairs(rows) do
+      if y>=h then break end
+      local fg=e.status=="breached" and colors.red or (e.status=="complied" and colors.lime or colors.orange)
+      fillLine(t,y," "..e.id.." ["..tostring(e.status or "?").."]",fg);y=y+1
+      if y<h then fillLine(t,y,"   "..tostring(e.targetName or "").." / "..tostring(e.enforcementType or ""),colors.white);y=y+1 end
+    end
+  end
+  fillLine(t,h," Registre public d'execution",colors.gray)
+end
+
 local function drawLaws(t,laws)
   t.setBackgroundColor(colors.black);t.clear()
   header(t,"CODE INTERNATIONAL","Selection des derniers articles actifs")
@@ -180,22 +199,24 @@ function P.run()
       local bills=rpc(cfg,"BILL_LIST",{stage="voting"},4) or {}
       local cases=rpc(cfg,"CASE_LIST",{visibility="public"},4) or {}
       local treaties=rpc(cfg,"TREATY_LIST",{stage="in_force"},4) or {}
+      local enforcements=rpc(cfg,"ENFORCEMENT_LIST",{visibility="public"},4) or {}
       local laws=rpc(cfg,"LAW_LIST",{status="active"},4) or {}
       if page==1 then drawOverview(target,dash,states,bills,cases)
       elseif page==2 then drawStates(target,states)
       elseif page==3 then drawBills(target,bills)
       elseif page==4 then drawTreaties(target,treaties)
       elseif page==5 then drawCases(target,cases)
+      elseif page==6 then drawEnforcements(target,enforcements)
       else drawLaws(target,laws) end
     end
 
     local timer=os.startTimer(8)
     while true do
       local ev,a=os.pullEvent()
-      if ev=="timer" and a==timer then page=page%6+1 break
+      if ev=="timer" and a==timer then page=page%7+1 break
       elseif ev=="key" and (a==keys.q or a==keys.escape) then
         term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
-      elseif ev=="monitor_touch" then page=page%5+1 break end
+      elseif ev=="monitor_touch" then page=page%7+1 break end
     end
   end
 end
@@ -349,6 +370,55 @@ function P.treatyDisplay(treatyId)
     end
 
     local timer=os.startTimer(4)
+    while true do
+      local ev,a=os.pullEvent()
+      if ev=="timer" and a==timer then break
+      elseif ev=="key" and (a==keys.q or a==keys.escape) then
+        term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
+      end
+    end
+  end
+end
+
+function P.enforcementDisplay(enforcementId)
+  local cfg=common.loadConfig()
+  if not cfg or cfg.role=="server" then error("Terminal client requis.",0) end
+  local monitor=findMonitor()
+  local old=term.current()
+  local target=monitor or old
+  if monitor and monitor.setTextScale then pcall(monitor.setTextScale,0.5) end
+  term.redirect(target)
+
+  while true do
+    target.setCursorBlink(false)
+    target.setBackgroundColor(colors.black);target.clear()
+    local e,err=rpc(cfg,"ENFORCEMENT_GET",{id=enforcementId},4)
+    if not e then
+      drawOffline(target,err)
+    else
+      header(target,"EXECUTION / "..e.id,e.targetName or "")
+      local _,h=target.getSize()
+      local y=4
+      local statusColor=e.status=="breached" and colors.red or
+        (e.status=="complied" and colors.lime or colors.orange)
+      fillLine(target,y," Statut: "..tostring(e.status),statusColor);y=y+1
+      fillLine(target,y," Type: "..tostring(e.enforcementType or "?"),colors.cyan);y=y+2
+      if e.caseId and e.caseId~="" then fillLine(target,y," Dossier: "..e.caseId,colors.lightGray);y=y+1 end
+      if e.deadline and e.deadline~="" then fillLine(target,y," Echeance: "..e.deadline,colors.yellow);y=y+1 end
+      if e.amount and e.amount~="" then fillLine(target,y," Montant: "..e.amount,colors.white);y=y+1 end
+      y=y+1
+      if y<h then fillLine(target,y," "..tostring(e.summary or ""),colors.white);y=y+2 end
+
+      local progress=e.progress or {}
+      if #progress>0 and y<h-2 then
+        local last=progress[#progress]
+        fillLine(target,y," Dernier suivi:",colors.cyan);y=y+1
+        fillLine(target,y," "..tostring(last.note or ""):gsub("\n"," "),colors.lightGray)
+      end
+      fillLine(target,h," LIVE / actualisation 5s / Q pour quitter",colors.gray)
+    end
+
+    local timer=os.startTimer(5)
     while true do
       local ev,a=os.pullEvent()
       if ev=="timer" and a==timer then break
