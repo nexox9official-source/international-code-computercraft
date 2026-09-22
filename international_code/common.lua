@@ -103,14 +103,57 @@ function M.trim(s)
   return tostring(s):match("^%s*(.-)%s*$")
 end
 
+function M.normalizeSearch(s)
+  s=tostring(s or "")
+  local replacements={
+    {"À","a"},{"Á","a"},{"Â","a"},{"Ã","a"},{"Ä","a"},{"Å","a"},
+    {"à","a"},{"á","a"},{"â","a"},{"ã","a"},{"ä","a"},{"å","a"},
+    {"Ç","c"},{"ç","c"},
+    {"È","e"},{"É","e"},{"Ê","e"},{"Ë","e"},
+    {"è","e"},{"é","e"},{"ê","e"},{"ë","e"},
+    {"Ì","i"},{"Í","i"},{"Î","i"},{"Ï","i"},
+    {"ì","i"},{"í","i"},{"î","i"},{"ï","i"},
+    {"Ñ","n"},{"ñ","n"},
+    {"Ò","o"},{"Ó","o"},{"Ô","o"},{"Õ","o"},{"Ö","o"},
+    {"ò","o"},{"ó","o"},{"ô","o"},{"õ","o"},{"ö","o"},
+    {"Ù","u"},{"Ú","u"},{"Û","u"},{"Ü","u"},
+    {"ù","u"},{"ú","u"},{"û","u"},{"ü","u"},
+    {"Ý","y"},{"Ÿ","y"},{"ý","y"},{"ÿ","y"},
+    {"Œ","oe"},{"œ","oe"},{"Æ","ae"},{"æ","ae"},
+    {"’","'"},{"‘","'"},{"–","-"},{"—","-"}
+  }
+  for _,pair in ipairs(replacements) do s=s:gsub(pair[1],pair[2]) end
+  s=string.lower(s)
+  s=s:gsub("%s+"," ")
+  return M.trim(s)
+end
+
 function M.lower(s)
-  return string.lower(tostring(s or ""))
+  return M.normalizeSearch(s)
 end
 
 function M.contains(haystack, needle)
-  haystack = M.lower(haystack)
-  needle = M.lower(needle)
+  haystack = M.normalizeSearch(haystack)
+  needle = M.normalizeSearch(needle)
   return needle == "" or string.find(haystack, needle, 1, true) ~= nil
+end
+
+function M.searchTokens(s)
+  local out={}
+  for token in M.normalizeSearch(s):gmatch("[%w%-_]+") do
+    if token~="" then out[#out+1]=token end
+  end
+  return out
+end
+
+function M.containsAllTokens(haystack, query)
+  local normalized=M.normalizeSearch(haystack)
+  local tokens=M.searchTokens(query)
+  if #tokens==0 then return true end
+  for _,token in ipairs(tokens) do
+    if not string.find(normalized,token,1,true) then return false end
+  end
+  return true
 end
 
 function M.wrap(text, width)
