@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.21.0
+
+### Ratification des deux Codes
+- le Code international commun `UNS-CIC-500-V1.0` est désormais **ratifié et actif** : les 500 articles initiaux passent en statut `active` ;
+- migration automatique des serveurs déjà installés depuis `PROJECT_NON_RATIFIED` vers `RATIFIED_ACTIVE` ;
+- le Corpus juridique national `NC-CORPUS-400-V2.0` est **ratifié et adopté** : les 400 articles passent en vigueur à compter du 22 septembre 2026 ;
+- les migrations conservent l'historique des statuts antérieurs au lieu de supprimer les traces du projet.
+
+### Autorité souveraine de North Coalition
+- **NexoFr_** est enregistré comme dirigeant de North Coalition, Président de la Coalition et autorité souveraine nationale ;
+- habilitation cumulative sur les compétences exécutives, législatives, réglementaires, judiciaires, sécuritaires, militaires, diplomatiques, financières et administratives ;
+- accès aux registres et niveaux de confidentialité nationaux ;
+- NexoFr_ peut déposer, modifier, adopter et promulguer directement un texte national via un acte souverain scellé et audité ;
+- les modules Justice, services publics, finances, démocratie et NorthNet reconnaissent cette habilitation nationale ;
+- l'interface affiche une fiche **AUTORITE SOUVERAINE - NexoFr_** et les droits enregistrés.
+
+### Limite internationale
+- les pouvoirs souverains de NexoFr_ sont strictement internes à North Coalition ;
+- North Coalition reste l'État proposant initial du Code UNS sans privilège juridique spécial sur les autres membres de l'Union.
+
 ## 0.20.0
 
 ### Portail national North Coalition
