@@ -1218,6 +1218,304 @@ function N.handle(state,actor,action,p,ctx)
     return copy(d)
   end
 
+  if action=="NC_CASE_LIST" then
+    return listNationalCases(n,p,state,actor)
+  end
+
+  if action=="NC_CASE_GET" then
+    local case=n.cases[common.trim(p.id):upper()]
+    if not case then return nil,"Dossier national introuvable." end
+    ensureNationalCaseShape(case)
+    if not canViewNationalCase(state,actor,case) then return nil,"Acces refuse a ce dossier national." end
+    return copy(case)
+  end
+
+  if action=="NC_CASE_CREATE" then
+    if not nationalCaseInstitutionalRole(state,actor) then return nil,"Creation de dossier reservee a la justice, au parquet ou a la police." end
+    local title=common.trim(p.title)
+    local summary=common.trim(p.summary)
+    if title=="" or summary=="" then return nil,"Titre et resume obligatoires." end
+    local validTypes={criminal=true,civil=true,administrative=true,constitutional=true}
+    local caseType=validTypes[p.caseType] and p.caseType or "criminal"
+    local visibility=(p.visibility=="public" or p.visibility=="sealed") and p.visibility or "restricted"
+    local id=nationalCaseId(n)
+    local case={
+      id=id,title=title,caseType=caseType,status="open",visibility=visibility,
+      complainant=common.trim(p.complainant),accused=common.trim(p.accused),
+      summary=summary,facts={},evidence={},citedArticles={},hearings={},judgments={},orders={},appeals={},timeline={},
+      createdAt=common.now(),createdBy=identity(actor),updatedAt=common.now()
+    }
+    case.seal=seal("NC-CASE",{case.id,case.title,case.caseType,case.visibility,case.complainant,case.accused,case.summary,case.createdAt,case.createdBy})
+    addNationalCaseTimeline(case,"created","Dossier ouvert",case.title,actor)
+    n.cases[id]=case
+    notifyNationalCase(ctx,state,case,"Dossier national ouvert",id.." / "..title,"info")
+    mutate(ctx,state,actor,"NC_CASE_CREATE",id,title.." / "..caseType)
+    return copy(case)
+  end
+
+  if action=="NC_CASE_ADD_FACT" then
+    local case=n.cases[common.trim(p.id):upper()]
+    if not case then return nil,"Dossier introuvable." end
+    ensureNationalCaseShape(case)
+    if not canViewNationalCase(state,actor,case) or not nationalCaseInstitutionalRole(state,actor) then return nil,"Ajout de fait non autorise." end
+    local text=common.trim(p.text)
+    if text=="" then return nil,"Texte du fait obligatoire." end
+    local row={id=string.format("FACT-%03d",#case.facts+1),text=text,at=common.now(),by=identity(actor)}
+    row.seal=seal("NC-FACT",{case.id,row.id,row.text,row.at,row.by})
+    case.facts[#case.facts+1]=row
+    case.updatedAt=common.now()
+    addNationalCaseTimeline(case,"fact","Fait ajoute",row.id.." / "..text,actor)
+    mutate(ctx,state,actor,"NC_CASE_ADD_FACT",case.id,row.id)
+    return copy(case)
+  end
+
+  if action=="NC_CASE_ADD_EVIDENCE" then
+    local case=n.cases[common.trim(p.id):upper()]
+    if not case then return nil,"Dossier introuvable." end
+    ensureNationalCaseShape(case)
+    if not canViewNationalCase(state,actor,case) or not nationalCaseInstitutionalRole(state,actor) then return nil,"Ajout de preuve non autorise." end
+    local label=common.trim(p.label)
+    local description=common.trim(p.description)
+    if label=="" or description=="" then return nil,"Nom et description de la preuve obligatoires." end
+    local row={
+      id=string.format("EVID-%03d",#case.evidence+1),label=label,description=description,
+      source=common.trim(p.source),at=common.now(),by=identity(actor)
+    }
+    row.seal=seal("NC-EVID",{case.id,row.id,row.label,row.description,row.source,row.at,row.by})
+    case.evidence[#case.evidence+1]=row
+    case.updatedAt=common.now()
+    addNationalCaseTimeline(case,"evidence","Preuve ajoutee",row.id.." / "..label,actor)
+    mutate(ctx,state,actor,"NC_CASE_ADD_EVIDENCE",case.id,row.id)
+    return copy(case)
+  end
+
+  if action=="NC_CASE_ADD_ARTICLE" then
+    local case=n.cases[common.trim(p.id):upper()]
+    if not case then return nil,"Dossier introuvable." end
+    ensureNationalCaseShape(case)
+    if not canViewNationalCase(state,actor,case) or not nationalCaseInstitutionalRole(state,actor) then return nil,"Citation d'article non autorisee." end
+    local law=getLaw(n,p.ref)
+    if not law then return nil,"Article national introuvable." end
+    for _,ref in ipairs(case.citedArticles) do if ref==law.id then return copy(case) end end
+    case.citedArticles[#case.citedArticles+1]=law.id
+    table.sort(case.citedArticles)
+    case.updatedAt=common.now()
+    addNationalCaseTimeline(case,"citation","Article cite",(law.display_reference or law.id).." / "..law.title,actor)
+    mutate(ctx,state,actor,"NC_CASE_ADD_ARTICLE",case.id,law.id)
+    return copy(case)
+  end
+
+  if action=="NC_CASE_REMOVE_ARTICLE" then
+    local case=n.cases[common.trim(p.id):upper()]
+    if not case then return nil,"Dossier introuvable." end
+    ensureNationalCaseShape(case)
+    if not canViewNationalCase(state,actor,case) or not nationalCaseInstitutionalRole(state,actor) then return nil,"Retrait de citation non autorise." end
+    local ref=normalizeRef(p.ref)
+    for i=#case.citedArticles,1,-1 do if case.citedArticles[i]==ref then table.remove(case.citedArticles,i) end end
+    case.updatedAt=common.now()
+    addNationalCaseTimeline(case,"citation_remove","Article retire",ref,actor)
+    mutate(ctx,state,actor,"NC_CASE_REMOVE_ARTICLE",case.id,ref)
+    return copy(case)
+  end
+
+  if action=="NC_CASE_SET_VISIBILITY" then
+    local case=n.cases[common.trim(p.id):upper()]
+    if not case then return nil,"Dossier introuvable." end
+    if not nationalCaseJudicialRole(state,actor) then return nil,"Visibilite reservee aux juges." end
+    local allowed={public=true,restricted=true,sealed=true}
+    if not allowed[p.visibility] then return nil,"Niveau de visibilite invalide." end
+    local old=case.visibility or "restricted"
+    case.visibility=p.visibility
+    case.updatedAt=common.now()
+    addNationalCaseTimeline(case,"visibility","Visibilite modifiee",old.." -> "..p.visibility,actor)
+    mutate(ctx,state,actor,"NC_CASE_SET_VISIBILITY",case.id,old.." -> "..p.visibility)
+    return copy(case)
+  end
+
+  if action=="NC_CASE_SET_STATUS" then
+    local case=n.cases[common.trim(p.id):upper()]
+    if not case then return nil,"Dossier introuvable." end
+    ensureNationalCaseShape(case)
+    local r=nationalRole(state,actor)
+    local allowedRole=(actor.role=="admin" or r=="judge" or r=="prosecutor" or (r=="police" and p.status=="investigation"))
+    if not allowedRole then return nil,"Changement de statut non autorise." end
+    local transitions={
+      open={investigation=true,hearing=true,closed=true},
+      investigation={hearing=true,closed=true},
+      hearing={judged=true,closed=true},
+      judged={appeal=true,closed=true},
+      appeal={judged=true,closed=true},
+      closed={archived=true},
+      archived={}
+    }
+    if case.status==p.status then return copy(case) end
+    if not (transitions[case.status] and transitions[case.status][p.status]) then
+      return nil,"Transition interdite: "..tostring(case.status).." -> "..tostring(p.status)
+    end
+    local old=case.status
+    case.status=p.status
+    case.updatedAt=common.now()
+    addNationalCaseTimeline(case,"status","Statut modifie",old.." -> "..p.status..(common.trim(p.reason)~="" and (" / "..common.trim(p.reason)) or ""),actor)
+    notifyNationalCase(ctx,state,case,"Mise a jour dossier "..case.id,old.." -> "..p.status,"info")
+    mutate(ctx,state,actor,"NC_CASE_SET_STATUS",case.id,old.." -> "..p.status)
+    return copy(case)
+  end
+
+  if action=="NC_CASE_ADD_HEARING" then
+    local case=n.cases[common.trim(p.id):upper()]
+    if not case then return nil,"Dossier introuvable." end
+    ensureNationalCaseShape(case)
+    if not nationalCaseJudicialRole(state,actor) then return nil,"Audience reservee aux juges." end
+    local subject=common.trim(p.subject)
+    if subject=="" then return nil,"Objet de l'audience obligatoire." end
+    local row={
+      id=string.format("HEARING-%03d",#case.hearings+1),subject=subject,
+      scheduledFor=common.trim(p.scheduledFor),location=common.trim(p.location),
+      status="scheduled",createdAt=common.now(),createdBy=identity(actor)
+    }
+    row.seal=seal("NC-HEAR",{case.id,row.id,row.subject,row.scheduledFor,row.location,row.createdAt,row.createdBy})
+    case.hearings[#case.hearings+1]=row
+    if case.status=="open" or case.status=="investigation" then case.status="hearing" end
+    case.updatedAt=common.now()
+    addNationalCaseTimeline(case,"hearing","Audience planifiee",row.id.." / "..subject.." / "..row.scheduledFor,actor)
+    notifyNationalCase(ctx,state,case,"Audience nationale planifiee",case.id.." / "..subject.." / "..row.scheduledFor,"warning")
+    mutate(ctx,state,actor,"NC_CASE_ADD_HEARING",case.id,row.id)
+    return copy(case)
+  end
+
+  if action=="NC_CASE_RECORD_HEARING" then
+    local case=n.cases[common.trim(p.id):upper()]
+    if not case then return nil,"Dossier introuvable." end
+    ensureNationalCaseShape(case)
+    if not nationalCaseJudicialRole(state,actor) then return nil,"Proces-verbal reserve aux juges." end
+    local hearing=nil
+    for _,h in ipairs(case.hearings) do if h.id==p.hearingId then hearing=h break end end
+    if not hearing then return nil,"Audience introuvable." end
+    local minutes=common.trim(p.minutes)
+    if minutes=="" then return nil,"Proces-verbal vide." end
+    hearing.minutes=minutes
+    hearing.status=p.status=="cancelled" and "cancelled" or "completed"
+    hearing.recordedAt=common.now();hearing.recordedBy=identity(actor)
+    hearing.recordSeal=seal("NC-HEAR-PV",{case.id,hearing.id,hearing.minutes,hearing.status,hearing.recordedAt,hearing.recordedBy,hearing.seal})
+    case.updatedAt=common.now()
+    addNationalCaseTimeline(case,"hearing_record","Proces-verbal d'audience",hearing.id.." / "..hearing.status,actor)
+    mutate(ctx,state,actor,"NC_CASE_RECORD_HEARING",case.id,hearing.id)
+    return copy(case)
+  end
+
+  if action=="NC_CASE_ADD_ORDER" then
+    local case=n.cases[common.trim(p.id):upper()]
+    if not case then return nil,"Dossier introuvable." end
+    ensureNationalCaseShape(case)
+    if not nationalCaseJudicialRole(state,actor) then return nil,"Ordonnance reservee aux juges." end
+    local valid={search=true,seizure=true,arrest=true,release=true,protection=true,injunction=true,other=true}
+    local typ=valid[p.orderType] and p.orderType or "other"
+    local subject=common.trim(p.subject)
+    local grounds=common.trim(p.grounds)
+    if subject=="" or grounds=="" then return nil,"Objet et motifs de l'ordonnance obligatoires." end
+    local row={
+      id=string.format("ORDER-%03d",#case.orders+1),orderType=typ,subject=subject,grounds=grounds,
+      status="active",issuedAt=common.now(),issuedBy=identity(actor),expiresAt=common.trim(p.expiresAt)
+    }
+    row.seal=seal("NC-ORDER",{case.id,row.id,row.orderType,row.subject,row.grounds,row.expiresAt,row.issuedAt,row.issuedBy})
+    case.orders[#case.orders+1]=row
+    case.updatedAt=common.now()
+    addNationalCaseTimeline(case,"order","Ordonnance emise",row.id.." / "..typ.." / "..subject,actor)
+    notifyNationalCase(ctx,state,case,"Ordonnance judiciaire",case.id.." / "..row.id.." / "..typ,"warning")
+    mutate(ctx,state,actor,"NC_CASE_ADD_ORDER",case.id,row.id)
+    return copy(case)
+  end
+
+  if action=="NC_CASE_SET_ORDER_STATUS" then
+    local case=n.cases[common.trim(p.id):upper()]
+    if not case then return nil,"Dossier introuvable." end
+    ensureNationalCaseShape(case)
+    if not nationalCaseJudicialRole(state,actor) then return nil,"Modification d'ordonnance reservee aux juges." end
+    local order=nil
+    for _,o in ipairs(case.orders) do if o.id==p.orderId then order=o break end end
+    if not order then return nil,"Ordonnance introuvable." end
+    local allowed={active=true,executed=true,revoked=true,expired=true}
+    if not allowed[p.status] then return nil,"Statut d'ordonnance invalide." end
+    local old=order.status
+    order.status=p.status;order.updatedAt=common.now();order.updatedBy=identity(actor)
+    order.statusSeal=seal("NC-ORDER-STAT",{case.id,order.id,old,order.status,order.updatedAt,order.updatedBy,order.seal})
+    case.updatedAt=common.now()
+    addNationalCaseTimeline(case,"order_status","Ordonnance mise a jour",order.id.." / "..old.." -> "..order.status,actor)
+    mutate(ctx,state,actor,"NC_CASE_SET_ORDER_STATUS",case.id,order.id.." "..old.." -> "..order.status)
+    return copy(case)
+  end
+
+  if action=="NC_CASE_ADD_JUDGMENT" then
+    local case=n.cases[common.trim(p.id):upper()]
+    if not case then return nil,"Dossier introuvable." end
+    ensureNationalCaseShape(case)
+    if not nationalCaseJudicialRole(state,actor) then return nil,"Jugement reserve aux juges." end
+    local verdict=common.trim(p.verdict)
+    local reasoning=common.trim(p.reasoning)
+    if verdict=="" or reasoning=="" then return nil,"Decision et motivation obligatoires." end
+    local row={
+      id=string.format("JUDG-%03d",#case.judgments+1),verdict=verdict,reasoning=reasoning,
+      sanctions=common.trim(p.sanctions),judge=identity(actor),date=common.now(),
+      final=p.final~=false,citedArticleVersions=nationalLawSnapshot(n,case.citedArticles)
+    }
+    row.seal=seal("NC-JUDG",{case.id,row.id,row.verdict,row.reasoning,row.sanctions,row.judge,row.date,row.final,row.citedArticleVersions})
+    case.judgments[#case.judgments+1]=row
+    if row.final then case.status="judged" end
+    case.updatedAt=common.now()
+    addNationalCaseTimeline(case,"judgment","Jugement enregistre",row.id.." / "..verdict,actor)
+    notifyNationalCase(ctx,state,case,"Jugement national rendu",case.id.." / "..verdict,row.final and "warning" or "info")
+    mutate(ctx,state,actor,"NC_CASE_ADD_JUDGMENT",case.id,row.id.." / "..row.seal)
+    return copy(case)
+  end
+
+  if action=="NC_CASE_FILE_APPEAL" then
+    local case=n.cases[common.trim(p.id):upper()]
+    if not case then return nil,"Dossier introuvable." end
+    ensureNationalCaseShape(case)
+    local who=identity(actor)
+    local institution=(actor.role=="admin" or nationalRole(state,actor)=="prosecutor" or nationalRole(state,actor)=="judge")
+    local party=(who~="" and (who==case.complainant or who==case.accused))
+    if not institution and not party then return nil,"Vous n'etes pas habilite a former appel dans ce dossier." end
+    if case.status~="judged" and case.status~="closed" then return nil,"L'appel exige une decision rendue." end
+    local grounds=common.trim(p.grounds)
+    if grounds=="" then return nil,"Motifs d'appel obligatoires." end
+    local row={
+      id=string.format("APPEAL-%03d",#case.appeals+1),appellant=who,grounds=grounds,
+      status="pending",filedAt=common.now(),filedBy=who
+    }
+    row.seal=seal("NC-APPEAL",{case.id,row.id,row.appellant,row.grounds,row.filedAt})
+    case.appeals[#case.appeals+1]=row
+    case.status="appeal";case.updatedAt=common.now()
+    addNationalCaseTimeline(case,"appeal","Appel depose",row.id.." / "..who,actor)
+    notifyNationalCase(ctx,state,case,"Appel depose",case.id.." / "..row.id,"warning")
+    mutate(ctx,state,actor,"NC_CASE_FILE_APPEAL",case.id,row.id)
+    return copy(case)
+  end
+
+  if action=="NC_CASE_DECIDE_APPEAL" then
+    local case=n.cases[common.trim(p.id):upper()]
+    if not case then return nil,"Dossier introuvable." end
+    ensureNationalCaseShape(case)
+    if not nationalCaseJudicialRole(state,actor) then return nil,"Decision d'appel reservee aux juges." end
+    local appeal=nil
+    for _,a in ipairs(case.appeals) do if a.id==p.appealId then appeal=a break end end
+    if not appeal then return nil,"Appel introuvable." end
+    if appeal.status~="pending" then return nil,"Cet appel est deja tranche." end
+    local valid={upheld=true,reversed=true,modified=true,remanded=true,dismissed=true}
+    if not valid[p.result] then return nil,"Resultat d'appel invalide." end
+    local reasoning=common.trim(p.reasoning)
+    if reasoning=="" then return nil,"Motivation d'appel obligatoire." end
+    appeal.status="decided";appeal.result=p.result;appeal.reasoning=reasoning
+    appeal.decidedAt=common.now();appeal.decidedBy=identity(actor)
+    appeal.decisionSeal=seal("NC-APPEAL-DEC",{case.id,appeal.id,appeal.result,appeal.reasoning,appeal.decidedAt,appeal.decidedBy,appeal.seal})
+    case.status=(p.result=="remanded") and "hearing" or "judged"
+    case.updatedAt=common.now()
+    addNationalCaseTimeline(case,"appeal_decision","Appel tranche",appeal.id.." / "..appeal.result,actor)
+    notifyNationalCase(ctx,state,case,"Decision d'appel",case.id.." / "..appeal.result,"info")
+    mutate(ctx,state,actor,"NC_CASE_DECIDE_APPEAL",case.id,appeal.id.." / "..appeal.result)
+    return copy(case)
+  end
+
   if action=="NC_AUDIT_LIST" then
     if not roleIs(state,actor,"admin","president","council","judge") then return nil,"Journal national reserve aux institutions autorisees." end
     local limit=math.min(tonumber(p.limit) or 100,300)
