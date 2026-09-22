@@ -148,4 +148,101 @@ function P.decree(d)
   return printLines(d.id or "NC-DEC",lines)
 end
 
+
+function P.caseFile(case)
+  if not case then return false,"Dossier introuvable." end
+  local lines={}
+  append(lines,"DOSSIER NATIONAL",case.id.." / "..(case.title or ""),25)
+  append(lines,"TYPE / STATUT",(case.caseType or "-").." / "..(case.status or "-"),25)
+  append(lines,"VISIBILITE",case.visibility or "-",25)
+  append(lines,"DEMANDEUR",case.complainant or "-",25)
+  append(lines,"MIS EN CAUSE",case.accused or "-",25)
+  append(lines,"RESUME",case.summary or "",25)
+  append(lines,"SCEAU INITIAL",case.seal or "-",25)
+
+  if #(case.facts or {})>0 then
+    lines[#lines+1]="FAITS"
+    for _,row in ipairs(case.facts or {}) do
+      for _,l in ipairs(common.wrap((row.id or "?").." / "..(row.text or ""),25)) do lines[#lines+1]=l end
+      for _,l in ipairs(common.wrap("Sceau: "..(row.seal or "-"),25)) do lines[#lines+1]=l end
+      lines[#lines+1]=""
+    end
+  end
+
+  if #(case.evidence or {})>0 then
+    lines[#lines+1]="PREUVES"
+    for _,row in ipairs(case.evidence or {}) do
+      for _,l in ipairs(common.wrap((row.id or "?").." / "..(row.label or ""),25)) do lines[#lines+1]=l end
+      for _,l in ipairs(common.wrap(row.description or "",25)) do lines[#lines+1]=l end
+      if row.source and row.source~="" then for _,l in ipairs(common.wrap("Source: "..row.source,25)) do lines[#lines+1]=l end end
+      for _,l in ipairs(common.wrap("Sceau: "..(row.seal or "-"),25)) do lines[#lines+1]=l end
+      lines[#lines+1]=""
+    end
+  end
+
+  append(lines,"ARTICLES CITES",table.concat(case.citedArticles or {},", "),25)
+
+  if #(case.hearings or {})>0 then
+    lines[#lines+1]="AUDIENCES"
+    for _,h in ipairs(case.hearings or {}) do
+      for _,l in ipairs(common.wrap((h.id or "?").." ["..(h.status or "?").."] "..(h.scheduledFor or ""),25)) do lines[#lines+1]=l end
+      for _,l in ipairs(common.wrap(h.subject or "",25)) do lines[#lines+1]=l end
+      if h.recordSeal then for _,l in ipairs(common.wrap("PV: "..h.recordSeal,25)) do lines[#lines+1]=l end end
+      lines[#lines+1]=""
+    end
+  end
+
+  if #(case.orders or {})>0 then
+    lines[#lines+1]="ORDONNANCES"
+    for _,o in ipairs(case.orders or {}) do
+      for _,l in ipairs(common.wrap((o.id or "?").." ["..(o.status or "?").."] "..(o.orderType or ""),25)) do lines[#lines+1]=l end
+      for _,l in ipairs(common.wrap(o.subject or "",25)) do lines[#lines+1]=l end
+      for _,l in ipairs(common.wrap("Sceau: "..(o.seal or "-"),25)) do lines[#lines+1]=l end
+      lines[#lines+1]=""
+    end
+  end
+
+  if #(case.judgments or {})>0 then
+    lines[#lines+1]="JUGEMENTS"
+    for _,j in ipairs(case.judgments or {}) do
+      for _,l in ipairs(common.wrap((j.id or "?").." / "..(j.date or "").." / "..(j.judge or ""),25)) do lines[#lines+1]=l end
+      for _,l in ipairs(common.wrap("Decision: "..(j.verdict or ""),25)) do lines[#lines+1]=l end
+      for _,l in ipairs(common.wrap("Sceau: "..(j.seal or "-"),25)) do lines[#lines+1]=l end
+      lines[#lines+1]=""
+    end
+  end
+
+  if #(case.appeals or {})>0 then
+    lines[#lines+1]="APPELS"
+    for _,a in ipairs(case.appeals or {}) do
+      for _,l in ipairs(common.wrap((a.id or "?").." ["..(a.status or "?").."] "..(a.appellant or ""),25)) do lines[#lines+1]=l end
+      if a.result then for _,l in ipairs(common.wrap("Decision: "..a.result,25)) do lines[#lines+1]=l end end
+      if a.decisionSeal then for _,l in ipairs(common.wrap("Sceau: "..a.decisionSeal,25)) do lines[#lines+1]=l end end
+      lines[#lines+1]=""
+    end
+  end
+
+  append(lines,"DERNIERE MAJ",case.updatedAt or case.createdAt or "-",25)
+  return printLines(case.id or "NC-CASE",lines)
+end
+
+function P.judgment(case,judgment)
+  if not case or not judgment then return false,"Jugement introuvable." end
+  local lines={}
+  append(lines,"JUGEMENT NATIONAL",case.id.." / "..(judgment.id or ""),25)
+  append(lines,"DOSSIER",case.title or "",25)
+  append(lines,"JUGE",judgment.judge or "-",25)
+  append(lines,"DATE",judgment.date or "-",25)
+  append(lines,"DECISION",judgment.verdict or "",25)
+  append(lines,"MOTIVATION",judgment.reasoning or "",25)
+  append(lines,"SANCTIONS / MESURES",judgment.sanctions or "-",25)
+  lines[#lines+1]="ARTICLES FIGES"
+  for _,law in ipairs(judgment.citedArticleVersions or {}) do
+    for _,l in ipairs(common.wrap((law.display_reference or law.id or "?").." v"..tostring(law.version or "?").." / "..(law.title or ""),25)) do lines[#lines+1]=l end
+  end
+  lines[#lines+1]=""
+  append(lines,"SCEAU",judgment.seal or "-",25)
+  return printLines((case.id or "NC-CASE").." JUGEMENT",lines)
+end
+
 return P
