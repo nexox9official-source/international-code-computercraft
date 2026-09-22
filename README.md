@@ -154,8 +154,19 @@ ic setup admin
 ic pair <role>
 ic backup
 ic doctor
+ic update
 ic help
 ```
+
+## Mise à jour des postes
+
+Une fois la première installation terminée, les postes peuvent être mis à jour sans perdre leur rôle, leur jeton d'appairage ou leur configuration :
+
+```text
+ic update
+```
+
+Le serveur doit être arrêté avant de mettre à jour son code. Relancez ensuite `ic server`. Sur les clients, relancez simplement `ic` ou redémarrez le PC.
 
 ## Rôles
 
