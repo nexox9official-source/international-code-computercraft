@@ -156,13 +156,15 @@ Les dossiers judiciaires disposent désormais de procédures plus proches d'une 
 - les terminaux publics ne voient que les dossiers publics ;
 - un dossier scellé est réservé aux juges et à l'administration ;
 - audiences programmées avec objet, date/heure, salle et statut ;
-- impression d'un **avis d'audience** ;
+- **procès-verbal d'audience** avec participants, compte rendu, issue/suite, auteur et sceau officiel ;
+- impression d'un **avis d'audience** ou du **procès-verbal scellé** ;
 - ordonnances, mandats, mesures provisoires, convocations et ordres de préservation des preuves ;
 - suivi de l'exécution, révocation ou expiration d'une ordonnance ;
 - appels formels avec motifs et demande ;
 - décision d'appel : confirmation, modification, annulation, rejet ou renvoi à une nouvelle audience ;
 - impression séparée de l'acte d'appel ;
-- chronologie automatique enrichie pour toutes ces opérations.
+- chronologie automatique enrichie pour toutes ces opérations ;
+- les procès-verbaux sont vérifiables via leur sceau `CIU-PV-...`.
 
 ### Sceaux d'intégrité
 
