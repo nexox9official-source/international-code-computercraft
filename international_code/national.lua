@@ -312,6 +312,35 @@ function N.ensure(state)
       n.meta.updatedAt=common.now()
       changed=true
     end
+
+    if n.meta.sovereignPermanenceApplied~=true then
+      local permanentRefs={
+        ["NC-ART-061"]=true,["NC-ART-093"]=true,["NC-ART-094"]=true,
+        ["NC-ART-095"]=true,["NC-ART-400"]=true
+      }
+      for _,seed in ipairs(corpus.articles or {}) do
+        if permanentRefs[seed.id] then
+          local law=n.laws[seed.id]
+          if law then
+            law.title=seed.title
+            law.text=seed.text
+            law.status=seed.status or law.status or "active"
+            law.version=seed.version or law.version
+            law.effective_at=seed.effective_at or law.effective_at
+            law.repealed_at=seed.repealed_at
+            law.history=copy(seed.history or law.history or {})
+            law.search_tags=copy(seed.search_tags or law.search_tags or {})
+            law.updatedAt=common.now()
+            law.updatedBy="NexoFr_"
+          end
+        end
+      end
+      if n.meta.sovereignAuthorityActive==nil then n.meta.sovereignAuthorityActive=true end
+      n.meta.sovereignAuthorityTenure=((corpus.government_system or {}).sovereign_authority_tenure or "perpetual_until_voluntary_relinquishment")
+      n.meta.sovereignPermanenceApplied=true
+      n.meta.updatedAt=common.now()
+      changed=true
+    end
   end
 
   for _,m in pairs(n.ministries) do
@@ -1011,6 +1040,7 @@ function N.handle(state,actor,action,p,ctx)
 
   if action=="NC_BOOTSTRAP" then
     if actor.role~="admin" then return nil,"Seul un terminal administrateur international peut initialiser l'intranet national." end
+    if n.meta.bootstrapAt then return nil,"L'intranet national a deja ete initialise; le bootstrap fondateur ne peut pas etre rejoue." end
     actor.nationalRole="president"
     actor.nationalIdentity=n.meta.foundingAccount or "NexoFr_"
     actor.ministryCode=nil
