@@ -2328,6 +2328,36 @@ local function auditScreen()
   end
 end
 
+local function verifySealScreen(seal)
+  seal=common.trim(seal or "")
+  if seal=="" then seal=prompt("Sceau officiel a verifier") end
+  if seal=="" then return end
+
+  local r,e=rpc("VERIFY_SEAL",{seal=seal})
+  if not r then
+    message("VERIFICATION",e,palette.bad)
+    return
+  end
+  if not r.valid then
+    message("SCEAU INCONNU","Le serveur ne reconnait pas ce sceau: "..seal,palette.bad)
+    return
+  end
+
+  textPage("SCEAU VALIDE",{
+    {label="Verification",text="VALIDE / PRESENT DANS LE REGISTRE CENTRAL"},
+    {label="Sceau",text=r.seal or seal},
+    {label="Type",text=r.kind or ""},
+    {label="Document parent",text=r.parentId or ""},
+    {label="Reference",text=r.reference or ""},
+    {label="Titre",text=r.title or ""},
+    {label="Statut",text=r.status or ""},
+    {label="Emis le",text=r.issuedAt or ""},
+    {label="Emis par",text=r.issuedBy or ""},
+    {label="Etat signataire",text=r.stateName or ""},
+    {label="Confidentialite",text=r.confidential and "Le sceau est authentique, mais le contenu du document est protege." or "Metadonnees accessibles."}
+  })
+end
+
 local function helpScreen()
   textPage("AIDE / RACCOURCIS",{
     {label="Navigation du Code",text="Parcourez par Livre, utilisez la recherche plein texte ou filtrez par statut. Un article peut etre ouvert, imprime et son historique de versions consulte."},
@@ -2339,6 +2369,7 @@ local function helpScreen()
     {label="Jugements",text="Lors de l'enregistrement, le systeme fige la reference, le titre et la version des articles cites. Les jugements, ordonnances, audiences, appels et scrutins recoivent aussi un sceau d'integrite applicatif."},
     {label="Appels",text="Le greffe ou le juge peut deposer un appel. Un juge peut ensuite confirmer, modifier, annuler, rejeter la decision ou renvoyer l'affaire a une nouvelle audience."},
     {label="Affichage public",text="ic public lance un registre tournant sur Monitor. ic display CASE-... affiche un dossier public specifique au tribunal."},
+    {label="Verification des documents",text="Chaque sceau imprime peut etre controle contre le serveur central depuis le menu ou avec ic verify <SCEAU>. Un document scelle peut etre confirme authentique sans reveler son contenu."},
     {label="Impression",text="Une imprimante ComputerCraft connectee permet d'imprimer le dossier complet, sa chronologie, un article ou un jugement individuel sur plusieurs pages."},
     {label="Sauvegarde",text="Les textes en cours sont autosauvegardes localement. Le serveur reste la source de verite pour les lois, dossiers, jugements et le journal d'audit."}
   })
@@ -2434,7 +2465,8 @@ function C.run()
       {text="TRAITES / DIPLOMATIE",id="treaties"},
       {text="REGISTRE DES ETATS MEMBRES",id="states"},
       {text="DOSSIERS JUDICIAIRES",id="cases"},
-      {text="RECHERCHE GLOBALE",id="search"}
+      {text="RECHERCHE GLOBALE",id="search"},
+      {text="VERIFIER UN SCEAU OFFICIEL",id="verify"}
     }
     if allowed("audit") then
       items[#items+1]={text="JOURNAL D'AUDIT",id="audit"}
@@ -2456,6 +2488,8 @@ function C.run()
       statesScreen("","")
     elseif p.id=="cases" then
       casesScreen("")
+    elseif p.id=="verify" then
+      verifySealScreen("")
     elseif p.id=="search" then
       local q=prompt("Recherche (article, titre, partie)")
       local kind=menu("RECHERCHE",{
@@ -2478,6 +2512,13 @@ function C.run()
       networkScreen()
     end
   end
+end
+
+function C.verify(seal)
+  cfg=common.loadConfig()
+  if not cfg or cfg.role=="server" then error("Terminal client appaire requis.",0) end
+  common.openModems()
+  verifySealScreen(seal)
 end
 
 function C.doctor()
