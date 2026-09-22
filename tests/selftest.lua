@@ -23,7 +23,7 @@ end
 assert(total==500,"expected 500 seed articles, got "..total)
 for n=1,500 do assert(seen[n],"missing article "..n) end
 
-assert(common.VERSION=="0.17.0","unexpected application version: "..tostring(common.VERSION))
+assert(common.VERSION=="0.18.0","unexpected application version: "..tostring(common.VERSION))
 
 local function readSource(path)
   local h=assert(io.open(path,"r"))
@@ -42,6 +42,7 @@ local nationalClient=readSource("international_code/national_client.lua")
 local nationalPrinter=readSource("international_code/national_printer.lua")
 local nationalPublic=readSource("international_code/national_public.lua")
 local nationalServices=readSource("international_code/national_services.lua")
+local nationalFinance=readSource("international_code/national_finance.lua")
 local nationalCorpus=readSource("international_code/national/corpus_v2.json")
 
 assert(server:find('CONFLICT_CREATE',1,true),"conflict server actions missing")
@@ -86,6 +87,15 @@ assert(nationalServices:find('NC_REQUEST_CREATE',1,true),"citizen administrative
 assert(nationalServices:find('NC_REQUEST_START_REVIEW',1,true),"ministry request review missing")
 assert(nationalServices:find('NC_REQUEST_DECIDE',1,true),"administrative request decision missing")
 assert(nationalServices:find('NC%-REQ'),"administrative request identifiers/seals missing")
+assert(nationalFinance:find('NC_BUDGET_CREATE',1,true),"national budget workflow missing")
+assert(nationalFinance:find('NC_BUDGET_VOTE',1,true),"budget vote missing")
+assert(nationalFinance:find('NC_BUDGET_ENACT',1,true),"budget promulgation missing")
+assert(nationalFinance:find('NC_REVENUE_RECORD',1,true),"treasury revenue ledger missing")
+assert(nationalFinance:find('NC_EXPENSE_REQUEST',1,true),"public expense workflow missing")
+assert(nationalFinance:find('NC_EXPENSE_PRESIDENT_DECIDE',1,true),"high-value presidential approval missing")
+assert(nationalFinance:find('NC_EXPENSE_PAY',1,true),"public payment workflow missing")
+assert(nationalFinance:find('NC_CONTRACT_CREATE',1,true),"public procurement workflow missing")
+assert(nationalFinance:find('NC_CONTRACT_AWARD',1,true),"public contract award missing")
 assert(national:find('NC%-GAZ'),"official Gazette IDs/seals missing")
 assert(nationalClient:find('CODE NATIONAL / CATEGORIES / RECHERCHE',1,true),"national categorized code UI missing")
 assert(nationalClient:find('NOTIFICATIONS NATIONALES',1,true),"national notification center missing")
@@ -99,6 +109,10 @@ assert(nationalClient:find('REGISTRE DES ORGANISATIONS',1,true),"organization UI
 assert(nationalClient:find('LICENCES / AUTORISATIONS',1,true),"license UI missing")
 assert(nationalClient:find('AMENDES / SANCTIONS PECUNIAIRES',1,true),"fine UI missing")
 assert(nationalClient:find('GUICHET CITOYEN / DEMANDES',1,true),"citizen service desk UI missing")
+assert(nationalClient:find('FINANCES PUBLIQUES',1,true),"national finance UI missing")
+assert(nationalClient:find('BUDGETS NATIONAUX',1,true),"national budget UI missing")
+assert(nationalClient:find('DEPENSES PUBLIQUES',1,true),"national expense UI missing")
+assert(nationalClient:find('MARCHES PUBLICS',1,true),"public procurement UI missing")
 assert(nationalPrinter:find('function P.law',1,true),"national law printing missing")
 assert(nationalPrinter:find('function P.caseFile',1,true),"national case printing missing")
 assert(nationalPrinter:find('function P.judgment',1,true),"national judgment printing missing")
@@ -109,9 +123,14 @@ assert(nationalPrinter:find('function P.license',1,true),"license printing missi
 assert(nationalPrinter:find('function P.fine',1,true),"fine printing missing")
 assert(nationalPrinter:find('function P.citizenRecord',1,true),"citizen record printing missing")
 assert(nationalPrinter:find('function P.request',1,true),"administrative request printing missing")
+assert(nationalPrinter:find('function P.budget',1,true),"budget printing missing")
+assert(nationalPrinter:find('function P.revenue',1,true),"revenue printing missing")
+assert(nationalPrinter:find('function P.expense',1,true),"expense printing missing")
+assert(nationalPrinter:find('function P.contract',1,true),"public contract printing missing")
 assert(nationalPublic:find('JUSTICE NATIONALE',1,true),"national justice monitor missing")
 assert(nationalPublic:find('SESSIONS NATIONALES',1,true),"national session monitor missing")
 assert(nationalPublic:find('NC-GAZ / actes officiels scelles',1,true),"official Gazette monitor missing")
+assert(nationalPublic:find('FINANCES PUBLIQUES',1,true),"national finance monitor missing")
 assert(cli:find('cmd=="nc%-verify"'),"national seal verification CLI missing")
 
 local ncCount=0
@@ -121,4 +140,4 @@ assert(nationalCorpus:find('"founding_phase_account": "NexoFr_"',1,true),"NexoFr
 local forbiddenServerName="Astra".."lium"
 assert(not nationalCorpus:find(forbiddenServerName,1,true),"forbidden server name leaked into national corpus")
 
-print("Self-test OK: 500 UNS articles + 400 NC articles + v0.17 citizen service desk intranet")
+print("Self-test OK: 500 UNS articles + 400 NC articles + v0.18 national treasury and procurement")
