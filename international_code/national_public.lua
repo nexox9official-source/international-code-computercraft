@@ -60,6 +60,7 @@ local function overview(t,info,dash)
   fill(t,y," CATEGORIES       "..tostring(dash.categories or 0),colors.cyan);y=y+1
   fill(t,y," CABINET          "..tostring(dash.filledMinistries or 0).."/"..tostring(dash.ministries or 0),colors.cyan);y=y+1
   fill(t,y," SESSIONS LIVE    "..tostring(dash.openSessions or 0).." / "..tostring(dash.scheduledSessions or 0).." prevues",colors.cyan);y=y+1
+  fill(t,y," DEMANDES EN COURS "..tostring(dash.pendingRequests or 0),colors.cyan);y=y+1
   fill(t,y," SCRUTINS OUVERTS "..tostring(dash.openElections or 0),colors.yellow);y=y+1
   fill(t,y," VOTES LEGISLATIFS "..tostring(dash.votingBills or 0),colors.yellow);y=y+1
   fill(t,y," DECRETS PUBLIES  "..tostring(dash.publishedDecrees or 0),colors.white);y=y+1
