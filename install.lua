@@ -77,8 +77,28 @@ end
 
 local function safePreCleanup()
   local freed=0
+
   -- Ancien corpus monolithique: 700+ Ko. Il n'est plus utilise en v0.23+.
   freed=freed+deleteMany({"international_code/national/corpus_v2.json"})
+
+  -- Une ecriture interrompue de state.tbl peut laisser un gros .tmp.
+  local stateTmp="/international_code/data/state.tbl.tmp"
+  if fs.exists(stateTmp) and not fs.isDir(stateTmp) then
+    freed=freed+(fs.getSize(stateTmp) or 0)
+    fs.delete(stateTmp)
+  end
+
+  -- Les backups sont recreables depuis state.tbl. Sur un disque sature,
+  -- on les purge avant toute mise a jour afin de proteger la base principale.
+  local backups="/international_code/data/backups"
+  if fs.exists(backups) and fs.isDir(backups) then
+    for _,name in ipairs(fs.list(backups)) do
+      local p=backups.."/"..name
+      if fs.exists(p) and not fs.isDir(p) then freed=freed+(fs.getSize(p) or 0) end
+      fs.delete(p)
+    end
+  end
+
   -- Restes d'un telechargement interrompu.
   for _,rel in ipairs(ALL_PROGRAMS) do
     local tmp=full(rel)..".download"
