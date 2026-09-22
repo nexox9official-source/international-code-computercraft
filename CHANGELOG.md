@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.22.0
+
+### Direction permanente de North Coalition
+- **NexoFr_** est désormais enregistré comme dirigeant permanent de North Coalition, Président de la Coalition et autorité souveraine nationale sans limite de durée ;
+- aucune élection, aucun vote, aucune motion, aucune décision judiciaire, ministérielle ou administrative ne peut le remplacer, le suspendre, le destituer ou mettre fin à ses pouvoirs nationaux ;
+- la direction souveraine ne peut prendre fin que par une renonciation volontaire de **NexoFr_** lui-même ;
+- cette renonciation exige une confirmation explicite, est scellée, auditée et publiée au Journal officiel ;
+- tant que cette renonciation n'existe pas, toute élection présidentielle est bloquée côté serveur et masquée dans l'interface ;
+- les élections du Conseil et les scrutins ministériels restent disponibles ;
+- les articles NC-ART-061, 093, 094, 095 et 400 ont été consolidés pour refléter cette règle constitutionnelle.
+
+### Succession
+- aucune vacance de la direction n'est créée par une absence ou une inactivité temporaire de NexoFr_ ;
+- une procédure de succession présidentielle ne peut être ouverte qu'après sa renonciation volontaire enregistrée ;
+- les anciennes élections présidentielles éventuellement encore présentes dans les données ne peuvent pas installer un successeur tant que l'autorité souveraine reste active.
+
 ## 0.21.0
 
 ### Ratification des deux Codes
