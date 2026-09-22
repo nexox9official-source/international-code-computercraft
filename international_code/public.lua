@@ -68,6 +68,7 @@ local function drawOverview(t,dash,states,bills,cases)
   fillLine(t,y," DOSSIERS PUBLICS "..tostring(dash.openCases or #cases),colors.white);y=y+1
   fillLine(t,y," SCRUTINS OUVERTS "..tostring((dash.votingBills or #bills)+(dash.votingResolutions or 0)),colors.yellow);y=y+1
   fillLine(t,y," SESSIONS LIVE    "..tostring(dash.openSessions or 0).." / "..tostring(dash.scheduledSessions or 0).." prevues",colors.cyan);y=y+1
+  fillLine(t,y," MISSIONS ACTIVES "..tostring(dash.activeMissions or 0),colors.cyan);y=y+1
   fillLine(t,y," EXECUTIONS ACT.  "..tostring(dash.activeEnforcements or 0),colors.orange);y=y+2
   fillLine(t,y," Revision registre: "..tostring(dash.revision or "?"),colors.lightGray);y=y+1
   fillLine(t,y," Projet juridique: "..tostring(dash.codeStatus or "?"),colors.lightGray)
@@ -164,6 +165,24 @@ local function drawSessions(t,rows)
   fillLine(t,h," Sessions de l'Union",colors.gray)
 end
 
+local function drawMissions(t,rows)
+  t.setBackgroundColor(colors.black);t.clear()
+  header(t,"MISSIONS INTERNATIONALES","Missions publiques actives")
+  local _,h=t.getSize()
+  local y=4
+  if #rows==0 then
+    fillLine(t,y," Aucune mission publique active.",colors.lightGray)
+  else
+    for _,m in ipairs(rows) do
+      if y>=h then break end
+      fillLine(t,y," "..m.id.." ["..tostring(m.missionType or "?").."]",colors.cyan);y=y+1
+      if y<h then fillLine(t,y,"   "..tostring(m.title or ""),colors.white);y=y+1 end
+      if m.area and m.area~="" and y<h then fillLine(t,y,"   Zone: "..m.area,colors.lightGray);y=y+1 end
+    end
+  end
+  fillLine(t,h," Missions et observateurs de l'Union",colors.gray)
+end
+
 local function drawTreaties(t,treaties)
   t.setBackgroundColor(colors.black);t.clear()
   header(t,"TRAITES EN VIGUEUR","Registre diplomatique")
@@ -239,6 +258,7 @@ function P.run()
       local sessions={}
       for _,row in ipairs(openSessions) do sessions[#sessions+1]=row end
       for _,row in ipairs(scheduledSessions) do sessions[#sessions+1]=row end
+      local missions=rpc(cfg,"MISSION_LIST",{status="active"},4) or {}
       local cases=rpc(cfg,"CASE_LIST",{visibility="public"},4) or {}
       local treaties=rpc(cfg,"TREATY_LIST",{stage="in_force"},4) or {}
       local enforcements=rpc(cfg,"ENFORCEMENT_LIST",{visibility="public"},4) or {}
@@ -248,19 +268,20 @@ function P.run()
       elseif page==3 then drawBills(target,bills)
       elseif page==4 then drawResolutions(target,resolutions)
       elseif page==5 then drawSessions(target,sessions)
-      elseif page==6 then drawTreaties(target,treaties)
-      elseif page==7 then drawCases(target,cases)
-      elseif page==8 then drawEnforcements(target,enforcements)
+      elseif page==6 then drawMissions(target,missions)
+      elseif page==7 then drawTreaties(target,treaties)
+      elseif page==8 then drawCases(target,cases)
+      elseif page==9 then drawEnforcements(target,enforcements)
       else drawLaws(target,laws) end
     end
 
     local timer=os.startTimer(8)
     while true do
       local ev,a=os.pullEvent()
-      if ev=="timer" and a==timer then page=page%9+1 break
+      if ev=="timer" and a==timer then page=page%10+1 break
       elseif ev=="key" and (a==keys.q or a==keys.escape) then
         term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
-      elseif ev=="monitor_touch" then page=page%9+1 break end
+      elseif ev=="monitor_touch" then page=page%10+1 break end
     end
   end
 end
@@ -563,6 +584,53 @@ function P.sessionDisplay(sessionId)
     end
 
     local timer=os.startTimer(3)
+    while true do
+      local ev,a=os.pullEvent()
+      if ev=="timer" and a==timer then break
+      elseif ev=="key" and (a==keys.q or a==keys.escape) then
+        term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
+      end
+    end
+  end
+end
+
+function P.missionDisplay(missionId)
+  local cfg=common.loadConfig()
+  if not cfg or cfg.role=="server" then error("Terminal client requis.",0) end
+  local monitor=findMonitor()
+  local old=term.current()
+  local target=monitor or old
+  if monitor and monitor.setTextScale then pcall(monitor.setTextScale,0.5) end
+  term.redirect(target)
+
+  while true do
+    target.setCursorBlink(false)
+    target.setBackgroundColor(colors.black);target.clear()
+    local m,err=rpc(cfg,"MISSION_GET",{id=missionId},4)
+    if not m then
+      drawOffline(target,err)
+    else
+      header(target,"MISSION / "..m.id,m.title or "")
+      local _,h=target.getSize()
+      local y=4
+      local statusColor=m.status=="active" and colors.lime or
+        (m.status=="suspended" and colors.yellow or (m.status=="cancelled" and colors.red or colors.cyan))
+      fillLine(target,y," Statut: "..tostring(m.status),statusColor);y=y+1
+      fillLine(target,y," Type: "..tostring(m.missionType or "?"),colors.cyan);y=y+1
+      fillLine(target,y," Zone: "..tostring(m.area or "-"),colors.white);y=y+1
+      fillLine(target,y," Periode: "..tostring(m.startAt or "-").." -> "..tostring(m.endAt or "-"),colors.lightGray);y=y+2
+      fillLine(target,y," Etats participants: "..tostring(#(m.participatingStates or {})),colors.cyan);y=y+1
+      if m.leadStateId and m.leadStateId~="" then fillLine(target,y," Responsable: "..m.leadStateId,colors.white);y=y+1 end
+      if m.commander and m.commander~="" then fillLine(target,y," Commandement: "..m.commander,colors.lightGray);y=y+2 end
+      fillLine(target,y," Rapports: "..tostring(#(m.reports or {})),colors.white);y=y+1
+      if m.reports and #m.reports>0 and y<h then
+        local r=m.reports[#m.reports]
+        fillLine(target,y," Dernier: "..tostring(r.title or r.id or ""),colors.lightGray)
+      end
+      fillLine(target,h," LIVE / actualisation 5s / Q pour quitter",colors.gray)
+    end
+
+    local timer=os.startTimer(5)
     while true do
       local ev,a=os.pullEvent()
       if ev=="timer" and a==timer then break
