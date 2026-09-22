@@ -944,6 +944,91 @@ function N.handle(state,actor,action,p,ctx)
   local access,accessErr=requireAccess(state,actor)
   if not access then return nil,accessErr end
 
+  if action=="NC_PORTAL_SEARCH" then
+    local q=common.trim(p.query)
+    if q=="" then return {} end
+    if #q>80 then q=q:sub(1,80) end
+
+    local out={}
+    local function add(kind,id,title,meta,rank)
+      out[#out+1]={
+        kind=kind,id=id,title=title or id,meta=meta or "",rank=rank or 0
+      }
+    end
+    local function append(rows,limit,kindFn,idFn,titleFn,metaFn,rank)
+      local count=0
+      for _,row in ipairs(rows or {}) do
+        add(kindFn(row),idFn(row),titleFn(row),metaFn(row),rank)
+        count=count+1
+        if count>=(limit or 10) then break end
+      end
+    end
+
+    append(listLaws(n,{query=q}),15,
+      function() return "law" end,
+      function(x) return x.id end,
+      function(x) return (x.display_reference or x.id).." - "..(x.title or "") end,
+      function(x) return (x.category_code or "").." / "..(x.chapter or "").." / "..(x.status or "") end,100)
+
+    append(listGazette(n,{query=q},state,actor),10,
+      function() return "gazette" end,
+      function(x) return x.id end,
+      function(x) return x.title end,
+      function(x) return (x.kind or "").." / "..(x.publishedAt or "") end,90)
+
+    local ministries={}
+    for _,m in ipairs(listMinistries(n)) do
+      local scope=table.concat(m.scope or {}," ")
+      if common.contains(m.code,q) or common.contains(m.name,q) or common.contains(scope,q) or
+         common.contains(m.holderIdentity,q) then
+        ministries[#ministries+1]=m
+      end
+    end
+    append(ministries,10,
+      function() return "ministry" end,
+      function(x) return x.code end,
+      function(x) return x.name end,
+      function(x) return x.code.." / "..tostring(x.holderIdentity or "VACANT") end,85)
+
+    append(listBills(n,{query=q}),10,
+      function() return "bill" end,
+      function(x) return x.id end,
+      function(x) return x.title end,
+      function(x) return (x.proposalType or "").." / "..(x.stage or "") end,80)
+
+    append(listDecrees(n,{query=q}),10,
+      function() return "decree" end,
+      function(x) return x.id end,
+      function(x) return x.title end,
+      function(x) return (x.scope or "").." / "..(x.status or "") end,78)
+
+    append(listNationalSessions(n,{query=q},state,actor),10,
+      function() return "session" end,
+      function(x) return x.id end,
+      function(x) return x.title end,
+      function(x) return (x.sessionType or "").." / "..(x.status or "") end,75)
+
+    append(listNationalCases(n,{query=q},state,actor),10,
+      function() return "case" end,
+      function(x) return x.id end,
+      function(x) return x.title end,
+      function(x) return (x.caseType or "").." / "..(x.status or "").." / "..(x.visibility or "") end,70)
+
+    append(listCitizens(n,{query=q},canManageCitizens(state,actor)),10,
+      function() return "citizen" end,
+      function(x) return x.id end,
+      function(x) return x.displayName or x.identity end,
+      function(x) return x.id.." / "..(x.status or "") end,65)
+
+    table.sort(out,function(a,b)
+      if (a.rank or 0)~=(b.rank or 0) then return (a.rank or 0)>(b.rank or 0) end
+      return tostring(a.title)<tostring(b.title)
+    end)
+    while #out>60 do table.remove(out) end
+    for _,row in ipairs(out) do row.rank=nil end
+    return out
+  end
+
   if action=="NC_VERIFY_SEAL" then
     local wanted=common.trim(p.seal):upper()
     if wanted=="" then return {valid=false,seal=wanted} end
