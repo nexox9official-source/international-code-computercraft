@@ -411,4 +411,45 @@ function P.citizenRecord(record)
   return printLines(cit.id.." DOSSIER",lines)
 end
 
+
+function P.request(req)
+  if not req then return false,"Demande introuvable." end
+  local lines={}
+  append(lines,"DEMANDE ADMINISTRATIVE",req.id.." / "..(req.title or ""),25)
+  append(lines,"TYPE / STATUT",(req.requestType or "-").." / "..(req.status or "-"),25)
+  append(lines,"DEMANDEUR",(req.applicantCitizenId or "-").." / "..(req.applicantIdentity or ""),25)
+  append(lines,"DESTINATAIRE",req.targetMinistry or "-",25)
+  append(lines,"OBJET / MOTIVATION",req.body or "",25)
+  append(lines,"BASE LEGALE",req.legalBasis or "-",25)
+  if req.payload then
+    local p=req.payload
+    if req.requestType=="license" then
+      append(lines,"LICENCE DEMANDEE",(p.kind or "-").." / "..(p.title or ""),25)
+      append(lines,"EXPIRATION SOUHAITEE",p.expiresAt or "-",25)
+      append(lines,"CONDITIONS SOUHAITEES",p.conditionsRequested or "-",25)
+    elseif req.requestType=="organization" then
+      append(lines,"ORGANISATION",(p.name or "-").." / "..(p.kind or "-"),25)
+      append(lines,"ACTIVITE",p.activity or "-",25)
+      append(lines,"SIEGE",p.registeredAddress or "-",25)
+    end
+  end
+  append(lines,"DEPOT",(req.createdAt or "-").." / "..(req.createdBy or "-"),25)
+  append(lines,"SCEAU DE DEPOT",req.seal or "-",25)
+  if req.decision then
+    append(lines,"DECISION",(req.decision or "").." / "..(req.decisionReason or ""),25)
+    append(lines,"DECIDEE",(req.decidedAt or "-").." / "..(req.decidedBy or "-"),25)
+    append(lines,"OBJET CREE",req.resultObjectId or "-",25)
+    append(lines,"SCEAU DE DECISION",req.decisionSeal or "-",25)
+  end
+  if #(req.history or {})>0 then
+    lines[#lines+1]="HISTORIQUE"
+    for _,h in ipairs(req.history or {}) do
+      for _,x in ipairs(common.wrap((h.at or "").." / "..(h.event or "").." / "..(h.by or "").." / "..(h.details or ""),25)) do lines[#lines+1]=x end
+      if h.seal then for _,x in ipairs(common.wrap("Sceau: "..h.seal,25)) do lines[#lines+1]=x end end
+      lines[#lines+1]=""
+    end
+  end
+  return printLines(req.id or "NC-REQ",lines)
+end
+
 return P
