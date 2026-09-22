@@ -381,29 +381,56 @@ local function eligibleVotingStates(state)
 end
 
 local function billTally(state,bill)
+  local eligibleSet={}
+  local eligible=0
+
+  if type(bill.eligibleStateIds)=="table" and #bill.eligibleStateIds>0 then
+    for _,id in ipairs(bill.eligibleStateIds) do
+      eligibleSet[id]=true
+      eligible=eligible+1
+    end
+  else
+    for id,st in pairs(state.states or {}) do
+      if st.status=="member" then
+        eligibleSet[id]=true
+        eligible=eligible+1
+      end
+    end
+  end
+
   local yes,no,abstain=0,0,0
   for stateId,v in pairs(bill.votes or {}) do
-    local st=state.states[stateId]
-    if st and st.status=="member" then
+    if eligibleSet[stateId] then
       if v.choice=="yes" then yes=yes+1
       elseif v.choice=="no" then no=no+1
       else abstain=abstain+1 end
     end
   end
-  local eligible=eligibleVotingStates(state)
+
+  local participation=yes+no+abstain
   local cast=yes+no
+  local quorumRequired=math.ceil(eligible/2)
+  local quorumMet=eligible>0 and participation>=quorumRequired
   local threshold=bill.threshold or "simple_cast"
   local adopted=false
-  if threshold=="simple_cast" then
-    adopted=cast>0 and yes>no
-  elseif threshold=="absolute_members" then
-    adopted=yes>(eligible/2)
-  elseif threshold=="two_thirds_cast" then
-    adopted=cast>0 and yes*3>=cast*2
-  elseif threshold=="three_quarters_members" then
-    adopted=eligible>0 and yes*4>=eligible*3
+
+  if quorumMet then
+    if threshold=="simple_cast" then
+      adopted=cast>0 and yes>no
+    elseif threshold=="absolute_members" then
+      adopted=yes>(eligible/2)
+    elseif threshold=="two_thirds_cast" then
+      adopted=cast>0 and yes*3>=cast*2
+    elseif threshold=="three_quarters_members" then
+      adopted=eligible>0 and yes*4>=eligible*3
+    end
   end
-  return {yes=yes,no=no,abstain=abstain,eligible=eligible,cast=cast,threshold=threshold,adopted=adopted}
+
+  return {
+    yes=yes,no=no,abstain=abstain,eligible=eligible,cast=cast,
+    participation=participation,quorumRequired=quorumRequired,quorumMet=quorumMet,
+    threshold=threshold,adopted=adopted
+  }
 end
 
 local function makeBillId(state)
@@ -460,6 +487,10 @@ end
 
 local function handleAction(state, actor, action, p)
   p = p or {}
+  if action:match("^CASE_") and action~="CASE_LIST" and action~="CASE_GET" and action~="CASE_CREATE" and p.id then
+    local guarded=state.cases[common.trim(p.id):upper()]
+    if guarded and not canViewCase(actor,guarded) then return nil,"Acces refuse a ce dossier." end
+  end
   if action == "PING" then return { pong=true, time=common.now(), revision=state.meta.revision } end
   if action == "SERVER_INFO" then
     return { meta=state.meta, clientsCount=(function() local n=0 for _ in pairs(state.clients) do n=n+1 end return n end)() }
@@ -573,7 +604,8 @@ local function handleAction(state, actor, action, p)
       targetRef=proposalType=="amendment" and normalizeArticleRef(p.targetRef) or "",
       proposedTitle=common.trim(p.proposedTitle),proposedBody=common.trim(p.proposedBody),
       proposedBook=common.trim(p.proposedBook),proposedSection=common.trim(p.proposedSection),
-      stage="draft",threshold=threshold,votes={},voteHistory={},
+      stage="draft",threshold=threshold,votes={},voteHistory={},voteRounds={},
+      eligibleStateIds={},votingRound=0,
       createdAt=common.now(),updatedAt=common.now(),createdBy=actor.label,
       result=nil,enactedRef=nil
     }
@@ -623,10 +655,30 @@ local function handleAction(state, actor, action, p)
     if bill.stage=="adopted" or bill.stage=="rejected" or bill.stage=="enacted" or bill.stage=="withdrawn" then
       return nil,"Cette proposition est deja terminee."
     end
+    bill.voteRounds=bill.voteRounds or {}
+    if bill.votingRound and bill.votingRound>0 then
+      bill.voteRounds[#bill.voteRounds+1]={
+        round=bill.votingRound,
+        openedAt=bill.votingOpenedAt,
+        closedAt=bill.closedAt,
+        result=bill.result,
+        votes=common.deepcopy(bill.votes or {}),
+        tally=billTally(state,bill)
+      }
+    end
+    bill.votingRound=(bill.votingRound or 0)+1
+    bill.votes={}
+    bill.eligibleStateIds={}
+    for id,st in pairs(state.states or {}) do
+      if st.status=="member" then bill.eligibleStateIds[#bill.eligibleStateIds+1]=id end
+    end
+    table.sort(bill.eligibleStateIds)
     bill.stage="voting"
+    bill.result=nil
+    bill.closedAt=nil
     bill.votingOpenedAt=common.now()
     bill.updatedAt=common.now()
-    mutate(state,actor,"BILL_OPEN_VOTE",bill.id,bill.title)
+    mutate(state,actor,"BILL_OPEN_VOTE",bill.id,bill.title.." / round "..bill.votingRound.." / electorate "..#bill.eligibleStateIds)
     local out=common.deepcopy(bill); out.tally=billTally(state,bill); return out
   end
 
@@ -636,7 +688,9 @@ local function handleAction(state, actor, action, p)
     if bill.stage~="voting" then return nil,"Le vote n'est pas ouvert." end
     local st=getClientState(state,actor)
     if not st then return nil,"Ce terminal delegue n'est rattache a aucun Etat." end
-    if st.status~="member" then return nil,"Seuls les Etats membres actifs peuvent voter." end
+    local eligible=false
+    for _,id in ipairs(bill.eligibleStateIds or {}) do if id==st.id then eligible=true break end end
+    if not eligible then return nil,"Cet Etat ne faisait pas partie du corps electoral a l'ouverture de ce vote." end
     local choice=common.lower(p.choice)
     if choice~="yes" and choice~="no" and choice~="abstain" then return nil,"Vote invalide." end
     bill.votes=bill.votes or {}
@@ -657,8 +711,13 @@ local function handleAction(state, actor, action, p)
     if not bill then return nil,"Proposition introuvable." end
     if bill.stage~="voting" then return nil,"Le vote n'est pas ouvert." end
     local tally=billTally(state,bill)
-    bill.result=tally.adopted and "adopted" or "rejected"
-    bill.stage=bill.result
+    if not tally.quorumMet then
+      bill.result="no_quorum"
+      bill.stage="no_quorum"
+    else
+      bill.result=tally.adopted and "adopted" or "rejected"
+      bill.stage=bill.result
+    end
     bill.closedAt=common.now()
     bill.closedBy=actor.label
     bill.updatedAt=common.now()
