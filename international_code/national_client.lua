@@ -325,7 +325,7 @@ local function chooseClient(title,filter)
   local items={}
   for _,cl in ipairs(rows) do
     if not filter or filter(cl) then
-      items[#items+1]={text=(cl.nationalIdentity or cl.label).." / PC #"..tostring(cl.computerId).." / "..roleLabel(cl.nationalRole),client=cl}
+      items[#items+1]={text=(cl.nationalIdentity or cl.label).." / "..(cl.citizenId or "sans NC-CIT").." / PC #"..tostring(cl.computerId).." / "..roleLabel(cl.nationalRole),client=cl}
     end
   end
   local p=menu(title or "TERMINAUX NATIONAUX",items,#items.." terminal(aux)")
@@ -364,7 +364,7 @@ local function ministryDetails(code)
     elseif a.id=="print" then
       local ok,pages=printer.ministry(m);message("IMPRESSION",ok and ("Fiche imprimee: "..pages.." page(s).") or pages,ok and palette.accent or palette.bad)
     elseif a.id=="appoint" then
-      local cl=chooseClient("CHOISIR LE MINISTRE",function(x) return x.nationalRole~="president" and not x.ministryCode end)
+      local cl=chooseClient("CHOISIR LE MINISTRE",function(x) return x.citizenId and x.nationalRole~="president" and not x.ministryCode end)
       if cl then
         local reason=multi("MOTIF DE NOMINATION","Nomination directe selon les regles gouvernementales.")
         local out,e=rpc("NC_MINISTER_APPOINT_DIRECT",{ministryCode=m.code,clientId=cl.clientId,reason=reason})
@@ -481,7 +481,7 @@ function C.electionDetails(id)
     elseif a.id=="print" then
       local ok,pages=printer.election(e);message("IMPRESSION",ok and ("Scrutin imprime: "..pages.." page(s).") or pages,ok and palette.accent or palette.bad)
     elseif a.id=="candidate" then
-      local cl=chooseClient("CHOISIR UN CANDIDAT",function(x) return x.nationalRole~="president" and not x.ministryCode end)
+      local cl=chooseClient("CHOISIR UN CANDIDAT",function(x) return x.citizenId and x.nationalRole~="president" and not x.ministryCode end)
       if cl then
         local out,er=rpc("NC_ELECTION_ADD_CANDIDATE",{id=e.id,clientId=cl.clientId})
         message("CANDIDATURE",out and "Candidat enregistre." or er,out and palette.accent or palette.bad)
@@ -1070,6 +1070,115 @@ local function casesScreen()
   end
 end
 
+
+local function citizenDetails(id,info)
+  while true do
+    local cit,err=rpc("NC_CITIZEN_GET",{id=id})
+    if not cit then message("REGISTRE CIVIL",err,palette.bad);return end
+    local canManage=(info.nationalRole=="admin" or info.nationalRole=="president" or
+      (info.nationalRole=="minister" and info.ministryCode=="MIN-INT"))
+    local actions={{text="Lire la fiche d'identite",id="read"}}
+    if canManage then
+      actions[#actions+1]={text="Modifier l'identite / statut",id="edit"}
+      actions[#actions+1]={text="Rattacher un terminal",id="link"}
+    end
+    local a=menu(cit.id.." - "..(cit.displayName or cit.identity),actions,
+      (cit.status or "?").." / identite officielle "..(cit.identity or ""))
+    if not a then return end
+
+    if a.id=="read" then
+      local hist={}
+      for _,h in ipairs(cit.history or {}) do
+        hist[#hist+1]=(h.at or "").." / "..(h.by or "")..
+          " / "..tostring((h.old or {}).status or "?").." -> "..tostring((h.new or {}).status or "?")..
+          "\nSceau: "..(h.seal or "-")
+      end
+      local linked={}
+      if canManage then
+        local clients=rpc("NC_CLIENT_LIST",{}) or {}
+        for _,cl in ipairs(clients) do
+          if cl.citizenId==cit.id then linked[#linked+1]=(cl.label or cl.clientId).." / PC #"..tostring(cl.computerId).." / "..roleLabel(cl.nationalRole) end
+        end
+      end
+      textPage(cit.id,{
+        {label="Identite officielle",text=cit.identity or ""},
+        {label="Nom affiche",text=cit.displayName or ""},
+        {label="Statut civil",text=cit.status or ""},
+        {label="Sceau initial",text=cit.seal or "-"},
+        {label="Notes administratives",text=cit.notes or (canManage and "Aucune" or "[restreintes]")},
+        {label="Terminaux rattaches",text=#linked>0 and table.concat(linked,"\n") or (canManage and "Aucun" or "[reserve administration]")},
+        {label="Historique",text=#hist>0 and table.concat(hist,"\n\n") or "Aucune modification"}
+      })
+
+    elseif a.id=="edit" then
+      local identityValue=prompt("Identite officielle",cit.identity or "")
+      local displayName=prompt("Nom affiche",cit.displayName or identityValue)
+      local st=menu("STATUT CIVIL",{
+        {text="Citoyen actif",v="citizen"},{text="Resident",v="resident"},
+        {text="Suspendu",v="suspended"},{text="Decede / archive",v="deceased"}
+      },"Actuel: "..(cit.status or ""))
+      local notes=multi("NOTES ADMINISTRATIVES",cit.notes or "")
+      local out,e=rpc("NC_CITIZEN_UPDATE",{
+        id=cit.id,identity=identityValue,displayName=displayName,
+        status=st and st.v or cit.status,notes=notes
+      })
+      message("REGISTRE CIVIL",out and "Identite mise a jour." or e,out and palette.accent or palette.bad)
+
+    elseif a.id=="link" then
+      local cl=chooseClient("RATTACHER UN TERMINAL")
+      if cl then
+        local out,e=rpc("NC_CITIZEN_LINK_CLIENT",{citizenId=cit.id,clientId=cl.clientId})
+        message("REGISTRE CIVIL",out and ("Terminal rattache a "..cit.id) or e,out and palette.accent or palette.bad)
+      end
+    end
+  end
+end
+
+local function citizensScreen(info)
+  local query,status="",""
+  while true do
+    local rows,err=rpc("NC_CITIZEN_LIST",{query=query,status=status})
+    if not rows then message("REGISTRE CIVIL",err,palette.bad);return end
+    local canManage=(info.nationalRole=="admin" or info.nationalRole=="president" or
+      (info.nationalRole=="minister" and info.ministryCode=="MIN-INT"))
+    local items={}
+    if canManage then items[#items+1]={text="[+] Enregistrer une identite",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
+    if query~="" or status~="" then items[#items+1]={text="[R] Reinitialiser filtres",id="reset"} end
+    for _,cit in ipairs(rows) do
+      items[#items+1]={text=cit.id.." ["..(cit.status or "?").."] "..(cit.displayName or cit.identity),citizen=cit}
+    end
+
+    local p=menu("REGISTRE CIVIL / CITOYENS",items,#rows.." identite(s)")
+    if not p then return end
+    if p.id=="new" then
+      local identityValue=prompt("Identite officielle")
+      local displayName=prompt("Nom affiche",identityValue)
+      local st=menu("STATUT INITIAL",{
+        {text="Citoyen",v="citizen"},{text="Resident",v="resident"}
+      })
+      local notes=multi("NOTES ADMINISTRATIVES","")
+      local out,e=rpc("NC_CITIZEN_CREATE",{
+        identity=identityValue,displayName=displayName,status=st and st.v or "citizen",notes=notes
+      })
+      message("REGISTRE CIVIL",out and ("Enregistre: "..out.id) or e,out and palette.accent or palette.bad)
+    elseif p.id=="search" then
+      query=prompt("ID / identite / nom",query)
+    elseif p.id=="status" then
+      local st=menu("STATUT",{
+        {text="Tous",v=""},{text="Citoyens",v="citizen"},{text="Residents",v="resident"},
+        {text="Suspendus",v="suspended"},{text="Decedes / archives",v="deceased"}
+      })
+      if st then status=st.v end
+    elseif p.id=="reset" then
+      query="";status=""
+    elseif p.citizen then
+      citizenDetails(p.citizen.id,info)
+    end
+  end
+end
+
 local function nationalNotices(info)
   while true do
     local rows,err=rpc("NC_NOTICE_LIST",{})
@@ -1101,7 +1210,8 @@ local function nationalNotices(info)
       elseif n.objectType=="nc_decree" then actions[#actions+1]={text="Ouvrir le decret",id="open"}
       elseif n.objectType=="nc_ministry" then actions[#actions+1]={text="Ouvrir le ministere",id="open"}
       elseif n.objectType=="nc_government" then actions[#actions+1]={text="Ouvrir le Gouvernement",id="open"}
-      elseif n.objectType=="nc_case" then actions[#actions+1]={text="Ouvrir le dossier judiciaire",id="open"} end
+      elseif n.objectType=="nc_case" then actions[#actions+1]={text="Ouvrir le dossier judiciaire",id="open"}
+      elseif n.objectType=="nc_citizen" then actions[#actions+1]={text="Ouvrir la fiche citoyenne",id="open"} end
       local a=menu(n.title or n.id,actions,(n.severity or "info").." / "..(n.createdAt or ""))
       if a and a.id=="read" then
         textPage(n.id,{
@@ -1117,7 +1227,8 @@ local function nationalNotices(info)
         elseif n.objectType=="nc_decree" then decreeDetails(n.objectId)
         elseif n.objectType=="nc_ministry" then ministryDetails(n.objectId)
         elseif n.objectType=="nc_government" then governmentScreen(info)
-        elseif n.objectType=="nc_case" then caseDetails(n.objectId) end
+        elseif n.objectType=="nc_case" then caseDetails(n.objectId)
+        elseif n.objectType=="nc_citizen" then citizenDetails(n.objectId,info) end
       end
     end
   end
@@ -1170,11 +1281,12 @@ function C.run()
     info=rpc("NC_INFO",{}) or info
     local subtitle=roleLabel(dash.nationalRole).." / "..tostring(dash.nationalIdentity)..
       (dash.ministryCode and (" / "..dash.ministryCode) or "")..
-      " | "..dash.activeLaws.." lois actives / "..tostring(dash.openCases or 0).." dossier(s) / "..dash.openElections.." scrutin(s) / "..tostring(dash.unreadNotices or 0).." notif."
+      " | "..tostring(dash.activeCitizens or 0).." citoyen(s) / "..dash.activeLaws.." lois / "..tostring(dash.openCases or 0).." dossier(s) / "..dash.openElections.." scrutin(s) / "..tostring(dash.unreadNotices or 0).." notif."
 
     local items={
       {text=(dash.unreadNotices or 0)>0 and ("[!] NOTIFICATIONS NATIONALES ("..dash.unreadNotices..")") or "NOTIFICATIONS NATIONALES",id="notices"},
       {text="CODE NATIONAL / CATEGORIES / RECHERCHE",id="code"},
+      {text="REGISTRE CIVIL / CITOYENS / IDENTITES",id="citizens"},
       {text="GOUVERNEMENT / MINISTERES / FONCTIONS",id="gov"},
       {text="LEGISLATION / PROJETS / VOTES",id="bills"},
       {text="ELECTIONS MINISTERIELLES",id="elections"},
@@ -1190,6 +1302,7 @@ function C.run()
     if not p or p.id=="back" then clear();return end
     if p.id=="notices" then nationalNotices(info)
     elseif p.id=="code" then codeScreen()
+    elseif p.id=="citizens" then citizensScreen(info)
     elseif p.id=="gov" then governmentScreen(info)
     elseif p.id=="bills" then billsScreen()
     elseif p.id=="elections" then C.electionsScreen()
