@@ -479,6 +479,219 @@ local function handleAction(state, actor, action, p)
       revision=state.meta.revision, codeStatus=state.meta.codeStatus
     }
   end
+  if action == "STATE_LIST" then return listStates(state,p) end
+  if action == "STATE_GET" then
+    return common.deepcopy(state.states[common.trim(p.id):upper()])
+  end
+
+  if action == "STATE_CREATE" then
+    local name=common.trim(p.name)
+    if name=="" then return nil,"Nom d'Etat obligatoire." end
+    for _,st in pairs(state.states) do
+      if common.normalizeSearch(st.name)==common.normalizeSearch(name) then
+        return nil,"Un Etat avec ce nom existe deja."
+      end
+    end
+    local id=string.format("STATE-%03d",state.nextState or 1)
+    state.nextState=(state.nextState or 1)+1
+    local st={
+      id=id,name=name,shortName=common.trim(p.shortName),
+      status=p.status or "candidate",government=common.trim(p.government),
+      representative=common.trim(p.representative),notes=common.trim(p.notes),
+      createdAt=common.now(),updatedAt=common.now()
+    }
+    if st.shortName=="" then st.shortName=st.name end
+    state.states[id]=st
+    mutate(state,actor,"STATE_CREATE",id,st.name.." / "..st.status)
+    return common.deepcopy(st)
+  end
+
+  if action == "STATE_UPDATE" then
+    local id=common.trim(p.id):upper()
+    local st=state.states[id]
+    if not st then return nil,"Etat introuvable." end
+    local allowed={candidate=true,member=true,suspended=true,withdrawn=true,excluded=true}
+    if p.status and not allowed[p.status] then return nil,"Statut d'Etat invalide." end
+    if p.name~=nil and common.trim(p.name)~="" then st.name=common.trim(p.name) end
+    if p.shortName~=nil then st.shortName=common.trim(p.shortName) end
+    if p.government~=nil then st.government=common.trim(p.government) end
+    if p.representative~=nil then st.representative=common.trim(p.representative) end
+    if p.notes~=nil then st.notes=common.trim(p.notes) end
+    if p.status~=nil then st.status=p.status end
+    st.updatedAt=common.now()
+    mutate(state,actor,"STATE_UPDATE",id,st.name.." / "..st.status)
+    return common.deepcopy(st)
+  end
+
+  if action == "CLIENT_LIST" then
+    local out={}
+    for _,client in pairs(state.clients or {}) do
+      out[#out+1]={
+        clientId=client.clientId,computerId=client.computerId,label=client.label,
+        role=client.role,stateId=client.stateId,createdAt=client.createdAt,lastSeen=client.lastSeen
+      }
+    end
+    table.sort(out,function(a,b) return tostring(a.label)<tostring(b.label) end)
+    return out
+  end
+
+  if action == "CLIENT_SET_STATE" then
+    local client=state.clients[common.trim(p.clientId)]
+    if not client then return nil,"Terminal introuvable." end
+    local stateId=common.trim(p.stateId):upper()
+    if stateId~="" and not state.states[stateId] then return nil,"Etat introuvable." end
+    client.stateId=stateId~="" and stateId or nil
+    mutate(state,actor,"CLIENT_SET_STATE",client.clientId,client.stateId or "aucun")
+    return common.deepcopy(client)
+  end
+
+  if action == "BILL_LIST" then return listBills(state,p) end
+  if action == "BILL_GET" then
+    local bill=state.bills[common.trim(p.id):upper()]
+    if not bill then return nil,"Proposition introuvable." end
+    local out=common.deepcopy(bill)
+    out.tally=billTally(state,bill)
+    return out
+  end
+
+  if action == "BILL_CREATE" then
+    local title=common.trim(p.title)
+    local proposalType=p.proposalType=="amendment" and "amendment" or "new_law"
+    if title=="" then return nil,"Titre obligatoire." end
+    if proposalType=="amendment" then
+      local ref=normalizeArticleRef(p.targetRef)
+      if not state.laws[ref] then return nil,"Article cible introuvable." end
+    end
+    local id=makeBillId(state)
+    local threshold=p.threshold or "simple_cast"
+    local validThreshold={simple_cast=true,absolute_members=true,two_thirds_cast=true,three_quarters_members=true}
+    if not validThreshold[threshold] then threshold="simple_cast" end
+    local bill={
+      id=id,title=title,summary=common.trim(p.summary),proposalType=proposalType,
+      targetRef=proposalType=="amendment" and normalizeArticleRef(p.targetRef) or "",
+      proposedTitle=common.trim(p.proposedTitle),proposedBody=common.trim(p.proposedBody),
+      proposedBook=common.trim(p.proposedBook),proposedSection=common.trim(p.proposedSection),
+      stage="draft",threshold=threshold,votes={},voteHistory={},
+      createdAt=common.now(),updatedAt=common.now(),createdBy=actor.label,
+      result=nil,enactedRef=nil
+    }
+    if bill.proposedTitle=="" or bill.proposedBody=="" then return nil,"Titre et texte proposes obligatoires." end
+    state.bills[id]=bill
+    mutate(state,actor,"BILL_CREATE",id,bill.title)
+    return common.deepcopy(bill)
+  end
+
+  if action == "BILL_EDIT" then
+    local bill=state.bills[common.trim(p.id):upper()]
+    if not bill then return nil,"Proposition introuvable." end
+    if bill.stage~="draft" and bill.stage~="debate" then return nil,"La proposition n'est plus modifiable a ce stade." end
+    if p.title~=nil and common.trim(p.title)~="" then bill.title=common.trim(p.title) end
+    if p.summary~=nil then bill.summary=common.trim(p.summary) end
+    if p.proposedTitle~=nil and common.trim(p.proposedTitle)~="" then bill.proposedTitle=common.trim(p.proposedTitle) end
+    if p.proposedBody~=nil and common.trim(p.proposedBody)~="" then bill.proposedBody=common.trim(p.proposedBody) end
+    if p.proposedBook~=nil then bill.proposedBook=common.trim(p.proposedBook) end
+    if p.proposedSection~=nil then bill.proposedSection=common.trim(p.proposedSection) end
+    if p.threshold~=nil then
+      local valid={simple_cast=true,absolute_members=true,two_thirds_cast=true,three_quarters_members=true}
+      if valid[p.threshold] then bill.threshold=p.threshold end
+    end
+    bill.updatedAt=common.now()
+    mutate(state,actor,"BILL_EDIT",bill.id,bill.title)
+    local out=common.deepcopy(bill); out.tally=billTally(state,bill); return out
+  end
+
+  if action == "BILL_OPEN_VOTE" then
+    local bill=state.bills[common.trim(p.id):upper()]
+    if not bill then return nil,"Proposition introuvable." end
+    if bill.stage=="adopted" or bill.stage=="rejected" or bill.stage=="enacted" or bill.stage=="withdrawn" then
+      return nil,"Cette proposition est deja terminee."
+    end
+    bill.stage="voting"
+    bill.votingOpenedAt=common.now()
+    bill.updatedAt=common.now()
+    mutate(state,actor,"BILL_OPEN_VOTE",bill.id,bill.title)
+    local out=common.deepcopy(bill); out.tally=billTally(state,bill); return out
+  end
+
+  if action == "BILL_VOTE" then
+    local bill=state.bills[common.trim(p.id):upper()]
+    if not bill then return nil,"Proposition introuvable." end
+    if bill.stage~="voting" then return nil,"Le vote n'est pas ouvert." end
+    local st=getClientState(state,actor)
+    if not st then return nil,"Ce terminal delegue n'est rattache a aucun Etat." end
+    if st.status~="member" then return nil,"Seuls les Etats membres actifs peuvent voter." end
+    local choice=common.lower(p.choice)
+    if choice~="yes" and choice~="no" and choice~="abstain" then return nil,"Vote invalide." end
+    bill.votes=bill.votes or {}
+    bill.voteHistory=bill.voteHistory or {}
+    local previous=bill.votes[st.id]
+    bill.votes[st.id]={choice=choice,at=common.now(),by=actor.label,stateName=st.name}
+    bill.voteHistory[#bill.voteHistory+1]={
+      at=common.now(),stateId=st.id,stateName=st.name,choice=choice,
+      previous=previous and previous.choice or nil,by=actor.label
+    }
+    bill.updatedAt=common.now()
+    mutate(state,actor,"BILL_VOTE",bill.id,st.id.."="..choice)
+    local out=common.deepcopy(bill); out.tally=billTally(state,bill); return out
+  end
+
+  if action == "BILL_CLOSE" then
+    local bill=state.bills[common.trim(p.id):upper()]
+    if not bill then return nil,"Proposition introuvable." end
+    if bill.stage~="voting" then return nil,"Le vote n'est pas ouvert." end
+    local tally=billTally(state,bill)
+    bill.result=tally.adopted and "adopted" or "rejected"
+    bill.stage=bill.result
+    bill.closedAt=common.now()
+    bill.closedBy=actor.label
+    bill.updatedAt=common.now()
+    mutate(state,actor,"BILL_CLOSE",bill.id,bill.result.." / yes="..tally.yes.." no="..tally.no.." abst="..tally.abstain)
+    local out=common.deepcopy(bill); out.tally=tally; return out
+  end
+
+  if action == "BILL_ENACT" then
+    local bill=state.bills[common.trim(p.id):upper()]
+    if not bill then return nil,"Proposition introuvable." end
+    if bill.stage~="adopted" then return nil,"La proposition doit etre adoptee avant promulgation." end
+    local enactedRef=nil
+    if bill.proposalType=="new_law" then
+      local n=state.nextArticle
+      state.nextArticle=n+1
+      enactedRef=string.format("UNS-ART-%03d",n)
+      state.laws[enactedRef]={
+        number=n,ref=enactedRef,title=bill.proposedTitle,body=bill.proposedBody,
+        book=bill.proposedBook,section=bill.proposedSection,status="active",
+        version=1,createdAt=common.now(),updatedAt=common.now(),history={},
+        lastChangedBy=actor.label,lastChangeReason="Promulgue depuis "..bill.id
+      }
+    else
+      enactedRef=bill.targetRef
+      local law=state.laws[enactedRef]
+      if not law then return nil,"Article cible introuvable au moment de la promulgation." end
+      law.history=law.history or {}
+      law.history[#law.history+1]={
+        version=law.version,title=law.title,body=law.body,book=law.book,section=law.section,status=law.status,
+        archivedAt=common.now(),archivedBy=actor.label,supersededByReason="Adoption de "..bill.id
+      }
+      law.version=(law.version or 1)+1
+      law.title=bill.proposedTitle
+      law.body=bill.proposedBody
+      if bill.proposedBook~="" then law.book=bill.proposedBook end
+      law.section=bill.proposedSection
+      law.status="active"
+      law.updatedAt=common.now()
+      law.lastChangedBy=actor.label
+      law.lastChangeReason="Promulgue depuis "..bill.id
+    end
+    bill.stage="enacted"
+    bill.enactedRef=enactedRef
+    bill.enactedAt=common.now()
+    bill.enactedBy=actor.label
+    bill.updatedAt=common.now()
+    mutate(state,actor,"BILL_ENACT",bill.id,enactedRef)
+    local out=common.deepcopy(bill); out.tally=billTally(state,bill); return out
+  end
+
   if action == "LAW_BOOKS" then return listBooks(state) end
   if action == "LAW_LIST" then return listLaws(state, p) end
   if action == "LAW_GET" then return common.deepcopy(state.laws[normalizeArticleRef(p.ref)]) end
