@@ -18,6 +18,7 @@ local function help()
   print("ic pair <role>             Creer un code (serveur arrete)")
   print("ic backup                  Backup manuel (serveur)")
   print("ic doctor                  Diagnostic terminal/reseau")
+  print("ic update                  Mettre a jour sans perdre la configuration")
   print("ic help                    Afficher cette aide")
 end
 
@@ -32,6 +33,13 @@ if cmd=="server" then dofile(ROOT.."/server.lua").run();return end
 if cmd=="pair" then dofile(ROOT.."/server.lua").manualPair(args[2] or "viewer");return end
 if cmd=="backup" then dofile(ROOT.."/server.lua").backupNow();return end
 if cmd=="doctor" then dofile(ROOT.."/client.lua").doctor();return end
+if cmd=="update" then
+  local url="https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua"
+  print("Mise a jour UNS International Code...")
+  local ok=shell.run("wget","run",url)
+  if ok then print("Mise a jour terminee. Relancez ic ou redemarrez le PC.") end
+  return
+end
 
 local cfg=common.loadConfig()
 if not cfg then help();return end
