@@ -648,12 +648,14 @@ local function listEnforcements(state,actor,payload)
   local q=common.trim(payload.query)
   local status=common.trim(payload.status)
   local stateId=common.trim(payload.stateId):upper()
+  local caseId=common.trim(payload.caseId):upper()
   local out={}
   for _,e in pairs(state.enforcements or {}) do
     local hit=(q=="" or common.contains(e.id,q) or common.contains(e.targetName,q) or common.contains(e.summary,q) or common.contains(e.enforcementType,q) or common.contains(e.caseId,q))
     local statusHit=(status=="" or e.status==status)
     local stateHit=(stateId=="" or e.targetStateId==stateId)
-    if hit and statusHit and stateHit and canViewEnforcement(actor,e) then
+    local caseHit=(caseId=="" or e.caseId==caseId)
+    if hit and statusHit and stateHit and caseHit and canViewEnforcement(actor,e) then
       out[#out+1]=common.deepcopy(e)
     end
   end
