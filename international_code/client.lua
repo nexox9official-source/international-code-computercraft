@@ -830,6 +830,8 @@ lawBasketBrowser=function(initial)
 end
 
 
+local enforcementsScreen
+
 local roleAllows={
   lawWrite={writer=true,admin=true},
   caseWrite={clerk=true,judge=true,admin=true},
@@ -837,6 +839,8 @@ local roleAllows={
   orderWrite={judge=true,admin=true},
   visibilityWrite={judge=true,admin=true},
   appealDecide={judge=true,admin=true},
+  enforcementWrite={judge=true,admin=true},
+  enforcementProgress={clerk=true,judge=true,admin=true},
   legislature={writer=true,admin=true},
   diplomacy={writer=true,admin=true},
   treatySign={delegate=true},
