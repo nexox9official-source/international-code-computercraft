@@ -7,7 +7,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** avec deux espaces juridi
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. Les données nationales de North Coalition sont isolées logiquement des registres internationaux et soumises à leur propre contrôle d'accès.
 
-## Ce que fait la v0.17
+## Ce que fait la v0.18
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
@@ -23,7 +23,7 @@ Le projet ne contient aucune référence au nom du serveur Minecraft. Les donné
 - impression multi-pages des articles et dossiers via une **Printer ComputerCraft** ;
 - interface terminal claire, navigable au clavier et à la souris.
 
-## Intranet national North Coalition v0.17
+## Intranet national North Coalition v0.18
 
 La v0.17 fournit un deuxième espace complet, **interne à North Coalition**, sans transformer les 400 lois nationales en articles UNS.
 
@@ -39,7 +39,7 @@ Pour un grand Monitor institutionnel interne :
 ic nc-display
 ```
 
-Le Monitor tourne entre Gouvernement, scrutins, législation, Journal officiel, sessions nationales, justice et catégories du Code.
+Le Monitor tourne entre finances publiques, Gouvernement, scrutins, législation, Journal officiel, sessions nationales, justice et catégories du Code.
 
 Le premier terminal administrateur peut enregistrer la Présidence fondatrice sous l'identité officielle **NexoFr_**. Ensuite, l'accès national est attribué terminal par terminal.
 
@@ -297,6 +297,83 @@ Pour un objet auquel le terminal n'a pas le droit d'accéder, le serveur peut co
 Les événements importants alimentent un centre de notifications propre à l'intranet : ouverture de vote, résultat, promulgation, décret, nomination ministérielle, audience, jugement, appel, modification du registre civil ou session institutionnelle.
 
 Les notifications ciblées restent liées au terminal et à l'identité concernée, et peuvent ouvrir directement l'objet correspondant.
+
+### Finances publiques v0.18
+
+North Coalition possède maintenant un **Trésor national** et un cycle budgétaire complet.
+
+Les objets principaux sont :
+
+```text
+NC-BUD-AAAA-XXXX      budget national
+NC-REV-AAAA-XXXX      recette de trésorerie
+NC-EXP-AAAA-XXXX      engagement / dépense publique
+NC-CONTRACT-AAAA-XXXX marché public
+```
+
+Les montants utilisent une unité budgétaire indépendante du gameplay appelée **UB**. Elle permet de régler l'économie plus tard sans casser les actes historiques.
+
+#### Budget national
+
+Le budget est préparé par la Présidence ou le **MIN-ECO**, puis soumis au Conseil.
+
+Cycle :
+
+```text
+draft
+  -> voting
+      -> adopted -> enacted
+      -> rejected
+      -> no_quorum
+```
+
+À l'ouverture du vote, la liste des membres du Conseil éligibles est figée avec leurs identifiants `NC-CIT`. La clôture vérifie le quorum et la majorité. Seule la Présidence peut ensuite promulguer un budget adopté.
+
+Chaque ministère reçoit une enveloppe. Le système calcule en permanence :
+
+- crédits votés ;
+- engagements autorisés ;
+- dépenses réellement payées ;
+- crédits encore disponibles.
+
+#### Trésorerie et recettes
+
+Le registre `NC-REV` conserve les recettes : solde initial, impôts/taxes, douanes, amendes, redevances, dividendes publics, aides ou recettes diverses.
+
+Les recettes fiscales, douanières et issues d'amendes exigent une **base légale nationale**. Chaque écriture possède un sceau vérifiable.
+
+#### Dépenses publiques
+
+Aucun ministre ne peut simplement retirer de l'argent du Trésor.
+
+Une dépense passe par :
+
+```text
+requested
+   -> validation MIN-ECO
+      -> president_approved
+         -> paid
+   -> rejected
+```
+
+Le serveur vérifie avant chaque validation que le ministère dispose encore des crédits nécessaires. Les dépenses importantes, à partir du seuil national configuré (2 500 UB par défaut), imposent une **double validation Finances + Présidence**.
+
+Le paiement final est refusé si la trésorerie nationale est insuffisante.
+
+#### Marchés publics
+
+Un marché `NC-CONTRACT` rattache :
+
+- le ministère acheteur ;
+- une organisation `NC-ORG` enregistrée ;
+- une dépense budgétaire autorisée ;
+- le montant ;
+- la procédure ;
+- l'objet et les justifications.
+
+Procédures disponibles : appel d'offres ouvert, appel restreint, attribution directe et urgence. Une attribution directe ou d'urgence exige une justification écrite.
+
+Les marchés attribués sont publiés au **Journal officiel** et restent vérifiables par leurs sceaux.
 
 ### Gouvernement et ministres
 
