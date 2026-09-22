@@ -89,6 +89,7 @@ local function prompt(label,default)
 end
 
 local referenceBrowser
+local lawBasketBrowser
 local menu
 
 local function splitDraft(text)
@@ -124,6 +125,7 @@ local function multi(label,initial)
   local top=1
   local left=1
   local dirty=true
+  local citationBasket={}
 
   local function save()
     common.writeAll(path,joinDraft(lines))
@@ -180,7 +182,7 @@ local function multi(label,initial)
     end
 
     local state=dirty and "AUTO*" or "AUTO"
-    footer("F2 Categories  F3 Recherche  F4 Inserer article  F5 Terminer  "..state)
+    footer("F2 Cat. F3 Chercher F4 Citer F6 Panier F5 Finir "..state)
 
     local screenX=textX+(cx-left)
     local screenY=bodyTop+(cy-top)
@@ -331,6 +333,29 @@ local function multi(label,initial)
         term.setCursorBlink(false)
         local law=referenceBrowser and referenceBrowser({mode="browse",pick=true,readonly=true}) or nil
         if law then insertChunk("["..law.ref.."] "..law.title) end
+
+      elseif a==keys.f6 then
+        save()
+        term.setCursorBlink(false)
+        if lawBasketBrowser then
+          local picked=lawBasketBrowser(citationBasket)
+          if picked then
+            citationBasket=picked
+            if #citationBasket>0 then
+              local action=menu("PANIER JURIDIQUE",{
+                {text="Inserer les "..#citationBasket.." reference(s) au curseur",id="insert"},
+                {text="Garder le panier et reprendre l'ecriture",id="keep"}
+              },"La selection reste disponible pendant cette redaction.")
+              if action and action.id=="insert" then
+                local chunks={}
+                for _,law in ipairs(citationBasket) do
+                  chunks[#chunks+1]="["..law.ref.."] "..(law.title or "")
+                end
+                insertChunk(table.concat(chunks,"\n"))
+              end
+            end
+          end
+        end
 
       elseif a==keys.f5 then
         save()
