@@ -13,6 +13,8 @@ local permissions = {
   },
   writer = {
     PING=true, DASHBOARD=true, SERVER_INFO=true, VERIFY_SEAL=true,
+    NOTICE_LIST=true, NOTICE_MARK_READ=true, NOTICE_MARK_ALL=true,
+    ENFORCEMENT_LIST=true, ENFORCEMENT_GET=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
@@ -24,6 +26,8 @@ local permissions = {
   },
   clerk = {
     PING=true, DASHBOARD=true, SERVER_INFO=true, VERIFY_SEAL=true,
+    NOTICE_LIST=true, NOTICE_MARK_READ=true, NOTICE_MARK_ALL=true,
+    ENFORCEMENT_LIST=true, ENFORCEMENT_GET=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
@@ -35,6 +39,8 @@ local permissions = {
   },
   judge = {
     PING=true, DASHBOARD=true, SERVER_INFO=true, VERIFY_SEAL=true,
+    NOTICE_LIST=true, NOTICE_MARK_READ=true, NOTICE_MARK_ALL=true,
+    ENFORCEMENT_LIST=true, ENFORCEMENT_GET=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
@@ -47,6 +53,8 @@ local permissions = {
   },
   delegate = {
     PING=true, DASHBOARD=true, SERVER_INFO=true, VERIFY_SEAL=true,
+    NOTICE_LIST=true, NOTICE_MARK_READ=true, NOTICE_MARK_ALL=true,
+    ENFORCEMENT_LIST=true, ENFORCEMENT_GET=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
