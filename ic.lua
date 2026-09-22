@@ -23,6 +23,8 @@ local function help()
   print("ic assembly <BILL-ID>      Tableau LIVE d'un scrutin sur Monitor")
   print("ic treaty <TREATY-ID>      Tableau LIVE des signatures d'un traite")
   print("ic verify <SCEAU>          Verifier l'authenticite d'un document")
+  print("ic inbox                   Ouvrir le centre de notifications")
+  print("ic enforcement <ENF-ID>    Tableau LIVE d'une mesure d'execution")
   print("ic doctor                  Diagnostic terminal/reseau")
   print("ic update                  Mettre a jour sans perdre la configuration")
   print("ic help                    Afficher cette aide")
@@ -52,6 +54,11 @@ if cmd=="treaty" then
   dofile(ROOT.."/public.lua").treatyDisplay(args[2]);return
 end
 if cmd=="verify" then dofile(ROOT.."/client.lua").verify(args[2] or "");return end
+if cmd=="inbox" then dofile(ROOT.."/client.lua").notifications();return end
+if cmd=="enforcement" then
+  if not args[2] then error("Usage: ic enforcement ENF-AAAA-0001",0) end
+  dofile(ROOT.."/public.lua").enforcementDisplay(args[2]);return
+end
 if cmd=="doctor" then dofile(ROOT.."/client.lua").doctor();return end
 if cmd=="update" then
   local url="https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua"
