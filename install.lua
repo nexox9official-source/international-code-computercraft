@@ -11,6 +11,7 @@ local files={
   "international_code/national_printer.lua",
   "international_code/national_public.lua",
   "international_code/national_services.lua",
+  "international_code/national_finance.lua",
   "international_code/national/corpus_v2.json",
   "international_code/seed/001.lua",
   "international_code/seed/002.lua",
