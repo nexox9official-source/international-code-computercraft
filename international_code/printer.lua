@@ -208,6 +208,7 @@ function P.bill(bill)
   appendWrapped(lines,"ETAPE",bill.stage or "-",25)
   appendWrapped(lines,"TYPE",bill.proposalType or "-",25)
   if bill.targetRef and bill.targetRef~="" then appendWrapped(lines,"ARTICLE CIBLE",bill.targetRef,25) end
+  if bill.targetRefs and #bill.targetRefs>0 then appendWrapped(lines,"ARTICLES CIBLES",table.concat(bill.targetRefs,"\n"),25) end
   appendWrapped(lines,"RESUME",bill.summary or "",25)
   appendWrapped(lines,"TITRE PROPOSE",bill.proposedTitle or "",25)
   appendWrapped(lines,"TEXTE PROPOSE",bill.proposedBody or "",25)
@@ -223,7 +224,11 @@ function P.bill(bill)
       " / Quorum: "..(bill.tally.quorumMet and "oui" or "non"),25)
   end
   if bill.resultSeal then appendWrapped(lines,"SCEAU DU SCRUTIN",bill.resultSeal,25) end
-  if bill.enactedRef then appendWrapped(lines,"PROMULGUE",bill.enactedRef,25) end
+  if bill.enactedRefs and #bill.enactedRefs>1 then
+    appendWrapped(lines,"ARTICLES PROMULGUES",table.concat(bill.enactedRefs,"\n"),25)
+  elseif bill.enactedRef then
+    appendWrapped(lines,"PROMULGUE",bill.enactedRef,25)
+  end
   if bill.enactmentSeal then appendWrapped(lines,"SCEAU DE PROMULGATION",bill.enactmentSeal,25) end
   return printLines(bill.id or "PROPOSITION",lines)
 end
