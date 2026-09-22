@@ -126,7 +126,7 @@ function P.judgment(case, judgment)
   if judgment.articleSnapshot and #judgment.articleSnapshot>0 then
     for _,a in ipairs(judgment.articleSnapshot) do
       local suffix=a.version and (" v"..tostring(a.version)) or ""
-      refs[#refs+1]=(a.ref or "?")..suffix.." "..(a.title or "")
+      refs[#refs+1]=(a.ref or "?")..suffix.." ["..tostring(a.status or "?").."] "..(a.title or "")
     end
   else
     for _,ref in ipairs(judgment.citedArticles or {}) do refs[#refs+1]=ref end
