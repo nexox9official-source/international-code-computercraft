@@ -1,4 +1,4 @@
-# Architecture v0.4
+# Architecture v0.5
 
 ## Topologie
 
@@ -63,6 +63,7 @@ Le serveur central contient désormais quatre ensembles principaux :
 - `laws` : articles versionnés du Code ;
 - `states` : États et statuts d'adhésion ;
 - `bills` : propositions, tours de scrutin et votes par État ;
+- `treaties` : projets de traités, versions, États parties, signatures et entrée en vigueur ;
 - `cases` : dossiers, preuves, audiences, ordonnances, appels et jugements.
 
 Les scrutins figent la liste des États éligibles au début de chaque tour. Une modification ultérieure du nombre de membres ne modifie donc pas rétroactivement le corps électoral de ce tour.
@@ -72,6 +73,20 @@ Les dossiers disposent de trois niveaux de visibilité. `public` est accessible 
 ## Sceaux applicatifs
 
 Les actes sensibles reçoivent un sceau calculé par le serveur à partir de leur contenu et de leurs métadonnées. Ces sceaux servent à détecter visuellement une incohérence RP et à identifier une version imprimée. Ils ne constituent pas une primitive cryptographique de sécurité.
+
+## Cycle de vie d'un traité
+
+```text
+draft -> signing -> ready -> in_force -> terminated
+  |        |          |
+  |        |          +-- toutes les parties ont signe
+  |        +-- texte fige + sceau UNS-TXT
+  +-- versions modifiables
+```
+
+Une signature de traité est attribuée à l'État rattaché au terminal `delegate`, pas seulement au nom libre saisi par le joueur. Le serveur vérifie que cet État appartient bien à la liste des parties avant d'accepter la signature.
+
+L'activation finale reçoit un sceau `UNS-TRT`. Les anciennes versions de brouillon et l'historique des signatures restent conservés.
 
 ## Évolution prévue
 
