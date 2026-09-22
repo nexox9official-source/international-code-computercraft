@@ -48,4 +48,5 @@ jobs:
           test "$count" -eq 400
           grep -q '"category_count": 20' international_code/national/corpus_v2.json
           grep -q '"founding_phase_account": "NexoFr_"' international_code/national/corpus_v2.json
-          ! grep -q 'Astralium' international_code/national/corpus_v2.json
+          forbidden="Astra""lium"
+          ! grep -R -q --exclude-dir=.git "$forbidden" .
