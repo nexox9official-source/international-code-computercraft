@@ -707,26 +707,29 @@ local function handleAction(state, actor, action, p)
     local bill=state.bills[common.trim(p.id):upper()]
     if not bill then return nil,"Proposition introuvable." end
     if bill.stage~="draft" and bill.stage~="debate" then return nil,"La proposition n'est plus modifiable a ce stade." end
+
+    local validatedRefs=nil
+    if bill.proposalType=="ratification_bundle" and type(p.targetRefs)=="table" then
+      local seen={}
+      validatedRefs={}
+      for _,raw in ipairs(p.targetRefs) do
+        local ref=normalizeArticleRef(raw)
+        if state.laws[ref] and not seen[ref] then
+          seen[ref]=true
+          validatedRefs[#validatedRefs+1]=ref
+        end
+      end
+      table.sort(validatedRefs,function(a,b) return (state.laws[a].number or 0)<(state.laws[b].number or 0) end)
+      if #validatedRefs==0 then return nil,"Le lot de ratification ne peut pas etre vide." end
+    end
+
     if p.title~=nil and common.trim(p.title)~="" then bill.title=common.trim(p.title) end
     if p.summary~=nil then bill.summary=common.trim(p.summary) end
     if p.proposedTitle~=nil and common.trim(p.proposedTitle)~="" then bill.proposedTitle=common.trim(p.proposedTitle) end
     if p.proposedBody~=nil and common.trim(p.proposedBody)~="" then bill.proposedBody=common.trim(p.proposedBody) end
     if p.proposedBook~=nil then bill.proposedBook=common.trim(p.proposedBook) end
     if p.proposedSection~=nil then bill.proposedSection=common.trim(p.proposedSection) end
-    if bill.proposalType=="ratification_bundle" and type(p.targetRefs)=="table" then
-      local seen={}
-      local refs={}
-      for _,raw in ipairs(p.targetRefs) do
-        local ref=normalizeArticleRef(raw)
-        if state.laws[ref] and not seen[ref] then
-          seen[ref]=true
-          refs[#refs+1]=ref
-        end
-      end
-      table.sort(refs,function(a,b) return (state.laws[a].number or 0)<(state.laws[b].number or 0) end)
-      if #refs==0 then return nil,"Le lot de ratification ne peut pas etre vide." end
-      bill.targetRefs=refs
-    end
+    if validatedRefs then bill.targetRefs=validatedRefs end
     if p.threshold~=nil then
       local valid={simple_cast=true,absolute_members=true,two_thirds_cast=true,three_quarters_members=true}
       if valid[p.threshold] then bill.threshold=p.threshold end
@@ -950,6 +953,28 @@ local function handleAction(state, actor, action, p)
     if not treaty then return nil,"Traite introuvable." end
     if treaty.stage~="draft" then return nil,"Le traite est fige des l'ouverture des signatures." end
 
+    local validatedParties=nil
+    if type(p.parties)=="table" then
+      local seen={}
+      validatedParties={}
+      for _,raw in ipairs(p.parties) do
+        local id=common.trim(raw):upper()
+        if state.states[id] and not seen[id] then
+          seen[id]=true
+          validatedParties[#validatedParties+1]=id
+        end
+      end
+      table.sort(validatedParties)
+      if #validatedParties<2 then return nil,"Un traite doit comporter au moins deux Etats parties." end
+    end
+
+    local allowedTypes={bilateral=true,multilateral=true,defense=true,trade=true,border=true,ceasefire=true,non_aggression=true,other=true}
+    local validatedType=treaty.treatyType
+    if p.treatyType~=nil then
+      if not allowedTypes[p.treatyType] then return nil,"Type de traite invalide." end
+      validatedType=p.treatyType
+    end
+
     treaty.history=treaty.history or {}
     treaty.history[#treaty.history+1]={
       version=treaty.version,title=treaty.title,treatyType=treaty.treatyType,
@@ -960,21 +985,8 @@ local function handleAction(state, actor, action, p)
     if p.title~=nil and common.trim(p.title)~="" then treaty.title=common.trim(p.title) end
     if p.summary~=nil then treaty.summary=common.trim(p.summary) end
     if p.body~=nil and common.trim(p.body)~="" then treaty.body=common.trim(p.body) end
-
-    local allowedTypes={bilateral=true,multilateral=true,defense=true,trade=true,border=true,ceasefire=true,non_aggression=true,other=true}
-    if p.treatyType and allowedTypes[p.treatyType] then treaty.treatyType=p.treatyType end
-
-    if type(p.parties)=="table" then
-      local parties={}
-      local seen={}
-      for _,raw in ipairs(p.parties) do
-        local id=common.trim(raw):upper()
-        if state.states[id] and not seen[id] then seen[id]=true;parties[#parties+1]=id end
-      end
-      table.sort(parties)
-      if #parties<2 then return nil,"Un traite doit comporter au moins deux Etats parties." end
-      treaty.parties=parties
-    end
+    treaty.treatyType=validatedType
+    if validatedParties then treaty.parties=validatedParties end
 
     treaty.version=(treaty.version or 1)+1
     treaty.signatures={}
