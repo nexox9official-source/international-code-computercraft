@@ -22,6 +22,7 @@ local function help()
   print("ic display <CASE-ID>       Afficher un dossier public au tribunal")
   print("ic assembly <BILL-ID>      Tableau LIVE d'un scrutin sur Monitor")
   print("ic treaty <TREATY-ID>      Tableau LIVE des signatures d'un traite")
+  print("ic verify <SCEAU>          Verifier l'authenticite d'un document")
   print("ic doctor                  Diagnostic terminal/reseau")
   print("ic update                  Mettre a jour sans perdre la configuration")
   print("ic help                    Afficher cette aide")
@@ -50,6 +51,7 @@ if cmd=="treaty" then
   if not args[2] then error("Usage: ic treaty TREATY-AAAA-0001",0) end
   dofile(ROOT.."/public.lua").treatyDisplay(args[2]);return
 end
+if cmd=="verify" then dofile(ROOT.."/client.lua").verify(args[2] or "");return end
 if cmd=="doctor" then dofile(ROOT.."/client.lua").doctor();return end
 if cmd=="update" then
   local url="https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua"
