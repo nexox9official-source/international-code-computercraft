@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.18.0
+
+### Trésor national
+- tableau de trésorerie en unités budgétaires `UB` ;
+- calcul automatique recettes - paiements ;
+- registre des recettes `NC-REV-AAAA-XXXX` ;
+- base légale obligatoire pour recettes fiscales, douanières et amendes ;
+- sceaux vérifiables pour chaque écriture.
+
+### Budget national
+- budgets `NC-BUD-AAAA-XXXX` ;
+- enveloppes par ministère ;
+- réserve nationale et recettes attendues ;
+- vote du Conseil avec corps électoral figé en `NC-CIT` ;
+- quorum et majorité vérifiés côté serveur ;
+- promulgation présidentielle ;
+- exécution en temps réel : alloué / engagé / payé / disponible ;
+- publication de la promulgation au Journal officiel.
+
+### Dépenses publiques
+- engagements `NC-EXP-AAAA-XXXX` ;
+- contrôle automatique des crédits disponibles ;
+- validation financière par `MIN-ECO` ;
+- double validation présidentielle pour les dépenses importantes ;
+- paiement bloqué si la trésorerie est insuffisante ;
+- historique et sceaux de demande, validation, refus et paiement.
+
+### Marchés publics
+- marchés `NC-CONTRACT-AAAA-XXXX` ;
+- prestataire obligatoirement lié à une `NC-ORG` active ;
+- rattachement à une dépense autorisée ;
+- appel ouvert, appel restreint, attribution directe et urgence ;
+- justification obligatoire pour les procédures non ouvertes ;
+- publication au Journal officiel lors de l'attribution ;
+- suivi awarded / active / completed / terminated.
+
+### Interface / Monitor
+- nouveau menu Finances publiques ;
+- impression budgets, recettes, dépenses et marchés ;
+- page Trésor/Budget sur `ic nc-display` ;
+- vérification des sceaux financiers via `NC_VERIFY_SEAL`.
+
 ## 0.17.0
 
 ### Guichet citoyen
