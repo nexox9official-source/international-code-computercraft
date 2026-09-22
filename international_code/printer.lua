@@ -58,6 +58,9 @@ function P.law(law)
   appendWrapped(lines, "STATUT", law.status or "inconnu", 25)
   appendWrapped(lines, "TEXTE", law.body or "", 25)
   appendWrapped(lines, "MISE A JOUR", law.updatedAt or law.createdAt or "", 25)
+  if law.lastChangeReason and law.lastChangeReason~="" then
+    appendWrapped(lines, "MOTIF DERNIERE MODIFICATION", law.lastChangeReason, 25)
+  end
   return printLines(law.ref or "ARTICLE", lines)
 end
 
