@@ -2873,6 +2873,8 @@ enforcementsScreen=function(query,status,stateId,caseId)
   end
 end
 
+local sessionDetails
+
 local function notificationCenter()
   while true do
     local rows,err=rpc("NOTICE_LIST",{})
@@ -3098,7 +3100,7 @@ local function sessionAgendaScreen(sess)
   end
 end
 
-local function sessionDetails(id)
+sessionDetails=function(id)
   while true do
     local sess,err=rpc("SESSION_GET",{id=id})
     if not sess then message("SESSION",err,palette.bad);return end
