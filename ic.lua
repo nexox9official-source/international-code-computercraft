@@ -4,10 +4,15 @@ local common=dofile(ROOT.."/common.lua")
 local args={...}
 local cmd=args[1]
 
+if not cmd then
+  dofile(ROOT.."/launcher.lua").run()
+  return
+end
+
 local function help()
   print("UNS + North Coalition Legal Network / ComputerCraft v"..common.VERSION)
   print("")
-  print("ic                         Ouvrir le bureau international")
+  print("ic                         Ouvrir le centre de controle graphique")
   print("ic nc                      Ouvrir l'intranet national North Coalition")
   print("ic nc-elections            Elections Presidence / Conseil")
   print("ic nc-search [texte]       Recherche globale dans l'intranet North Coalition")
@@ -101,15 +106,14 @@ if cmd=="enforcement" then
   if not args[2] then error("Usage: ic enforcement ENF-AAAA-0001",0) end
   dofile(ROOT.."/public.lua").enforcementDisplay(args[2]);return
 end
-if cmd=="doctor" then dofile(ROOT.."/client.lua").doctor();return end
+if cmd=="doctor" then dofile(ROOT.."/launcher.lua").diagnostic();return end
 if cmd=="update" then
   local url="https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua"
   print("Mise a jour UNS International Code...")
-  local ok=shell.run("wget","run",url)
+  local ok=shell.run("wget","run",url,"update")
   if ok then print("Mise a jour terminee. Relancez ic ou redemarrez le PC.") end
   return
 end
 
-local cfg=common.loadConfig()
-if not cfg then help();return end
-if cfg.role=="server" then dofile(ROOT.."/server.lua").run() else dofile(ROOT.."/client.lua").run() end
+print("Commande inconnue: "..tostring(cmd))
+print("Lancez simplement 'ic' pour le centre de controle, ou 'ic help'.")
