@@ -336,13 +336,15 @@ local function ministryDetails(code)
   while true do
     local m,err=rpc("NC_MINISTRY_GET",{code=code})
     if not m then message("MINISTERE",err,palette.bad);return end
+    local info=rpc("NC_INFO",{}) or {}
+    local canPresident=(info.nationalRole=="admin" or info.nationalRole=="president")
     local actions={{text="Lire la fiche du ministere",id="read"},{text="Imprimer la fiche",id="print"}}
     if not m.holderClientId then
       actions[#actions+1]={text="Scrutins concernant ce ministere",id="elections"}
-      if m.directAppointmentAllowed then actions[#actions+1]={text="Nomination directe autorisee",id="appoint"} end
+      if canPresident and m.directAppointmentAllowed then actions[#actions+1]={text="Nomination directe autorisee",id="appoint"} end
     else
       actions[#actions+1]={text="Titulaire: "..tostring(m.holderIdentity),id="holder"}
-      actions[#actions+1]={text="Revoquer / liberer le portefeuille",id="remove"}
+      if canPresident then actions[#actions+1]={text="Revoquer / liberer le portefeuille",id="remove"} end
     end
     local a=menu(m.code.." - "..m.name,actions,m.holderIdentity and ("Titulaire: "..m.holderIdentity) or "VACANT")
     if not a then return end
@@ -390,10 +392,12 @@ local function governmentScreen(info)
     local items={
       {text="Presidence / principes gouvernementaux",id="pres"},
       {text="Ministeres et portefeuille ("..filled.."/"..#(gov.ministries or {})..")",id="ministries"},
-      {text="Gestion des terminaux / fonctions",id="clients"},
       {text="Scrutins ministeriels",id="elections"}
     }
-    if gov.meta.foundingMode then items[#items+1]={text="[!] Clore la phase fondatrice",id="closefounding"} end
+    if info.nationalRole=="admin" or info.nationalRole=="president" then
+      items[#items+1]={text="Gestion des terminaux / fonctions",id="clients"}
+      if gov.meta.foundingMode then items[#items+1]={text="[!] Clore la phase fondatrice",id="closefounding"} end
+    end
     local p=menu("GOUVERNEMENT NATIONAL",items,"President: "..tostring(gov.meta.presidentIdentity).." / "..(gov.meta.foundingMode and "PHASE FONDATRICE" or "REGIME NORMAL"))
     if not p then return end
     if p.id=="pres" then
@@ -446,13 +450,15 @@ function C.electionDetails(id)
   while true do
     local e,err=rpc("NC_ELECTION_GET",{id=id})
     if not e then message("SCRUTIN",err,palette.bad);return end
+    local info=rpc("NC_INFO",{}) or {}
+    local canPresident=(info.nationalRole=="admin" or info.nationalRole=="president")
     local actions={{text="Lire le scrutin",id="read"},{text="Imprimer le scrutin",id="print"}}
-    if e.stage=="draft" then
+    if e.stage=="draft" and canPresident then
       actions[#actions+1]={text="Ajouter un candidat",id="candidate"}
       actions[#actions+1]={text="Ouvrir le vote",id="open"}
     elseif e.stage=="open" then
       actions[#actions+1]={text="Voter",id="vote"}
-      actions[#actions+1]={text="Clore / depouiller",id="close"}
+      if canPresident then actions[#actions+1]={text="Clore / depouiller",id="close"} end
     end
     local a=menu(e.id.." - "..e.title,actions,e.ministryCode.." / "..e.electorate.." / "..e.stage)
     if not a then return end
@@ -505,7 +511,11 @@ function C.electionsScreen()
   while true do
     local rows,err=rpc("NC_ELECTION_LIST",{})
     if not rows then message("SCRUTINS",err,palette.bad);return end
-    local items={{text="[+] Ouvrir une procedure ministerielle",id="new"}}
+    local info=rpc("NC_INFO",{}) or {}
+    local items={}
+    if info.nationalRole=="admin" or info.nationalRole=="president" then
+      items[#items+1]={text="[+] Ouvrir une procedure ministerielle",id="new"}
+    end
     for _,e in ipairs(rows) do items[#items+1]={text=e.id.." "..e.ministryCode.." ["..e.stage.."] "..e.title,election=e} end
     local p=menu("SCRUTINS MINISTERIELS",items,#rows.." scrutin(s)")
     if not p then return end
@@ -528,10 +538,16 @@ local function billDetails(id)
   while true do
     local b,err=rpc("NC_BILL_GET",{id=id})
     if not b then message("PROJET DE LOI",err,palette.bad);return end
+    local info=rpc("NC_INFO",{}) or {}
+    local canCouncil=(info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council")
+    local canPresident=(info.nationalRole=="admin" or info.nationalRole=="president")
     local actions={{text="Lire le projet",id="read"},{text="Imprimer",id="print"}}
-    if b.stage=="draft" or b.stage=="debate" or b.stage=="no_quorum" then actions[#actions+1]={text="Ouvrir le vote",id="open"} end
-    if b.stage=="voting" then actions[#actions+1]={text="Voter",id="vote"};actions[#actions+1]={text="Clore le vote",id="close"} end
-    if b.stage=="adopted" then actions[#actions+1]={text="Promulguer",id="enact"} end
+    if (b.stage=="draft" or b.stage=="debate" or b.stage=="no_quorum") and canCouncil then actions[#actions+1]={text="Ouvrir le vote",id="open"} end
+    if b.stage=="voting" then
+      actions[#actions+1]={text="Voter",id="vote"}
+      if canCouncil then actions[#actions+1]={text="Clore le vote",id="close"} end
+    end
+    if b.stage=="adopted" and canPresident then actions[#actions+1]={text="Promulguer",id="enact"} end
     local a=menu(b.id.." - "..b.title,actions,b.proposalType.." / "..b.stage.." / "..b.electorate)
     if not a then return end
     if a.id=="read" then
@@ -626,7 +642,11 @@ local function billsScreen()
   while true do
     local rows,err=rpc("NC_BILL_LIST",{})
     if not rows then message("LEGISLATION",err,palette.bad);return end
-    local items={{text="[+] Deposer un projet de loi",id="new"}}
+    local info=rpc("NC_INFO",{}) or {}
+    local items={}
+    if info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="council" or info.nationalRole=="minister" then
+      items[#items+1]={text="[+] Deposer un projet de loi",id="new"}
+    end
     for _,b in ipairs(rows) do items[#items+1]={text=b.id.." ["..b.stage.."] "..b.title,bill=b} end
     local p=menu("LEGISLATION NATIONALE",items,#rows.." projet(s)")
     if not p then return end
@@ -666,7 +686,10 @@ local function decreesScreen(info)
   while true do
     local rows,err=rpc("NC_DECREE_LIST",{})
     if not rows then message("DECRETS",err,palette.bad);return end
-    local items={{text="[+] Rediger un decret",id="new"}}
+    local items={}
+    if info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="minister" then
+      items[#items+1]={text="[+] Rediger un decret",id="new"}
+    end
     for _,d in ipairs(rows) do items[#items+1]={text=d.id.." ["..d.status.."] "..d.title.." / "..(d.ministryCode~="" and d.ministryCode or "NATIONAL"),decree=d} end
     local p=menu("DECRETS ET REGLEMENTS",items,#rows.." decret(s)")
     if not p then return end
@@ -716,6 +739,16 @@ function C.run()
     else
       message("ACCES NATIONAL",err or "Terminal non autorise.",palette.bad)
       return
+    end
+  elseif cfg.role=="admin" and not info.presidentClientId then
+    local x=menu("INITIALISATION NATIONALE",{
+      {text="Enregistrer ce terminal comme Presidence NexoFr_",id="bootstrap"},
+      {text="Continuer uniquement en administrateur",id="admin"}
+    },"Le corpus est installe mais aucun terminal presidentiel n'est encore enregistre.")
+    if x and x.id=="bootstrap" then
+      local out,e=rpc("NC_BOOTSTRAP",{})
+      if not out then message("INITIALISATION",e,palette.bad);return end
+      info=rpc("NC_INFO",{}) or info
     end
   end
 
