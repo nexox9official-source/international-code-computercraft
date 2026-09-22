@@ -1,4 +1,4 @@
-# Architecture v0.11
+# Architecture v0.12
 
 ## Topologie
 
@@ -22,6 +22,96 @@
                            +-------------+          +------------+
 ```
 
+## Double espace juridique : UNS + North Coalition
+
+Le serveur central conserve désormais deux domaines qui partagent uniquement l'authentification réseau, la persistance et les sauvegardes.
+
+```text
+state
+  |
+  +-- laws / cases / states / bills / resolutions / ...
+  |      domaine international UNS
+  |
+  +-- national
+         |
+         +-- laws[NC-ART-...]
+         +-- categories
+         +-- ministries
+         +-- elections[NC-ELECT-...]
+         +-- bills[NC-BILL-...]
+         +-- decrees[NC-DEC-...]
+         +-- nationalAudit
+```
+
+Les actions nationales portent toutes le préfixe `NC_`. L'authentification Rednet valide d'abord le terminal et son jeton, puis `national.lua` applique une seconde vérification avec les habilitations internes de North Coalition.
+
+Un rôle international élevé ne devient pas automatiquement un droit politique national. Le rôle `admin` conserve un accès technique de secours, mais les électeurs et candidats sont construits uniquement à partir des terminaux explicitement enregistrés dans North Coalition.
+
+## Identité et habilitations nationales
+
+Chaque client peut stocker :
+
+```text
+nationalRole
+nationalIdentity
+ministryCode
+stateId
+```
+
+`nationalIdentity` est la clé électorale : le système déduplique les électeurs par identité, afin que deux terminaux appartenant à la même identité ne produisent pas deux voix.
+
+Le ministre n'est pas attribué via un simple changement de rôle. Le serveur exige le workflow gouvernemental : nomination directe admissible ou résultat d'un scrutin valide.
+
+## Corpus national
+
+Le fichier source `international_code/national/corpus_v2.json` contient les 400 articles et leurs métadonnées structurées.
+
+Au premier démarrage, le serveur construit `state.national.laws`. Aux mises à jour suivantes, `national.ensure` ajoute uniquement les articles manquants et ne remplace jamais les versions déjà modifiées dans `state.tbl`.
+
+Cela sépare :
+
+- le **corpus distribué avec le logiciel** ;
+- l'**état juridique vivant du pays**.
+
+## Gouvernement et élections
+
+Un ministère conserve son titulaire, sa date de vacance, le nombre de scrutins échoués et son historique.
+
+```text
+MINISTERE VACANT
+     |
+     +-- phase fondatrice -------------------> nomination directe
+     |
+     +-- aucun vote pendant délai ----------> nomination directe
+     |
+     +-- NC-ELECT ---------------------------+
+           |                                 |
+           +-- quorum + vainqueur ----------> nomination automatique
+           |
+           +-- échec x2 --------------------> nomination directe déverrouillée
+```
+
+Le corps électoral est figé à l'ouverture du scrutin. Les votes sont indexés par identité nationale, pas par Computer ID.
+
+## Législation nationale
+
+`NC-BILL` ne partage aucune table avec les projets de l'UNS.
+
+Une promulgation peut :
+
+- modifier une loi en archivant sa version précédente ;
+- abroger une loi sans supprimer son historique ;
+- activer un lot de lois d'une catégorie ;
+- créer un nouvel identifiant `NC-ART`.
+
+Le vote et la promulgation sont deux opérations différentes afin qu'un projet adopté ne modifie pas silencieusement le Code.
+
+## Décrets
+
+Les décrets constituent une couche réglementaire séparée des lois.
+
+Le serveur vérifie le portefeuille du ministre avant publication d'un décret ministériel. Les décrets nationaux restent réservés à la Présidence. La publication et l'abrogation sont scellées et auditées.
+
 ## Invariants importants
 
 1. Un numéro d'article n'est jamais réutilisé.
@@ -39,7 +129,11 @@
 
 ## Identifiants
 
-- Article : `UNS-ART-001`
+- Article international : `UNS-ART-001`
+- Article national : `NC-ART-001`
+- Projet de loi national : `NC-BILL-AAAA-0001`
+- Scrutin ministériel : `NC-ELECT-AAAA-0001`
+- Décret : `NC-DEC-AAAA-0001`
 - Dossier : `CASE-AAAA-0001`
 - Terminal : `CLIENT-<computerId>-<suffixe>`
 
