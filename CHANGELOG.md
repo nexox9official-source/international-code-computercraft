@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.20.0
+
+### Portail national North Coalition
+- remplacement du menu national plat par un **Portail national North Coalition** organise en espaces : Mon espace, Droit, Institutions, Services publics, Justice, Economie et Reseau interne ;
+- acces au reseau interne affiche uniquement pour les fonctions institutionnelles ; les autorisations restent verifiees cote serveur ;
+- retour explicite vers l'**Union des Nations Souveraines** afin de conserver la separation entre droit national et systeme international.
+
+### Recherche nationale
+- nouvelle action serveur `NC_PORTAL_SEARCH` ;
+- recherche globale dans les lois, Journal officiel, ministeres, projets de loi, decrets, sessions, dossiers judiciaires visibles et citoyens ;
+- filtrage des resultats selon les regles de confidentialite deja appliquees par chaque registre ;
+- ouverture directe du resultat dans l'ecran correspondant ;
+- nouvelle commande `ic nc-search [texte]`.
+
+### Redaction juridique
+- l'editeur national permet maintenant de consulter le Code avec la touche `C` sans perdre le brouillon en cours ;
+- selection d'un article par recherche, reference directe ou parcours `categorie -> titre -> chapitre -> article` ;
+- la sauvegarde locale du brouillon reste active pendant la consultation du Code.
+
 ## 0.19.0
 
 ### Élections nationales
