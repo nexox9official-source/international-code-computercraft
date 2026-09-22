@@ -73,6 +73,8 @@ assert(national:find('NC_BILL_ENACT',1,true),"national legislation workflow miss
 assert(national:find('NC_BILL_SOVEREIGN_ADOPT',1,true),"sovereign direct legislation missing")
 assert(national:find('nationalRoot',1,true),"NexoFr sovereign national access missing")
 assert(national:find('NC_SOVEREIGN_RELINQUISH',1,true),"voluntary sovereign relinquishment action missing")
+assert(national:find('sovereignPermanenceApplied',1,true),"v0.22 permanence migration missing")
+assert(national:find('bootstrap fondateur ne peut pas etre rejoue',1,true),"founder bootstrap replay guard missing")
 assert(national:find('JE RENONCE VOLONTAIREMENT A LA DIRECTION DE NORTH COALITION',1,true),"guarded sovereign relinquishment confirmation missing")
 assert(national:find('NC_DECREE_PUBLISH',1,true),"national decrees missing")
 assert(national:find('NC_NOTICE_LIST',1,true),"national notifications missing")
