@@ -3516,6 +3516,337 @@ local function missionsScreen(query,status)
   end
 end
 
+local function incidentTypeLabel(v)
+  local labels={
+    border="Incident frontalier",ceasefire_violation="Violation de cessez-le-feu",
+    diplomatic="Incident diplomatique",humanitarian="Incident humanitaire",
+    armed_clash="Affrontement arme",cyber="Incident cyber",
+    contamination="Contamination / zone dangereuse",infrastructure="Infrastructure critique",
+    natural_disaster="Catastrophe naturelle",smuggling="Contrebande / trafic",other="Autre incident"
+  }
+  return labels[v] or tostring(v or "")
+end
+
+local function chooseIncidentType(current)
+  local p=menu("TYPE D'INCIDENT",{
+    {text="Incident frontalier",v="border"},
+    {text="Violation de cessez-le-feu",v="ceasefire_violation"},
+    {text="Incident diplomatique",v="diplomatic"},
+    {text="Incident humanitaire",v="humanitarian"},
+    {text="Affrontement arme",v="armed_clash"},
+    {text="Incident cyber",v="cyber"},
+    {text="Contamination / zone dangereuse",v="contamination"},
+    {text="Infrastructure critique",v="infrastructure"},
+    {text="Catastrophe naturelle",v="natural_disaster"},
+    {text="Contrebande / trafic",v="smuggling"},
+    {text="Autre",v="other"}
+  },"Actuel: "..incidentTypeLabel(current))
+  return p and p.v or current or "other"
+end
+
+local function chooseIncidentSeverity(current)
+  local p=menu("GRAVITE",{
+    {text="Information",v="info"},
+    {text="Mineur",v="minor"},
+    {text="Serieux",v="serious"},
+    {text="Critique",v="critical"}
+  },"Actuel: "..tostring(current or "minor"))
+  return p and p.v or current or "minor"
+end
+
+local function incidentReportsText(incident)
+  local rows={}
+  for _,r in ipairs(incident.reports or {}) do
+    rows[#rows+1]=(r.id or "?").." ["..(r.classification or "public").."] "..(r.title or "")..
+      "\n"..(r.at or "").." / "..(r.by or "")..
+      ((r.stateId and r.stateId~="") and (" / "..r.stateId) or "")..
+      "\nPosition: "..positionText(r.position)..
+      "\n"..(r.body or "")..
+      "\nSceau: "..(r.seal or "-")
+  end
+  return #rows>0 and table.concat(rows,"\n\n") or "Aucun rapport de situation."
+end
+
+local function incidentStatusHistoryText(incident)
+  local rows={}
+  for _,r in ipairs(incident.statusHistory or {}) do
+    rows[#rows+1]=(r.at or "").." / "..(r.from or "?").." -> "..(r.to or "?")..
+      ((r.reason and r.reason~="") and ("\n"..r.reason) or "")..
+      "\nSceau: "..(r.seal or "-")
+  end
+  return #rows>0 and table.concat(rows,"\n\n") or "Aucun changement de statut."
+end
+
+incidentDetails=function(id)
+  while true do
+    local incident,err=rpc("INCIDENT_GET",{id=id})
+    if not incident then message("INCIDENT",err,palette.bad);return end
+    incident.involvedStates=incident.involvedStates or {}
+    incident.reports=incident.reports or {}
+    incident.statusHistory=incident.statusHistory or {}
+
+    local actions={
+      {text="Lire la fiche complete",id="read"},
+      {text="Rapports de situation ("..#incident.reports..")",id="reports"},
+      {text="Imprimer l'incident",id="print"}
+    }
+    if incident.missionId and incident.missionId~="" then actions[#actions+1]={text="Ouvrir la mission liee",id="mission"} end
+    if incident.resolutionId and incident.resolutionId~="" then actions[#actions+1]={text="Ouvrir la resolution liee",id="resolution"} end
+    if incident.treatyId and incident.treatyId~="" then actions[#actions+1]={text="Ouvrir le traite lie",id="treaty"} end
+    if incident.caseId and incident.caseId~="" then actions[#actions+1]={text="Ouvrir le dossier judiciaire",id="case"} end
+    if incident.enforcementId and incident.enforcementId~="" then actions[#actions+1]={text="Ouvrir la mesure d'execution",id="enforcement"} end
+
+    if allowed("incidentReport") and incident.status~="closed" then
+      actions[#actions+1]={text="Ajouter un SITREP / rapport terrain",id="report"}
+    end
+    if allowed("incidentWrite") and incident.status~="closed" then
+      actions[#actions+1]={text="Modifier la fiche",id="edit"}
+      actions[#actions+1]={text="Changer le statut",id="status"}
+    end
+
+    local a=menu(incident.id.." - "..incident.title,actions,
+      "["..incident.status.."] "..string.upper(incident.severity or "?").." / "..incidentTypeLabel(incident.incidentType))
+    if not a then return end
+
+    if a.id=="read" then
+      textPage(incident.id,{
+        {label="Incident",text=incident.title or ""},
+        {label="Type / gravite / statut",text=incidentTypeLabel(incident.incidentType).." / "..(incident.severity or "").." / "..(incident.status or "")},
+        {label="Resume",text=incident.summary or ""},
+        {label="Details",text=incident.details or ""},
+        {label="Zone",text=(incident.area or "-").."\n"..positionText(incident.position)},
+        {label="Etats impliques",text=#incident.involvedStates>0 and table.concat(incident.involvedStates,"\n") or "Aucun Etat renseigne"},
+        {label="Etat declarant",text=incident.reportingStateId or "-"},
+        {label="Liens",text="Mission: "..(incident.missionId or "-")..
+          "\nResolution: "..(incident.resolutionId or "-")..
+          "\nTraite: "..(incident.treatyId or "-")..
+          "\nDossier: "..(incident.caseId or "-")..
+          "\nExecution: "..(incident.enforcementId or "-")},
+        {label="Visibilite",text=incident.visibility or "public"},
+        {label="Sceau initial",text=incident.seal or "-"},
+        {label="Historique de statut",text=incidentStatusHistoryText(incident)}
+      })
+
+    elseif a.id=="reports" then
+      textPage("SITREP "..incident.id,{{label="Rapports terrain",text=incidentReportsText(incident)}})
+
+    elseif a.id=="print" then
+      local ok,pages=printer.incident(incident)
+      message("IMPRESSION",ok and ("Incident imprime: "..pages.." page(s).") or pages,ok and palette.ok or palette.bad)
+
+    elseif a.id=="mission" then missionDetails(incident.missionId)
+    elseif a.id=="resolution" then resolutionDetails(incident.resolutionId)
+    elseif a.id=="treaty" then treatyDetails(incident.treatyId)
+    elseif a.id=="case" then caseDetails(incident.caseId)
+    elseif a.id=="enforcement" then enforcementDetails(incident.enforcementId)
+
+    elseif a.id=="report" then
+      local title=prompt("Titre du SITREP")
+      local classification=menu("CLASSIFICATION",{
+        {text="Public",v="public"},{text="Restreint",v="restricted"}
+      })
+      local pos=askPosition(incident.position)
+      local body=multi("RAPPORT DE SITUATION / TERRAIN","")
+      local out,e=rpc("INCIDENT_ADD_REPORT",{
+        id=incident.id,title=title,classification=classification and classification.v or "public",
+        body=body,dimension=pos.dimension,x=pos.x,y=pos.y,z=pos.z,radius=pos.radius
+      })
+      message("SITREP",out and "Rapport terrain ajoute et scelle." or e,out and palette.ok or palette.bad)
+
+    elseif a.id=="edit" then
+      local title=prompt("Titre",incident.title)
+      local typ=chooseIncidentType(incident.incidentType)
+      local severity=chooseIncidentSeverity(incident.severity)
+      local summary=multi("RESUME OPERATIONNEL",incident.summary or "")
+      local details=multi("DETAILS / CONTEXTE",incident.details or "")
+      local area=prompt("Nom de zone / secteur",incident.area or "")
+      local pos=askPosition(incident.position)
+      local involved=stateBasketBrowser(incident.involvedStates) or incident.involvedStates
+      local visibility=menu("VISIBILITE",{
+        {text="Publique",v="public"},{text="Restreinte",v="restricted"}
+      },"Actuel: "..(incident.visibility or "public"))
+      local out,e=rpc("INCIDENT_EDIT",{
+        id=incident.id,title=title,incidentType=typ,severity=severity,summary=summary,details=details,
+        area=area,dimension=pos.dimension,x=pos.x,y=pos.y,z=pos.z,radius=pos.radius,
+        involvedStates=involved,visibility=visibility and visibility.v or incident.visibility
+      })
+      message("INCIDENT",out and "Fiche mise a jour." or e,out and palette.ok or palette.bad)
+
+    elseif a.id=="status" then
+      local st=menu("STATUT INCIDENT",{
+        {text="Ouvert",v="open"},{text="En investigation",v="investigating"},
+        {text="Contenu / stabilise",v="contained"},{text="Resolue",v="resolved"},
+        {text="Clos",v="closed"}
+      },"Actuel: "..incident.status)
+      if st then
+        local reason=multi("MOTIF / BILAN DU CHANGEMENT","")
+        local out,e=rpc("INCIDENT_SET_STATUS",{id=incident.id,status=st.v,reason=reason})
+        message("INCIDENT",out and ("Statut: "..out.status) or e,out and palette.ok or palette.bad)
+      end
+    end
+  end
+end
+
+local function incidentsScreen(query,status,severity)
+  query=query or ""
+  status=status or ""
+  severity=severity or ""
+  while true do
+    local rows,err=rpc("INCIDENT_LIST",{query=query,status=status,severity=severity})
+    if not rows then message("INCIDENTS",err,palette.bad);return end
+
+    local items={}
+    if allowed("incidentCreate") then items[#items+1]={text="[+] Declarer un incident international",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer par statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
+    items[#items+1]={text="[G] Filtrer par gravite"..(severity~="" and (" ["..severity.."]") or ""),id="severity"}
+    if query~="" or status~="" or severity~="" then items[#items+1]={text="[R] Reinitialiser les filtres",id="reset"} end
+
+    for _,incident in ipairs(rows) do
+      items[#items+1]={
+        text=incident.id.." ["..string.upper(incident.severity or "?").."] "..incident.title.." ["..incident.status.."]",
+        incident=incident
+      }
+    end
+
+    local p=menu("INCIDENTS INTERNATIONAUX",items,#rows.." incident(s)")
+    if not p then return end
+
+    if p.id=="new" then
+      local title=prompt("Titre de l'incident")
+      local typ=chooseIncidentType("other")
+      local severityChoice=chooseIncidentSeverity("minor")
+      local summary=multi("RESUME OPERATIONNEL","")
+      local details=multi("DETAILS / CONTEXTE","")
+      local area=prompt("Nom de zone / secteur")
+      local pos=askPosition({})
+      local involved=stateBasketBrowser({}) or {}
+      local missionId=prompt("Mission liee MISSION-... (optionnel)")
+      local resolutionId=prompt("Resolution liee RES-... (optionnel)")
+      local treatyId=prompt("Traite lie TREATY-... (optionnel)")
+      local caseId=prompt("Dossier lie CASE-... (optionnel)")
+      local enforcementId=prompt("Execution liee ENF-... (optionnel)")
+      local visibility=menu("VISIBILITE",{
+        {text="Publique",v="public"},{text="Restreinte",v="restricted"}
+      })
+      local out,e=rpc("INCIDENT_CREATE",{
+        title=title,incidentType=typ,severity=severityChoice,summary=summary,details=details,
+        area=area,dimension=pos.dimension,x=pos.x,y=pos.y,z=pos.z,radius=pos.radius,
+        involvedStates=involved,missionId=missionId,resolutionId=resolutionId,treatyId=treatyId,
+        caseId=caseId,enforcementId=enforcementId,visibility=visibility and visibility.v or "public"
+      })
+      message("INCIDENT",out and ("Declare: "..out.id) or e,out and palette.ok or palette.bad)
+
+    elseif p.id=="search" then
+      query=prompt("Recherche incident",query)
+
+    elseif p.id=="status" then
+      local st=menu("STATUT",{
+        {text="Tous",v=""},{text="Ouverts",v="open"},{text="En investigation",v="investigating"},
+        {text="Contenus",v="contained"},{text="Resolus",v="resolved"},{text="Clos",v="closed"}
+      })
+      if st then status=st.v end
+
+    elseif p.id=="severity" then
+      local sv=menu("GRAVITE",{
+        {text="Toutes",v=""},{text="Information",v="info"},{text="Mineur",v="minor"},
+        {text="Serieux",v="serious"},{text="Critique",v="critical"}
+      })
+      if sv then severity=sv.v end
+
+    elseif p.id=="reset" then
+      query="";status="";severity=""
+
+    elseif p.incident then
+      incidentDetails(p.incident.id)
+    end
+  end
+end
+
+local function situationDeskScreen()
+  local dimension="minecraft:overworld"
+  while true do
+    local sit,err=rpc("SITUATION_GET",{dimension=dimension})
+    if not sit then message("SITUATION",err,palette.bad);return end
+    local c=sit.counts or {}
+
+    local items={
+      {text="Vue de synthese",id="summary"},
+      {text="Incidents actifs ("..tostring(c.incidents or 0)..")",id="incidents"},
+      {text="Missions actives ("..tostring(c.missions or 0)..")",id="missions"},
+      {text="Mesures d'execution actives ("..tostring(c.enforcements or 0)..")",id="enforcement"},
+      {text="Resolutions / sessions en cours",id="institutions"},
+      {text="Changer de dimension ["..dimension.."]",id="dimension"},
+      {text="Actualiser",id="refresh"}
+    }
+    local p=menu("CENTRE DE SITUATION",items,
+      "INC "..tostring(c.incidents or 0).." / MIS "..tostring(c.missions or 0).." / ENF "..tostring(c.enforcements or 0).." / "..dimension)
+    if not p then return end
+
+    if p.id=="summary" then
+      local incidents={}
+      for _,x in ipairs(sit.incidents or {}) do
+        incidents[#incidents+1]=x.id.." ["..string.upper(x.severity or "?").."] "..x.title.." / "..x.status
+      end
+      local missions={}
+      for _,x in ipairs(sit.missions or {}) do missions[#missions+1]=x.id.." "..x.title.." / "..x.status end
+      local institutions={}
+      for _,x in ipairs(sit.resolutions or {}) do institutions[#institutions+1]=x.id.." "..x.title.." ["..x.stage.."]" end
+      for _,x in ipairs(sit.sessions or {}) do institutions[#institutions+1]=x.id.." "..x.title.." ["..x.status.."]" end
+      textPage("SITUATION INTERNATIONALE",{
+        {label="Dimension",text=sit.dimension or dimension},
+        {label="Incidents actifs",text=#incidents>0 and table.concat(incidents,"\n") or "Aucun"},
+        {label="Missions actives",text=#missions>0 and table.concat(missions,"\n") or "Aucune"},
+        {label="Institutions",text=#institutions>0 and table.concat(institutions,"\n") or "Aucun scrutin/session actif"},
+        {label="Mesures d'execution",text=tostring(c.enforcements or 0).." active(s)"},
+        {label="Derniere generation",text=sit.generatedAt or ""}
+      })
+
+    elseif p.id=="incidents" then
+      local list={}
+      for _,x in ipairs(sit.incidents or {}) do list[#list+1]={text=x.id.." ["..string.upper(x.severity or "?").."] "..x.title,incident=x} end
+      if #list==0 then message("SITUATION","Aucun incident actif dans cette dimension.",palette.ok)
+      else
+        local x=menu("INCIDENTS ACTIFS",list,dimension)
+        if x then incidentDetails(x.incident.id) end
+      end
+
+    elseif p.id=="missions" then
+      local list={}
+      for _,x in ipairs(sit.missions or {}) do list[#list+1]={text=x.id.." "..x.title,mission=x} end
+      if #list==0 then message("SITUATION","Aucune mission active.",palette.ok)
+      else
+        local x=menu("MISSIONS ACTIVES",list,dimension)
+        if x then missionDetails(x.mission.id) end
+      end
+
+    elseif p.id=="enforcement" then
+      local list={}
+      for _,x in ipairs(sit.enforcements or {}) do list[#list+1]={text=x.id.." "..(x.targetName or "").." ["..x.status.."]",enforcement=x} end
+      if #list==0 then message("SITUATION","Aucune mesure active visible.",palette.ok)
+      else
+        local x=menu("EXECUTION ACTIVE",list,"Mesures visibles")
+        if x then enforcementDetails(x.enforcement.id) end
+      end
+
+    elseif p.id=="institutions" then
+      local list={}
+      for _,x in ipairs(sit.resolutions or {}) do list[#list+1]={text=x.id.." "..x.title.." ["..x.stage.."]",kind="resolution",id=x.id} end
+      for _,x in ipairs(sit.sessions or {}) do list[#list+1]={text=x.id.." "..x.title.." ["..x.status.."]",kind="session",id=x.id} end
+      if #list==0 then message("SITUATION","Aucune activite institutionnelle immediate.",palette.ok)
+      else
+        local x=menu("INSTITUTIONS",list,"Resolutions et sessions")
+        if x and x.kind=="resolution" then resolutionDetails(x.id)
+        elseif x then sessionDetails(x.id) end
+      end
+
+    elseif p.id=="dimension" then
+      dimension=prompt("Dimension Minecraft",dimension)
+      if dimension=="" then dimension="minecraft:overworld" end
+    end
+  end
+end
+
 local function auditScreen()
   local rows,err=rpc("AUDIT_LIST",{limit=100})
   if not rows then message("JOURNAL",err,palette.bad);return end
