@@ -7,6 +7,7 @@ local permissions = {
     NOTICE_LIST=true, NOTICE_MARK_READ=true, NOTICE_MARK_ALL=true,
     ENFORCEMENT_LIST=true, ENFORCEMENT_GET=true,
     SESSION_LIST=true, SESSION_GET=true,
+    MISSION_LIST=true, MISSION_GET=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
@@ -17,6 +18,7 @@ local permissions = {
     NOTICE_LIST=true, NOTICE_MARK_READ=true, NOTICE_MARK_ALL=true,
     ENFORCEMENT_LIST=true, ENFORCEMENT_GET=true,
     SESSION_LIST=true, SESSION_GET=true,
+    MISSION_LIST=true, MISSION_GET=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
@@ -24,6 +26,7 @@ local permissions = {
     BILL_OPEN_VOTE=true, BILL_CLOSE=true, BILL_ENACT=true,
     RESOLUTION_CREATE=true, RESOLUTION_EDIT=true, RESOLUTION_SET_STAGE=true, RESOLUTION_OPEN_VOTE=true, RESOLUTION_CLOSE=true, RESOLUTION_EXECUTE=true,
     SESSION_CREATE=true, SESSION_EDIT=true, SESSION_ADD_AGENDA=true, SESSION_REMOVE_AGENDA=true, SESSION_OPEN=true, SESSION_SET_ITEM_STATUS=true, SESSION_CLOSE=true, SESSION_CANCEL=true,
+    MISSION_CREATE=true, MISSION_EDIT=true, MISSION_SET_STATUS=true, MISSION_ADD_REPORT=true,
     TREATY_CREATE=true, TREATY_EDIT=true, TREATY_OPEN_SIGNATURE=true, TREATY_ACTIVATE=true, TREATY_TERMINATE=true,
     LAW_CREATE=true, LAW_AMEND=true, LAW_REPEAL=true, LAW_SET_STATUS=true,
     AUDIT_LIST=true
@@ -33,6 +36,7 @@ local permissions = {
     NOTICE_LIST=true, NOTICE_MARK_READ=true, NOTICE_MARK_ALL=true,
     ENFORCEMENT_LIST=true, ENFORCEMENT_GET=true,
     SESSION_LIST=true, SESSION_GET=true,
+    MISSION_LIST=true, MISSION_GET=true, MISSION_ADD_REPORT=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
@@ -47,6 +51,7 @@ local permissions = {
     NOTICE_LIST=true, NOTICE_MARK_READ=true, NOTICE_MARK_ALL=true,
     ENFORCEMENT_LIST=true, ENFORCEMENT_GET=true,
     SESSION_LIST=true, SESSION_GET=true,
+    MISSION_LIST=true, MISSION_GET=true, MISSION_ADD_REPORT=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
@@ -62,6 +67,7 @@ local permissions = {
     NOTICE_LIST=true, NOTICE_MARK_READ=true, NOTICE_MARK_ALL=true,
     ENFORCEMENT_LIST=true, ENFORCEMENT_GET=true,
     SESSION_LIST=true, SESSION_GET=true,
+    MISSION_LIST=true, MISSION_GET=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
@@ -177,6 +183,8 @@ local function freshState()
     resolutionCounters = {},
     sessions = {},
     sessionCounters = {},
+    missions = {},
+    missionCounters = {},
     treaties = {},
     treatyCounters = {},
     enforcements = {},
@@ -209,6 +217,8 @@ local function loadState()
   state.resolutionCounters = state.resolutionCounters or {}
   state.sessions = state.sessions or {}
   state.sessionCounters = state.sessionCounters or {}
+  state.missions = state.missions or {}
+  state.missionCounters = state.missionCounters or {}
   state.treaties = state.treaties or {}
   state.treatyCounters = state.treatyCounters or {}
   state.enforcements = state.enforcements or {}
@@ -241,7 +251,7 @@ local function loadState()
   end
 
   state.meta.version = common.VERSION
-  state.meta.schema = math.max(tonumber(state.meta.schema) or 1,5)
+  state.meta.schema = math.max(tonumber(state.meta.schema) or 1,6)
   return state
 end
 
