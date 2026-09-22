@@ -1,10 +1,13 @@
-# UNS International Code - ComputerCraft
+# UNS + North Coalition Legal Network - ComputerCraft
 
-Système distribué pour **CC:Tweaked / ComputerCraft** destiné au Code international de l'**Union des Nations Souveraines (UNS)** et à la **Cour internationale de l'Union (CIU)**.
+Système distribué pour **CC:Tweaked / ComputerCraft** avec deux espaces juridiques séparés sur le même serveur central :
 
-Le projet ne contient aucune référence au nom du serveur Minecraft. `North Coalition` est conservé uniquement comme État proposant dans le corpus juridique initial.
+- le réseau **international UNS / CIU** ;
+- l'**intranet national de North Coalition**, avec son Code, son Gouvernement, ses ministères, ses votes, ses décrets et ses habilitations internes.
 
-## Ce que fait la v0.11
+Le projet ne contient aucune référence au nom du serveur Minecraft. Les données nationales de North Coalition sont isolées logiquement des registres internationaux et soumises à leur propre contrôle d'accès.
+
+## Ce que fait la v0.12
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
@@ -19,6 +22,116 @@ Le projet ne contient aucune référence au nom du serveur Minecraft. `North Coa
 - recherche dans les articles et dossiers ;
 - impression multi-pages des articles et dossiers via une **Printer ComputerCraft** ;
 - interface terminal claire, navigable au clavier et à la souris.
+
+## Intranet national North Coalition v0.12
+
+La v0.12 ajoute un deuxième espace complet, **interne à North Coalition**, sans transformer les 400 lois nationales en articles UNS.
+
+Depuis un terminal autorisé :
+
+```text
+ic nc
+```
+
+Le premier terminal administrateur peut enregistrer la Présidence fondatrice sous l'identité officielle **NexoFr_**. Ensuite, l'accès national est attribué terminal par terminal.
+
+### Code national structuré
+
+Le corpus `NC-CORPUS-400-V2.0` contient exactement **400 articles** et **20 catégories**.
+
+La navigation respecte la hiérarchie :
+
+```text
+Branche juridique
+  -> Categorie / Code
+    -> Livre
+      -> Titre
+        -> Chapitre
+          -> Article
+```
+
+Deux références coexistent :
+
+- ID permanent : `NC-ART-075` ;
+- référence métier : par exemple `NC-GOV-075`.
+
+La recherche couvre le numéro, le titre, le texte, la branche, la catégorie, le chapitre, l'autorité et le ministère compétent.
+
+### Habilitations nationales
+
+L'intranet ne se contente pas du rôle international du terminal. Il possède ses propres fonctions :
+
+- Président de la Coalition ;
+- membre du Conseil de la Coalition ;
+- ministre ;
+- justice ;
+- police / sécurité ;
+- administration ;
+- citoyen.
+
+Les terminaux étrangers ou non enregistrés ne peuvent pas ouvrir le registre national. L'administration internationale garde un accès de secours, mais **un terminal administrateur non enregistré n'est pas compté comme électeur national ni comme candidat à un ministère**.
+
+### Gouvernement et ministres
+
+Les onze ministères du corpus v2 sont enregistrés individuellement avec portefeuille, compétences, titulaire, historique et sceaux.
+
+Un ministre peut arriver au pouvoir par :
+
+```text
+vote du Conseil
+vote citoyen
+nomination directe présidentielle
+```
+
+La règle nationale enregistrée est appliquée par le serveur :
+
+- pendant la phase fondatrice, la Présidence peut constituer directement le premier gouvernement ;
+- ensuite, en l'absence de scrutin pendant le délai officiel (48 h par défaut), la nomination directe devient possible ;
+- elle devient également possible après **deux scrutins échoués** ;
+- un scrutin ouvert fige son corps électoral ;
+- une identité nationale ne possède qu'une voix, même si plusieurs terminaux existent ;
+- le candidat élu est automatiquement installé comme titulaire du ministère ;
+- la révocation présidentielle exige un motif publié et laisse une trace dans l'historique.
+
+### Législation nationale
+
+Le système possède ses propres projets `NC-BILL-AAAA-XXXX`, entièrement séparés des `BILL-...` de l'UNS.
+
+Ils permettent :
+
+- d'amender un article ;
+- d'abroger un article ;
+- de ratifier en bloc une catégorie du Code ;
+- de créer un nouvel article.
+
+Le vote peut être réservé au Conseil ou prendre la forme d'un référendum citoyen. Le quorum et la majorité sont calculés côté serveur. Une loi adoptée n'est appliquée qu'après **promulgation présidentielle**.
+
+Les anciennes versions des articles restent archivées.
+
+### Décrets
+
+Les actes réglementaires utilisent des références `NC-DEC-AAAA-XXXX`.
+
+- le Président peut publier un décret national ;
+- un ministre ne peut publier que dans son propre portefeuille ;
+- une base légale `NC-ART-...` peut être exigée/enregistrée ;
+- publication et abrogation produisent des sceaux et des traces d'audit.
+
+### Séparation UNS / North Coalition
+
+```text
+                  SERVEUR CENTRAL
+                        |
+          +-------------+-------------+
+          |                           |
+      ESPACE UNS                 ESPACE NC
+   UNS-ART / CASE / RES       NC-ART / NC-BILL
+   TREATY / MISSION / ENF     MIN / NC-ELECT / NC-DEC
+          |                           |
+   droits internationaux       habilitations nationales
+```
+
+Le même PC serveur assure les sauvegardes, mais les actions nationales passent par le préfixe RPC `NC_` et sont revalidées par le moteur national avant toute mutation.
 
 ## Installation
 
@@ -76,7 +189,7 @@ wget run https://raw.githubusercontent.com/nexox9official-source/international-c
 wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua admin
 ```
 
-## Navigation v0.11
+## Navigation v0.12
 
 Le Code n'affiche plus simplement une liste brute de 500 articles. Le terminal propose maintenant :
 
