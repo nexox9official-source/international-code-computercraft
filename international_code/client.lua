@@ -2971,6 +2971,8 @@ local function chooseAgendaObject(kind)
   elseif kind=="treaty" then action="TREATY_LIST";title="TRAITES"
   elseif kind=="case" then action="CASE_LIST";title="DOSSIERS"
   elseif kind=="enforcement" then action="ENFORCEMENT_LIST";title="EXECUTION"
+  elseif kind=="mission" then action="MISSION_LIST";title="MISSIONS"
+  elseif kind=="incident" then action="INCIDENT_LIST";title="INCIDENTS"
   else return nil,nil end
 
   local rows,err=rpc(action,{})
@@ -2996,6 +2998,8 @@ local function openAgendaObject(item)
   elseif item.kind=="treaty" then treatyDetails(item.ref)
   elseif item.kind=="case" then caseDetails(item.ref)
   elseif item.kind=="enforcement" then enforcementDetails(item.ref)
+  elseif item.kind=="mission" then missionDetails(item.ref)
+  elseif item.kind=="incident" then incidentDetails(item.ref)
   else
     textPage(item.id or "AGENDA",{
       {label=item.title or "Element",text=item.description or ""},
@@ -3050,6 +3054,8 @@ local function sessionAgendaScreen(sess)
         {text="Dossier judiciaire / CASE",v="case"},
         {text="Article du Code",v="law"},
         {text="Mesure d'execution / ENF",v="enforcement"},
+        {text="Mission internationale / MISSION",v="mission"},
+        {text="Incident international / INC",v="incident"},
         {text="Point libre",v="custom"}
       })
       if kindMenu then
