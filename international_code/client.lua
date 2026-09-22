@@ -2637,6 +2637,8 @@ local function helpScreen()
     {label="Assemblee",text="Les propositions BILL peuvent creer un article ou amender un texte existant. Les terminaux delegate rattaches a un Etat votent POUR, CONTRE ou ABSTENTION. Apres cloture, une proposition adoptee peut etre promulguee dans le Code."},
     {label="Etats membres",text="Le registre STATE conserve le statut, le gouvernement et le representant des pays. Un administrateur peut rattacher un terminal delegate a un Etat pour ses votes officiels."},
     {label="Traites",text="Les traites TREATY sont rediges puis figes avant signature. Chaque Etat partie signe depuis un terminal delegate rattache. Une fois toutes les signatures reunies, le traite peut entrer en vigueur avec un sceau officiel."},
+    {label="Notifications",text="Le serveur cree des alertes pour les votes ouverts, signatures de traites, audiences, appels et mesures d'execution. Les delegues recoivent automatiquement les actions qui concernent leur Etat."},
+    {label="Execution",text="Le registre ENF suit amendes, restitutions, embargos, gels d'avoirs, restrictions, inspections et autres mesures issues des decisions. Chaque changement et compte rendu peut etre scelle et imprime."},
     {label="Dossiers",text="Le panier juridique permet d'ajouter ou retirer plusieurs articles d'un dossier. Chaque fait, preuve, audience, ordonnance, changement de statut et jugement alimente la chronologie."},
     {label="Jugements",text="Lors de l'enregistrement, le systeme fige la reference, le titre et la version des articles cites. Les jugements, ordonnances, audiences, appels et scrutins recoivent aussi un sceau d'integrite applicatif."},
     {label="Appels",text="Le greffe ou le juge peut deposer un appel. Un juge peut ensuite confirmer, modifier, annuler, rejeter la decision ou renvoyer l'affaire a une nouvelle audience."},
@@ -2728,15 +2730,17 @@ function C.run()
   while true do
     local dash,err=rpc("DASHBOARD",{})
     local subtitle=dash and
-      ("Role "..cfg.role.." | "..dash.laws.." art. | "..tostring(dash.states or 0).." Etats | "..tostring(dash.votingBills or 0).." vote(s) | "..tostring(dash.activeTreaties or 0).." traite(s) | rev "..dash.revision)
+      ("Role "..cfg.role.." | "..dash.laws.." art. | "..tostring(dash.votingBills or 0).." vote(s) | "..tostring(dash.activeTreaties or 0).." traites | "..tostring(dash.activeEnforcements or 0).." exec. | "..tostring(dash.unreadNotices or 0).." notif. | r"..dash.revision)
       or ("HORS LIGNE - "..tostring(err))
 
     local items={
+      {text=(dash and (dash.unreadNotices or 0)>0) and ("[!] NOTIFICATIONS ("..dash.unreadNotices..")") or "CENTRE DE NOTIFICATIONS",id="notices"},
       {text="CODE INTERNATIONAL / ARTICLES",id="laws"},
       {text="ASSEMBLEE / PROPOSITIONS / VOTES",id="bills"},
       {text="TRAITES / DIPLOMATIE",id="treaties"},
       {text="REGISTRE DES ETATS MEMBRES",id="states"},
       {text="DOSSIERS JUDICIAIRES",id="cases"},
+      {text="EXECUTION / SANCTIONS / REPARATIONS",id="enforcement"},
       {text="RECHERCHE GLOBALE",id="search"},
       {text="VERIFIER UN SCEAU OFFICIEL",id="verify"}
     }
@@ -2750,7 +2754,9 @@ function C.run()
     local p=menu("BUREAU JURIDIQUE",items,subtitle)
     if not p or p.id=="quit" then clear();return end
 
-    if p.id=="laws" then
+    if p.id=="notices" then
+      notificationCenter()
+    elseif p.id=="laws" then
       lawsScreen("")
     elseif p.id=="bills" then
       billsScreen("","")
@@ -2760,6 +2766,8 @@ function C.run()
       statesScreen("","")
     elseif p.id=="cases" then
       casesScreen("")
+    elseif p.id=="enforcement" then
+      enforcementsScreen("","","","")
     elseif p.id=="verify" then
       verifySealScreen("")
     elseif p.id=="search" then
@@ -2769,12 +2777,14 @@ function C.run()
         {text="Dans les propositions / votes",id="bill"},
         {text="Dans les traites",id="treaty"},
         {text="Dans les Etats membres",id="state"},
-        {text="Dans les dossiers",id="case"}
+        {text="Dans les dossiers",id="case"},
+        {text="Dans les mesures d'execution",id="enforcement"}
       })
       if kind and kind.id=="law" then lawsScreen(q)
       elseif kind and kind.id=="bill" then billsScreen(q,"")
       elseif kind and kind.id=="treaty" then treatiesScreen(q,"","")
       elseif kind and kind.id=="state" then statesScreen(q,"")
+      elseif kind and kind.id=="enforcement" then enforcementsScreen(q,"","","")
       elseif kind then casesScreen(q) end
     elseif p.id=="audit" then
       auditScreen()
