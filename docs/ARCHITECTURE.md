@@ -1,4 +1,4 @@
-# Architecture v0.9
+# Architecture v0.10
 
 ## Topologie
 
@@ -65,7 +65,8 @@ Le serveur central contient désormais quatre ensembles principaux :
 - `bills` : propositions législatives, ratifications, tours de scrutin et votes par État ;
 - `resolutions` : décisions institutionnelles, scrutins et éventuelle exécution automatique ;
 - `sessions` : calendrier, ordres du jour, présences et procès-verbaux institutionnels ;
-- `missions` : mandats internationaux, États participants, statut opérationnel et rapports ;
+- `missions` : mandats internationaux, États participants, coordonnées, statut opérationnel et rapports ;
+- `incidents` : événements internationaux, géolocalisation, États impliqués, SITREP et historique ;
 - `treaties` : projets de traités, versions, États parties, signatures et entrée en vigueur ;
 - `cases` : dossiers, preuves, audiences, procès-verbaux, ordonnances, appels et jugements ;
 - `enforcements` : sanctions, réparations et suivi de conformité ;
@@ -78,6 +79,34 @@ Les dossiers disposent de trois niveaux de visibilité. `public` est accessible 
 ## Sceaux applicatifs
 
 Les actes sensibles reçoivent un sceau calculé par le serveur à partir de leur contenu et de leurs métadonnées. Ces sceaux servent à détecter visuellement une incohérence RP et à identifier une version imprimée. Ils ne constituent pas une primitive cryptographique de sécurité.
+
+## Centre de situation
+
+Le centre de situation n'est pas une seconde base : `SITUATION_GET` construit une **vue calculée** à partir des registres existants.
+
+```text
+                    +--> incidents
+                    +--> missions
+SITUATION_GET ------+--> enforcements
+                    +--> resolutions
+                    +--> sessions
+                    +--> points X/Z
+```
+
+La réponse est filtrée avec les droits du terminal appelant. Les Monitors publics demandent en plus explicitement `visibility=public` pour les missions et incidents afin qu'un terminal administrateur utilisé comme écran mural ne divulgue pas accidentellement un objet restreint.
+
+La carte ne cherche pas à reproduire une carte Minecraft complète. Elle normalise les coordonnées X/Z des points visibles dans la dimension demandée et les projette dans la taille du Monitor. Les incidents sont marqués `I`, les missions `M` et une superposition `*`.
+
+## Incidents et SITREP
+
+Un incident possède un sceau initial immuable, puis deux historiques append-only :
+
+- `reports[]` pour les rapports de situation ;
+- `statusHistory[]` pour les transitions d'état.
+
+Les rapports restreints ne sont pas seulement masqués par l'interface : ils sont supprimés de la copie renvoyée par le serveur lorsque le terminal n'a pas l'accès complet.
+
+Les coordonnées d'un rapport sont indépendantes des coordonnées principales de l'incident. Cela permet par exemple de conserver le point d'origine tout en enregistrant plusieurs observations successives.
 
 ## Missions internationales
 
