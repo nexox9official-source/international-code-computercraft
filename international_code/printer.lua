@@ -255,4 +255,42 @@ function P.appeal(case, appeal)
   return printLines((case.id or "DOSSIER").."-"..(appeal.id or "APPEL"),lines)
 end
 
+
+function P.treaty(treaty)
+  if not treaty then return false,"Traite introuvable." end
+  local lines={}
+  appendWrapped(lines,"TRAITE INTERNATIONAL",treaty.id or "-",25)
+  appendWrapped(lines,"TITRE",treaty.title or "-",25)
+  appendWrapped(lines,"TYPE",treaty.treatyType or "-",25)
+  appendWrapped(lines,"VERSION","v"..tostring(treaty.version or 1),25)
+  appendWrapped(lines,"STATUT",treaty.stage or "-",25)
+  appendWrapped(lines,"ETATS PARTIES",table.concat(treaty.parties or {},"\n"),25)
+  appendWrapped(lines,"RESUME",treaty.summary or "",25)
+  appendWrapped(lines,"TEXTE",treaty.body or "",25)
+  if treaty.signatureTextSeal then appendWrapped(lines,"SCEAU DU TEXTE",treaty.signatureTextSeal,25) end
+
+  lines[#lines+1]="SIGNATURES"
+  local sigs={}
+  for stateId,sig in pairs(treaty.signatures or {}) do
+    sigs[#sigs+1]={stateId=stateId,sig=sig}
+  end
+  table.sort(sigs,function(a,b) return a.stateId<b.stateId end)
+  for _,entry in ipairs(sigs) do
+    local sig=entry.sig
+    for _,l in ipairs(common.wrap((sig.stateName or entry.stateId).." / "..(sig.at or ""),25)) do lines[#lines+1]=l end
+    for _,l in ipairs(common.wrap("Sceau: "..(sig.seal or "-"),25)) do lines[#lines+1]=l end
+    lines[#lines+1]=""
+  end
+
+  if treaty.activationSeal then
+    appendWrapped(lines,"ENTREE EN VIGUEUR",treaty.effectiveAt or "-",25)
+    appendWrapped(lines,"SCEAU D'ACTIVATION",treaty.activationSeal,25)
+  end
+  if treaty.terminationReason then
+    appendWrapped(lines,"FIN DU TRAITE",(treaty.terminatedAt or "").." / "..treaty.terminationReason,25)
+    appendWrapped(lines,"SCEAU DE FIN",treaty.terminationSeal or "-",25)
+  end
+  return printLines(treaty.id or "TRAITE",lines)
+end
+
 return P
