@@ -119,6 +119,40 @@ local function multi(label,initial)
   if not fs.exists(draftsDir) then fs.makeDir(draftsDir) end
 
   local path=draftsDir.."/draft-"..os.getComputerID().."-"..common.randomToken(6)..".txt"
+
+  local function browseOldDrafts()
+    local names=fs.list(draftsDir)
+    local items={}
+    local currentName=fs.getName(path)
+    table.sort(names)
+    for _,name in ipairs(names) do
+      if name~=currentName and not fs.isDir(draftsDir.."/"..name) then
+        local raw=common.readAll(draftsDir.."/"..name) or ""
+        local preview=raw:gsub("\n"," "):gsub("%s+"," ")
+        items[#items+1]={text=name.." | "..preview:sub(1,30),name=name,raw=raw}
+      end
+    end
+    if #items==0 then
+      message("BROUILLONS","Aucun autre brouillon recuperable sur ce PC.",palette.warn)
+      return nil
+    end
+
+    while true do
+      local p=menu("BROUILLONS RECUPERABLES",items,#items.." sauvegarde(s) locale(s)")
+      if not p then return nil end
+      local a=menu(p.name,{
+        {text="Inserer ce brouillon a la position du curseur",id="insert"},
+        {text="Supprimer definitivement ce brouillon",id="delete"}
+      },"Apercu: "..(p.raw:gsub("\n"," "):sub(1,40)))
+      if a and a.id=="insert" then
+        return p.raw
+      elseif a and a.id=="delete" then
+        fs.delete(draftsDir.."/"..p.name)
+        return nil
+      end
+    end
+  end
+
   local lines=splitDraft(initial or "")
   local cy=1
   local cx=#lines[1]+1
@@ -182,7 +216,7 @@ local function multi(label,initial)
     end
 
     local state=dirty and "AUTO*" or "AUTO"
-    footer("F2 Cat. F3 Chercher F4 Citer F6 Panier F5 Finir "..state)
+    footer("F2 Cat F3 Cherch F4 Cite F6 Panier F7 Draft F5 Fin "..state)
 
     local screenX=textX+(cx-left)
     local screenY=bodyTop+(cy-top)
@@ -356,6 +390,12 @@ local function multi(label,initial)
             end
           end
         end
+
+      elseif a==keys.f7 then
+        save()
+        term.setCursorBlink(false)
+        local recovered=browseOldDrafts()
+        if recovered and recovered~="" then insertChunk(recovered) end
 
       elseif a==keys.f5 then
         save()
