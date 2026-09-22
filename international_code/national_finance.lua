@@ -7,7 +7,8 @@ local function trim(v) return common.trim(v) end
 local function role(actor) return actor and actor.nationalRole or nil end
 local function identity(actor) return trim(actor and (actor.nationalIdentity or actor.label or actor.clientId) or "") end
 local function technicalAdmin(actor)
-  return actor and actor.role=="admin" and (not actor.nationalRole or actor.nationalRole=="admin")
+  return actor and (actor.nationalRoot==true or
+    (actor.role=="admin" and (not actor.nationalRole or actor.nationalRole=="admin")))
 end
 local function yearNow() return os.date and os.date("%Y") or "0000" end
 local function seal(prefix,payload)
