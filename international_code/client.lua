@@ -3791,6 +3791,7 @@ local function situationDeskScreen()
 
     local items={
       {text="Vue de synthese",id="summary"},
+      {text="Conflits / crises ("..tostring(c.conflicts or 0)..")",id="conflicts"},
       {text="Incidents actifs ("..tostring(c.incidents or 0)..")",id="incidents"},
       {text="Missions actives ("..tostring(c.missions or 0)..")",id="missions"},
       {text="Mesures d'execution actives ("..tostring(c.enforcements or 0)..")",id="enforcement"},
@@ -3799,10 +3800,12 @@ local function situationDeskScreen()
       {text="Actualiser",id="refresh"}
     }
     local p=menu("CENTRE DE SITUATION",items,
-      "INC "..tostring(c.incidents or 0).." / MIS "..tostring(c.missions or 0).." / ENF "..tostring(c.enforcements or 0).." / "..dimension)
+      "CF "..tostring(c.conflicts or 0).." / INC "..tostring(c.incidents or 0).." / MIS "..tostring(c.missions or 0).." / ENF "..tostring(c.enforcements or 0).." / "..dimension)
     if not p then return end
 
     if p.id=="summary" then
+      local conflicts={}
+      for _,x in ipairs(sit.conflicts or {}) do conflicts[#conflicts+1]=x.id.." "..x.title.." / "..x.status end
       local incidents={}
       for _,x in ipairs(sit.incidents or {}) do
         incidents[#incidents+1]=x.id.." ["..string.upper(x.severity or "?").."] "..x.title.." / "..x.status
@@ -3814,12 +3817,24 @@ local function situationDeskScreen()
       for _,x in ipairs(sit.sessions or {}) do institutions[#institutions+1]=x.id.." "..x.title.." ["..x.status.."]" end
       textPage("SITUATION INTERNATIONALE",{
         {label="Dimension",text=sit.dimension or dimension},
+        {label="Conflits / crises",text=#conflicts>0 and table.concat(conflicts,"\n") or "Aucun"},
         {label="Incidents actifs",text=#incidents>0 and table.concat(incidents,"\n") or "Aucun"},
         {label="Missions actives",text=#missions>0 and table.concat(missions,"\n") or "Aucune"},
         {label="Institutions",text=#institutions>0 and table.concat(institutions,"\n") or "Aucun scrutin/session actif"},
         {label="Mesures d'execution",text=tostring(c.enforcements or 0).." active(s)"},
         {label="Derniere generation",text=sit.generatedAt or ""}
       })
+
+    elseif p.id=="conflicts" then
+      local list={}
+      for _,x in ipairs(sit.conflicts or {}) do
+        list[#list+1]={text=x.id.." ["..(x.status or "?").."] "..x.title,conflict=x}
+      end
+      if #list==0 then message("SITUATION","Aucun conflit ou crise actif.",palette.ok)
+      else
+        local x=menu("CONFLITS / CRISES",list,"Situation actuelle")
+        if x then conflictDetails(x.conflict.id) end
+      end
 
     elseif p.id=="incidents" then
       local list={}
