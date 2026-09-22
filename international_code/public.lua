@@ -59,7 +59,7 @@ local function drawOffline(t,msg)
   fillLine(t,6," "..tostring(msg or ""),colors.lightGray)
 end
 
-local function drawOverview(t,dash,states,bills,cases,missions,incidents,enforcements)
+local function drawOverview(t,dash,states,bills,cases,missions,conflicts,incidents,enforcements)
   t.setBackgroundColor(colors.black);t.clear()
   header(t,"REGISTRE PUBLIC","Union des Nations Souveraines")
   local y=4
@@ -69,6 +69,7 @@ local function drawOverview(t,dash,states,bills,cases,missions,incidents,enforce
   fillLine(t,y," SCRUTINS OUVERTS "..tostring((dash.votingBills or #bills)+(dash.votingResolutions or 0)),colors.yellow);y=y+1
   fillLine(t,y," SESSIONS LIVE    "..tostring(dash.openSessions or 0).." / "..tostring(dash.scheduledSessions or 0).." prevues",colors.cyan);y=y+1
   fillLine(t,y," MISSIONS ACTIVES "..tostring(#(missions or {})),colors.cyan);y=y+1
+  fillLine(t,y," CONFLITS / CRISES "..tostring(#(conflicts or {})),#(conflicts or {})>0 and colors.orange or colors.lightGray);y=y+1
   local publicCritical=0
   for _,incident in ipairs(incidents or {}) do if incident.severity=="critical" then publicCritical=publicCritical+1 end end
   fillLine(t,y," INCIDENTS ACTIFS "..tostring(#(incidents or {}))..
@@ -167,6 +168,26 @@ local function drawSessions(t,rows)
     end
   end
   fillLine(t,h," Sessions de l'Union",colors.gray)
+end
+
+local function drawConflicts(t,rows)
+  t.setBackgroundColor(colors.black);t.clear()
+  header(t,"CONFLITS / CRISES","Registre public des situations en cours")
+  local _,h=t.getSize()
+  local y=4
+  if #rows==0 then
+    fillLine(t,y," Aucun conflit public en cours.",colors.lightGray)
+  else
+    for _,conflict in ipairs(rows) do
+      if y>=h then break end
+      local fg=conflict.status=="active" and colors.red or
+        (conflict.status=="ceasefire" and colors.yellow or colors.orange)
+      fillLine(t,y," "..conflict.id.." ["..tostring(conflict.status or "?").."]",fg);y=y+1
+      if y<h then fillLine(t,y,"   "..tostring(conflict.title or ""),colors.white);y=y+1 end
+      if y<h then fillLine(t,y,"   Zones: "..tostring(#(conflict.zones or {})).." / Etats: "..tostring(#(conflict.involvedStates or {})),colors.lightGray);y=y+1 end
+    end
+  end
+  fillLine(t,h," Conflits, crises et cessez-le-feu",colors.gray)
 end
 
 local function incidentSeverityColor(severity)
@@ -291,6 +312,11 @@ function P.run()
       for _,row in ipairs(openSessions) do sessions[#sessions+1]=row end
       for _,row in ipairs(scheduledSessions) do sessions[#sessions+1]=row end
       local missions=rpc(cfg,"MISSION_LIST",{status="active",visibility="public"},4) or {}
+      local conflicts={}
+      for _,st in ipairs({"tension","active","ceasefire","peace_process"}) do
+        local rows=rpc(cfg,"CONFLICT_LIST",{status=st,visibility="public"},4) or {}
+        for _,row in ipairs(rows) do conflicts[#conflicts+1]=row end
+      end
       local incidents={}
       for _,st in ipairs({"open","investigating","contained"}) do
         local rows=rpc(cfg,"INCIDENT_LIST",{status=st,visibility="public"},4) or {}
@@ -300,26 +326,27 @@ function P.run()
       local treaties=rpc(cfg,"TREATY_LIST",{stage="in_force"},4) or {}
       local enforcements=rpc(cfg,"ENFORCEMENT_LIST",{visibility="public"},4) or {}
       local laws=rpc(cfg,"LAW_LIST",{status="active"},4) or {}
-      if page==1 then drawOverview(target,dash,states,bills,cases,missions,incidents,enforcements)
+      if page==1 then drawOverview(target,dash,states,bills,cases,missions,conflicts,incidents,enforcements)
       elseif page==2 then drawStates(target,states)
       elseif page==3 then drawBills(target,bills)
       elseif page==4 then drawResolutions(target,resolutions)
       elseif page==5 then drawSessions(target,sessions)
       elseif page==6 then drawMissions(target,missions)
-      elseif page==7 then drawIncidents(target,incidents)
-      elseif page==8 then drawTreaties(target,treaties)
-      elseif page==9 then drawCases(target,cases)
-      elseif page==10 then drawEnforcements(target,enforcements)
+      elseif page==7 then drawConflicts(target,conflicts)
+      elseif page==8 then drawIncidents(target,incidents)
+      elseif page==9 then drawTreaties(target,treaties)
+      elseif page==10 then drawCases(target,cases)
+      elseif page==11 then drawEnforcements(target,enforcements)
       else drawLaws(target,laws) end
     end
 
     local timer=os.startTimer(8)
     while true do
       local ev,a=os.pullEvent()
-      if ev=="timer" and a==timer then page=page%11+1 break
+      if ev=="timer" and a==timer then page=page%12+1 break
       elseif ev=="key" and (a==keys.q or a==keys.escape) then
         term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
-      elseif ev=="monitor_touch" then page=page%11+1 break end
+      elseif ev=="monitor_touch" then page=page%12+1 break end
     end
   end
 end
@@ -733,6 +760,7 @@ local function drawSituationOverview(t,sit)
   header(t,"CENTRE DE SITUATION",sit.dimension or "minecraft:overworld")
   local c=sit.counts or {}
   local y=4
+  fillLine(t,y," CONFLITS       "..tostring(c.conflicts or 0), (c.conflicts or 0)>0 and colors.orange or colors.lime);y=y+1
   fillLine(t,y," INCIDENTS      "..tostring(c.incidents or 0), (c.incidents or 0)>0 and colors.orange or colors.lime);y=y+1
   fillLine(t,y," MISSIONS       "..tostring(c.missions or 0),colors.cyan);y=y+1
   fillLine(t,y," EXECUTIONS     "..tostring(c.enforcements or 0),colors.orange);y=y+1
@@ -797,15 +825,36 @@ local function drawSituationMap(t,sit)
       px=math.max(left+1,math.min(right-1,px))
       py=math.max(top+1,math.min(bottom-1,py))
       local key=px..":"..py
-      local ch=p.kind=="incident" and "I" or "M"
-      local fg=p.kind=="incident" and incidentSeverityColor(p.severity) or colors.cyan
+      local ch=p.kind=="incident" and "I" or (p.kind=="conflict" and "C" or "M")
+      local fg=p.kind=="incident" and incidentSeverityColor(p.severity) or
+        (p.kind=="conflict" and colors.red or colors.cyan)
       if occupied[key] then ch="*";fg=colors.white end
       occupied[key]=true
       t.setCursorPos(px,py);t.setTextColor(fg);t.write(ch)
     end
   end
-  fillLine(t,h-1," I=incident  M=mission  *=superposition",colors.lightGray)
+  fillLine(t,h-1," I=incident  M=mission  C=zone conflit  *=superposition",colors.lightGray)
   fillLine(t,h," Carte dynamique / coordonnees Minecraft",colors.gray)
+end
+
+local function drawSituationConflicts(t,sit)
+  t.setBackgroundColor(colors.black);t.clear()
+  header(t,"SITUATION / CONFLITS","Crises, fronts et cessez-le-feu")
+  local _,h=t.getSize()
+  local y=4
+  if #(sit.conflicts or {})==0 then
+    fillLine(t,y," Aucun conflit actif visible.",colors.lime)
+  else
+    for _,conflict in ipairs(sit.conflicts or {}) do
+      if y>=h then break end
+      local fg=conflict.status=="active" and colors.red or
+        (conflict.status=="ceasefire" and colors.yellow or colors.orange)
+      fillLine(t,y," "..conflict.id.." ["..tostring(conflict.status or "?").."]",fg);y=y+1
+      if y<h then fillLine(t,y,"   "..tostring(conflict.title or ""),colors.white);y=y+1 end
+      if y<h then fillLine(t,y,"   Zones "..tostring(#(conflict.zones or {})).." / Etats "..tostring(#(conflict.involvedStates or {})),colors.lightGray);y=y+1 end
+    end
+  end
+  fillLine(t,h," Conflits visibles / centre de situation",colors.gray)
 end
 
 local function drawSituationIncidents(t,sit)
@@ -899,16 +948,67 @@ function P.situationDisplay(dimension)
       drawOffline(target,err)
     elseif page==1 then drawSituationOverview(target,sit)
     elseif page==2 then drawSituationMap(target,sit)
-    elseif page==3 then drawSituationIncidents(target,sit)
-    elseif page==4 then drawSituationMissions(target,sit)
-    elseif page==5 then drawSituationExecution(target,sit)
+    elseif page==3 then drawSituationConflicts(target,sit)
+    elseif page==4 then drawSituationIncidents(target,sit)
+    elseif page==5 then drawSituationMissions(target,sit)
+    elseif page==6 then drawSituationExecution(target,sit)
     else drawSituationInstitutions(target,sit) end
 
     local timer=os.startTimer(5)
     while true do
       local ev,a=os.pullEvent()
-      if ev=="timer" and a==timer then page=page%6+1 break
-      elseif ev=="monitor_touch" then page=page%6+1 break
+      if ev=="timer" and a==timer then page=page%7+1 break
+      elseif ev=="monitor_touch" then page=page%7+1 break
+      elseif ev=="key" and (a==keys.q or a==keys.escape) then
+        term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
+      end
+    end
+  end
+end
+
+function P.conflictDisplay(conflictId)
+  local cfg=common.loadConfig()
+  if not cfg or cfg.role=="server" then error("Terminal client requis.",0) end
+  local monitor=findMonitor()
+  local old=term.current()
+  local target=monitor or old
+  if monitor and monitor.setTextScale then pcall(monitor.setTextScale,0.5) end
+  term.redirect(target)
+
+  while true do
+    target.setCursorBlink(false)
+    target.setBackgroundColor(colors.black);target.clear()
+    local conflict,err=rpc(cfg,"CONFLICT_GET",{id=conflictId},4)
+    if not conflict then
+      drawOffline(target,err)
+    else
+      header(target,"CONFLIT / "..conflict.id,conflict.title or "")
+      local _,h=target.getSize()
+      local y=4
+      local fg=conflict.status=="active" and colors.red or
+        (conflict.status=="ceasefire" and colors.yellow or colors.orange)
+      fillLine(target,y," Statut: "..tostring(conflict.status),fg);y=y+1
+      fillLine(target,y," Type: "..tostring(conflict.conflictType or "?"),colors.cyan);y=y+1
+      fillLine(target,y," Etats impliques: "..tostring(#(conflict.involvedStates or {})),colors.white);y=y+1
+      fillLine(target,y," Zones: "..tostring(#(conflict.zones or {})),colors.white);y=y+2
+
+      for _,zone in ipairs(conflict.zones or {}) do
+        if y>=h then break end
+        local zfg=zone.status=="contested" and colors.red or
+          (zone.status=="demilitarized" and colors.yellow or colors.lightGray)
+        fillLine(target,y," "..tostring(zone.id).." ["..tostring(zone.status or "?").."] "..tostring(zone.name or ""),zfg);y=y+1
+        local pos=zone.position or {}
+        if pos.x and pos.z and y<h then
+          fillLine(target,y,"   "..tostring(pos.dimension or "minecraft:overworld").." X"..tostring(pos.x).." Z"..tostring(pos.z),colors.lightGray);y=y+1
+        end
+      end
+      fillLine(target,h," LIVE / actualisation 5s / Q pour quitter",colors.gray)
+    end
+
+    local timer=os.startTimer(5)
+    while true do
+      local ev,a=os.pullEvent()
+      if ev=="timer" and a==timer then break
       elseif ev=="key" and (a==keys.q or a==keys.escape) then
         term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
       end
