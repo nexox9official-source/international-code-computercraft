@@ -2905,17 +2905,57 @@ local function portalSearchScreen(info,initialQuery)
 end
 
 local function sovereignAuthorityScreen(info)
-  info=rpc("NC_INFO",{}) or info or {}
-  local powers={}
-  for _,p in ipairs(info.sovereignAuthorityPowers or {}) do powers[#powers+1]="- "..tostring(p) end
-  textPage("AUTORITE SOUVERAINE - NexoFr_",{
-    {label="Identite officielle",text=tostring(info.sovereignAuthorityIdentity or "NexoFr_")},
-    {label="Titre",text=tostring(info.sovereignAuthorityTitle or "Dirigeant de North Coalition et President de la Coalition")},
-    {label="Statut du Corpus",text="RATIFIE ET ADOPTE / en vigueur depuis "..tostring(info.ratifiedAt or "2026-09-22")},
-    {label="Portee",text="Habilitation cumulative sur l'ensemble des competences nationales de North Coalition."},
-    {label="Pouvoirs enregistres",text=#powers>0 and table.concat(powers,"\n") or "Toutes les competences nationales."},
-    {label="Limite internationale",text="Cette habilitation est interne a North Coalition et ne confere aucun privilege particulier dans l'Union des Nations Souveraines."}
-  })
+  while true do
+    info=rpc("NC_INFO",{}) or info or {}
+    local active=info.sovereignAuthorityActive~=false
+    local items={{text="Lire le statut constitutionnel complet",id="read"}}
+    if info.sovereignAuthority and active then
+      items[#items+1]={text="[!] Renoncer volontairement a la direction",id="relinquish"}
+    end
+    local p=menu("AUTORITE SOUVERAINE - NexoFr_",items,
+      active and "PERMANENTE / aucune limite de duree / fin uniquement sur decision de NexoFr_" or
+      "RENONCIATION ENREGISTREE / direction souveraine vacante")
+    if not p then return end
+
+    if p.id=="read" then
+      local powers={}
+      for _,power in ipairs(info.sovereignAuthorityPowers or {}) do powers[#powers+1]="- "..tostring(power) end
+      textPage("AUTORITE SOUVERAINE - NexoFr_",{
+        {label="Identite officielle",text=tostring(info.sovereignAuthorityIdentity or "NexoFr_")},
+        {label="Titre",text=tostring(info.sovereignAuthorityTitle or "Dirigeant de North Coalition et President de la Coalition")},
+        {label="Statut",text=active and "DIRIGEANT PERMANENT - SANS LIMITE DE DUREE" or "RENONCIATION VOLONTAIRE ENREGISTREE"},
+        {label="Regle de maintien",text="NexoFr_ reste dirigeant de North Coalition de plein droit. Aucun vote, election, motion, tribunal, ministre, Conseil ou autre autorite nationale ne peut le remplacer, le destituer, le suspendre ou mettre fin a son habilitation souveraine."},
+        {label="Fin du statut",text="La direction souveraine ne prend fin que si NexoFr_ exprime lui-meme une renonciation volontaire, explicite, authentifiee, enregistree et scellee."},
+        {label="Statut du Corpus",text="RATIFIE ET ADOPTE / en vigueur depuis "..tostring(info.ratifiedAt or "2026-09-22")},
+        {label="Portee",text="Habilitation cumulative sur l'ensemble des competences nationales de North Coalition."},
+        {label="Pouvoirs enregistres",text=#powers>0 and table.concat(powers,"\n") or "Toutes les competences nationales."},
+        {label="Limite internationale",text="Cette habilitation est interne a North Coalition et ne confere aucun privilege particulier dans l'Union des Nations Souveraines."}
+      })
+    elseif p.id=="relinquish" then
+      local first=menu("RENUNTIATION VOLONTAIRE",{
+        {text="NON - conserver la direction",id="no"},
+        {text="OUI - poursuivre la procedure",id="yes"}
+      },"Cette operation met fin a la direction souveraine de NexoFr_ et ouvre la voie a une succession.")
+      if first and first.id=="yes" then
+        local phrase=prompt("Recopier exactement","JE RENONCE VOLONTAIREMENT A LA DIRECTION DE NORTH COALITION")
+        if phrase=="JE RENONCE VOLONTAIREMENT A LA DIRECTION DE NORTH COALITION" then
+          local reason=multi("MOTIF / DECLARATION DE RENONCIATION","")
+          local last=menu("CONFIRMATION FINALE",{
+            {text="ANNULER - je reste dirigeant",id="no"},
+            {text="CONFIRMER MA RENONCIATION",id="yes"}
+          },"Seul NexoFr_ peut effectuer cette action.")
+          if last and last.id=="yes" then
+            local out,err=rpc("NC_SOVEREIGN_RELINQUISH",{confirmation=phrase,reason=reason})
+            message("RENUNCIATION",out and ("Renonciation enregistree / "..tostring(out.seal)) or err,
+              out and palette.warn or palette.bad)
+            if out then return end
+          end
+        else
+          message("RENUNCIATION","Phrase de confirmation incorrecte. Aucune modification effectuee.",palette.bad)
+        end
+      end
+    end
+  end
 end
 
 local function portalMySpace(info,dash)
@@ -2973,7 +3013,7 @@ local function portalInstitutionsHub(info,dash)
   while true do
     local items={
       {text="GOUVERNEMENT / PRESIDENCE / MINISTERES",id="gov"},
-      {text="ELECTIONS NATIONALES / PRESIDENCE / CONSEIL",id="democracy"},
+      {text=info.sovereignAuthorityActive and "ELECTIONS NATIONALES / CONSEIL (PRESIDENCE PERMANENTE)" or "ELECTIONS NATIONALES / PRESIDENCE / CONSEIL",id="democracy"},
       {text="SCRUTINS MINISTERIELS",id="elections"},
       {text="SESSIONS / CONSEIL / CABINET / ORDRE DU JOUR",id="sessions"},
       {text="JOURNAL OFFICIEL INSTITUTIONNEL",id="gazette"},
