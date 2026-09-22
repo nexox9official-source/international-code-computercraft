@@ -4342,6 +4342,7 @@ function C.run()
 
   while true do
     local dash,err=rpc("DASHBOARD",{})
+    local ncInfo=rpc("NC_INFO",{},2)
     local subtitle=dash and
       ("Role "..cfg.role.." | "..tostring(dash.activeConflicts or 0).." conflit(s) | "..tostring(dash.activeIncidents or 0).." incident(s)"..
       ((dash.criticalIncidents or 0)>0 and (" / "..dash.criticalIncidents.." CRIT") or "")..
@@ -4364,6 +4365,9 @@ function C.run()
       {text="RECHERCHE GLOBALE",id="search"},
       {text="VERIFIER UN SCEAU OFFICIEL",id="verify"}
     }
+    if ncInfo then
+      table.insert(items,2,{text="[NC] INTRANET NATIONAL / NORTH COALITION",id="national"})
+    end
     if allowed("audit") then
       items[#items+1]={text="JOURNAL D'AUDIT",id="audit"}
     end
@@ -4376,6 +4380,8 @@ function C.run()
 
     if p.id=="notices" then
       notificationCenter()
+    elseif p.id=="national" then
+      dofile("/international_code/national_client.lua").run()
     elseif p.id=="laws" then
       lawsScreen("")
     elseif p.id=="bills" then
