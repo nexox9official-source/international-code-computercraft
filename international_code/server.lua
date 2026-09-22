@@ -4018,6 +4018,30 @@ function S.run()
   end
 end
 
+local function cleanupBootstrapSources()
+  local paths={
+    "/international_code/national/corpus_v2.json",
+    "/international_code/national/articles_001_100.json",
+    "/international_code/national/articles_101_200.json",
+    "/international_code/national/articles_201_300.json",
+    "/international_code/national/articles_301_400.json",
+    "/international_code/seed/001.lua",
+    "/international_code/seed/002.lua",
+    "/international_code/seed/003.lua",
+    "/international_code/seed/004.lua",
+    "/international_code/seed/005.lua"
+  }
+  local freed=0
+  for _,path in ipairs(paths) do
+    if fs.exists(path) and not fs.isDir(path) then
+      freed=freed+(fs.getSize(path) or 0)
+      fs.delete(path)
+    end
+  end
+  if collectgarbage then pcall(collectgarbage,"collect") end
+  return freed
+end
+
 function S.setupServer()
   common.ensureLayout()
   term.setTextColor(colors.white)
@@ -4029,10 +4053,21 @@ function S.setupServer()
   }
   common.saveConfig(cfg)
   if not fs.exists(common.STATE) then
-    common.saveTableAtomic(common.STATE,freshState())
+    local initial=freshState()
+    local freed=cleanupBootstrapSources()
+    common.saveTableAtomic(common.STATE,initial)
+    initial=nil
+    if collectgarbage then pcall(collectgarbage,"collect") end
+    print("Sources d'initialisation nettoyees: "..tostring(freed).." octets liberes.")
+  else
+    cleanupBootstrapSources()
   end
   print("Serveur configure. ID #"..os.getComputerID())
-  print("Connectez un modem puis lancez: ic server")
+  print("Lancez simplement 'ic' puis utilisez le bouton LANCER LE SERVEUR.")
+end
+
+function S.cleanupBootstrapSources()
+  return cleanupBootstrapSources()
 end
 
 function S.manualPair(role)
