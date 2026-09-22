@@ -17,6 +17,7 @@
 - amendes, restitutions, indemnisations, embargos, gels d'avoirs, restrictions, suspensions, inspections, zones démilitarisées et mesures libres ;
 - statuts ordered / active / partial / complied / breached / lifted / expired ;
 - comptes rendus d'exécution scellés ;
+- procès-verbaux d'audience scellés (`CIU-PV-...`) avec participants, compte rendu et issue ;
 - historique des changements de statut avec sceaux ;
 - notifications automatiques aux États concernés ;
 - impression multipage d'une fiche d'exécution ;
