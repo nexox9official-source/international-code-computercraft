@@ -569,6 +569,98 @@ local function officialSeal(prefix,parts)
   return tostring(prefix or "UNS").."-"..string.upper(common.simpleChecksum(table.concat(raw,"|")))
 end
 
+local function noticeVisible(actor,n)
+  if not actor or not n then return false end
+  if actor.role=="admin" then return true end
+
+  local targeted=false
+  if n.targetClientId then
+    targeted=true
+    if n.targetClientId~=actor.clientId then return false end
+  end
+  if n.targetStateId then
+    targeted=true
+    if n.targetStateId~=actor.stateId then return false end
+  end
+  if type(n.roles)=="table" and next(n.roles)~=nil then
+    targeted=true
+    if not n.roles[actor.role] then return false end
+  end
+  return targeted or n.global==true
+end
+
+local function pushNotice(state,spec)
+  state.noticeCounter=(state.noticeCounter or 0)+1
+  local id=string.format("NOTICE-%06d",state.noticeCounter)
+  local n={
+    id=id,title=common.trim(spec.title),body=common.trim(spec.body),
+    severity=spec.severity or "info",
+    objectType=spec.objectType,objectId=spec.objectId,
+    targetStateId=spec.targetStateId,targetClientId=spec.targetClientId,
+    roles=spec.roles,global=spec.global==true,
+    createdAt=common.now(),readBy={}
+  }
+  state.notices[#state.notices+1]=n
+  while #state.notices>800 do table.remove(state.notices,1) end
+  return n
+end
+
+local function listNotices(state,actor,payload)
+  payload=payload or {}
+  local unreadOnly=payload.unreadOnly==true
+  local out={}
+  for i=#(state.notices or {}),1,-1 do
+    local n=state.notices[i]
+    if noticeVisible(actor,n) then
+      local copy=common.deepcopy(n)
+      copy.read=(n.readBy and n.readBy[actor.clientId])==true
+      copy.readBy=nil
+      if (not unreadOnly) or not copy.read then out[#out+1]=copy end
+    end
+    if #out>120 then break end
+  end
+  return out
+end
+
+local function countUnreadNotices(state,actor)
+  local n=0
+  for _,notice in ipairs(state.notices or {}) do
+    if noticeVisible(actor,notice) and not (notice.readBy and notice.readBy[actor.clientId]) then n=n+1 end
+  end
+  return n
+end
+
+local function makeEnforcementId(state)
+  local year=os.date and os.date("%Y") or "0000"
+  local n=(state.enforcementCounters[year] or 0)+1
+  state.enforcementCounters[year]=n
+  return string.format("ENF-%s-%04d",year,n)
+end
+
+local function canViewEnforcement(actor,e)
+  if not actor or not e then return false end
+  if actor.role=="admin" or actor.role=="judge" or actor.role=="clerk" then return true end
+  return (e.visibility or "restricted")=="public"
+end
+
+local function listEnforcements(state,actor,payload)
+  payload=payload or {}
+  local q=common.trim(payload.query)
+  local status=common.trim(payload.status)
+  local stateId=common.trim(payload.stateId):upper()
+  local out={}
+  for _,e in pairs(state.enforcements or {}) do
+    local hit=(q=="" or common.contains(e.id,q) or common.contains(e.targetName,q) or common.contains(e.summary,q) or common.contains(e.enforcementType,q) or common.contains(e.caseId,q))
+    local statusHit=(status=="" or e.status==status)
+    local stateHit=(stateId=="" or e.targetStateId==stateId)
+    if hit and statusHit and stateHit and canViewEnforcement(actor,e) then
+      out[#out+1]=common.deepcopy(e)
+    end
+  end
+  table.sort(out,function(a,b) return tostring(a.id)>tostring(b.id) end)
+  return out
+end
+
 local function handleAction(state, actor, action, p)
   p = p or {}
   if action:match("^CASE_") and action~="CASE_LIST" and action~="CASE_GET" and action~="CASE_CREATE" and p.id then
