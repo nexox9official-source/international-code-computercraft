@@ -2120,7 +2120,7 @@ local function budgetDetails(id,info)
     local president=(info.nationalRole=="admin" or info.nationalRole=="president")
     local unit=(rpc("NC_TREASURY_DASHBOARD",{}) or {}).unit or "UB"
 
-    local actions={{text="Lire le budget complet",id="read"}}
+    local actions={{text="Lire le budget complet",id="read"},{text="Imprimer le budget",id="print"}}
     if financeManager and b.status=="draft" then
       actions[#actions+1]={text="Modifier les credits par ministere",id="alloc"}
       actions[#actions+1]={text="Ouvrir le vote du Conseil",id="open_vote"}
@@ -2159,6 +2159,9 @@ local function budgetDetails(id,info)
         {label="Journal officiel",text=b.gazetteId or "-"},
         {label="Notes",text=b.notes or "-"}
       })
+    elseif a.id=="print" then
+      local ok,pages=printer.budget(b,unit)
+      message("IMPRESSION",ok and ("Budget imprime: "..pages.." page(s).") or pages,ok and palette.accent or palette.bad)
     elseif a.id=="alloc" then
       local ministries=rpc("NC_MINISTRY_LIST",{}) or {}
       local items={}
@@ -2224,13 +2227,22 @@ local function revenueDetails(id)
   local row=nil
   for _,x in ipairs(rows) do if x.id==id then row=x break end end
   if not row then message("RECETTE","Recette introuvable.",palette.bad);return end
-  textPage(row.id,{
-    {label="Nature",text=row.kind or ""},{label="Titre",text=row.title or ""},
-    {label="Montant",text=money(row.amountUB,"UB")},{label="Source",text=row.source or "-"},
-    {label="Base legale",text=row.legalBasis or "-"},{label="Date",text=row.recordedAt or ""},
-    {label="Enregistre par",text=row.recordedBy or ""},{label="Notes",text=row.notes or "-"},
-    {label="Sceau",text=row.seal or "-"}
-  })
+  local a=menu(row.id.." - "..row.title,{
+    {text="Lire la recette",id="read"},{text="Imprimer",id="print"}
+  },row.kind.." / +"..money(row.amountUB,"UB"))
+  if not a then return end
+  if a.id=="read" then
+    textPage(row.id,{
+      {label="Nature",text=row.kind or ""},{label="Titre",text=row.title or ""},
+      {label="Montant",text=money(row.amountUB,"UB")},{label="Source",text=row.source or "-"},
+      {label="Base legale",text=row.legalBasis or "-"},{label="Date",text=row.recordedAt or ""},
+      {label="Enregistre par",text=row.recordedBy or ""},{label="Notes",text=row.notes or "-"},
+      {label="Sceau",text=row.seal or "-"}
+    })
+  elseif a.id=="print" then
+    local ok,pages=printer.revenue(row,"UB")
+    message("IMPRESSION",ok and ("Recette imprimee: "..pages.." page(s).") or pages,ok and palette.accent or palette.bad)
+  end
 end
 
 local function revenuesScreen(info)
@@ -2275,7 +2287,7 @@ local function expenseDetails(id,info)
     local finance=(info.nationalRole=="admin" or info.nationalRole=="president" or
       (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
     local president=(info.nationalRole=="admin" or info.nationalRole=="president")
-    local actions={{text="Lire la demande de depense",id="read"}}
+    local actions={{text="Lire la demande de depense",id="read"},{text="Imprimer la depense",id="print"}}
     if e.status=="requested" and finance then
       actions[#actions+1]={text="Valider par les Finances",id="finance_yes"}
       actions[#actions+1]={text="Rejeter par les Finances",id="finance_no"}
@@ -2298,6 +2310,9 @@ local function expenseDetails(id,info)
         {label="Contrat",text=e.contractId or "-"},
         {label="Sceaux",text=(e.requestSeal or "-").."\n"..(e.financeSeal or "-").."\n"..(e.presidentSeal or "-").."\n"..(e.paymentSeal or e.decisionSeal or "-")}
       })
+    elseif a.id=="print" then
+      local ok,pages=printer.expense(e,"UB")
+      message("IMPRESSION",ok and ("Depense imprimee: "..pages.." page(s).") or pages,ok and palette.accent or palette.bad)
     elseif a.id=="finance_yes" then
       local out,er=rpc("NC_EXPENSE_FINANCE_DECIDE",{id=e.id,approve=true})
       message("DEPENSE",out and ("Validation: "..out.status) or er,out and palette.accent or palette.bad)
@@ -2383,7 +2398,7 @@ local function contractDetails(id,info)
     local finance=(info.nationalRole=="admin" or info.nationalRole=="president" or
       (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
     local manager=finance or (info.nationalRole=="minister" and info.ministryCode==row.ministryCode)
-    local actions={{text="Lire le marche",id="read"}}
+    local actions={{text="Lire le marche",id="read"},{text="Imprimer le marche",id="print"}}
     if row.status=="draft" and finance then actions[#actions+1]={text="Attribuer officiellement le marche",id="award"}
     elseif (row.status=="awarded" or row.status=="active") and manager then actions[#actions+1]={text="Changer le statut d'execution",id="status"} end
     local a=menu(row.id.." - "..row.title,actions,row.ministryCode.." / "..row.status.." / "..money(row.amountUB,"UB"))
@@ -2397,6 +2412,9 @@ local function contractDetails(id,info)
         {label="Sceaux",text=(row.draftSeal or "-").."\n"..(row.awardSeal or "-").."\n"..(row.closeSeal or "-")},
         {label="Journal officiel",text=row.gazetteId or "-"}
       })
+    elseif a.id=="print" then
+      local ok,pages=printer.contract(row,"UB")
+      message("IMPRESSION",ok and ("Marche imprime: "..pages.." page(s).") or pages,ok and palette.accent or palette.bad)
     elseif a.id=="award" then
       local out,e=rpc("NC_CONTRACT_AWARD",{id=row.id})
       message("MARCHE PUBLIC",out and ("Attribue / "..tostring(out.awardSeal)) or e,out and palette.accent or palette.bad)
