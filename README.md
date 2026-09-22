@@ -4,7 +4,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** destiné au Code interna
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. `North Coalition` est conservé uniquement comme État proposant dans le corpus juridique initial.
 
-## Ce que fait la v0.10
+## Ce que fait la v0.11
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
@@ -76,7 +76,7 @@ wget run https://raw.githubusercontent.com/nexox9official-source/international-c
 wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua admin
 ```
 
-## Navigation v0.10
+## Navigation v0.11
 
 Le Code n'affiche plus simplement une liste brute de 500 articles. Le terminal propose maintenant :
 
@@ -296,6 +296,69 @@ ic session SESSION-2026-0001
 ```
 
 Le Monitor affiche le statut, la salle, le nombre d'États présents et l'avancement de l'ordre du jour en temps réel.
+
+## Conflits, crises et zones v0.11
+
+Les incidents ponctuels ne servent plus à représenter à eux seuls une guerre ou une crise longue. Le système possède maintenant un registre séparé :
+
+```text
+CONFLICT-2026-0001
+CONFLICT-2026-0002
+...
+```
+
+Un conflit peut être de type international, interne/civil, frontalier, occupation/contrôle territorial, insurrection ou autre situation RP.
+
+Cycle de vie :
+
+```text
+tension -> active -> ceasefire -> peace_process -> ended
+   |          |          |              |
+   +----------+----------+--------------+
+              transitions contrôlées
+```
+
+Le dossier conserve :
+
+- les États impliqués ;
+- les coalitions, groupes ou parties non étatiques sous forme de description ;
+- la date de début et de fin ;
+- la résolution, le traité ou le dossier judiciaire lié ;
+- le traité de cessez-le-feu éventuel ;
+- la visibilité publique/restreinte ;
+- un sceau initial et un historique de statut scellé.
+
+### Zones et fronts Minecraft
+
+Chaque conflit peut contenir plusieurs zones `ZONE-001`, `ZONE-002`, etc.
+
+Une zone possède :
+
+- un nom et une description ;
+- une dimension ;
+- X / Y / Z ;
+- un rayon ;
+- un statut `active`, `contested`, `demilitarized`, `humanitarian` ou `closed` ;
+- une version ;
+- un sceau `UNS-CFZONE-...`.
+
+Modifier une zone ne détruit pas l'ancienne : sa version précédente et son ancien sceau sont conservés.
+
+Les zones apparaissent automatiquement sur la carte du centre de situation avec la lettre `C`.
+
+### Connexions avec le reste du système
+
+Un incident `INC-...` peut être rattaché à un `CONFLICT-...`.
+
+Une mission `MISSION-...` peut également être déployée dans le cadre d'un conflit. Depuis la fiche du conflit, le poste peut ouvrir directement toutes les missions et tous les incidents liés.
+
+Les conflits peuvent aussi être inscrits à l'ordre du jour d'une session institutionnelle.
+
+Pour afficher un conflit et ses zones sur un Monitor :
+
+```text
+ic conflict CONFLICT-2026-0001
+```
 
 ## Centre de situation et incidents v0.10
 
@@ -584,6 +647,7 @@ ic resolution RES-2026-0001
 ic session SESSION-2026-0001
 ic mission MISSION-2026-0001
 ic incident INC-2026-0001
+ic conflict CONFLICT-2026-0001
 ic situation
 ic situation minecraft:the_nether
 ic treaty TREATY-2026-0001
