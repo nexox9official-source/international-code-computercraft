@@ -608,7 +608,7 @@ referenceBrowser=function(opts)
     if opts.mode=="search" then
       local q=prompt("Recherche article / mot / numero")
       if q=="" then return nil end
-      local found,e=rpc("LAW_LIST",{query=q})
+      local found,e=rpc("LAW_LIST",{query=q,status=opts.status or ""})
       if not found then message("RECHERCHE",e,palette.bad);return nil end
       local chosen=chooseLawFromList("RESULTATS: "..q,found,opts)
       if chosen or opts.pick then return chosen end
@@ -645,7 +645,7 @@ referenceBrowser=function(opts)
           end
         end
       elseif p.id=="all" then
-        local all,e=rpc("LAW_LIST",{query=""})
+        local all,e=rpc("LAW_LIST",{query="",status=opts.status or ""})
         if not all then
           message("CODE",e,palette.bad)
         else
@@ -653,7 +653,7 @@ referenceBrowser=function(opts)
           if chosen then return chosen end
         end
       elseif p.book then
-        local laws,e=rpc("LAW_LIST",{book=p.book.name})
+        local laws,e=rpc("LAW_LIST",{book=p.book.name,status=opts.status or ""})
         if not laws then
           message("CODE",e,palette.bad)
         else
@@ -921,7 +921,10 @@ local function viewLaw(ref)
   end
 end
 
-local function lawsScreen(query)
+local function lawsScreen(query,status)
+  query=query or ""
+  status=status or ""
+
   while true do
     local items={}
     if allowed("lawWrite") then
@@ -929,9 +932,15 @@ local function lawsScreen(query)
     end
     items[#items+1]={text="[L] Parcourir par LIVRE / categorie",id="books"}
     items[#items+1]={text="[?] Rechercher par numero, titre ou mot",id="search"}
+    items[#items+1]={text="[S] Filtrer par statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
     items[#items+1]={text="[*] Afficher tous les articles",id="all"}
+    if query~="" or status~="" then
+      items[#items+1]={text="[R] Reinitialiser les filtres",id="reset"}
+    end
 
-    local pick=menu("CODE INTERNATIONAL",items,"Navigation par categories + recherche instantanee")
+    local subtitle="Categories + recherche"
+    if status~="" then subtitle=subtitle.." / statut "..status end
+    local pick=menu("CODE INTERNATIONAL",items,subtitle)
     if not pick then return end
 
     if pick.id=="new" then
@@ -953,17 +962,17 @@ local function lawsScreen(query)
 
     elseif pick.id=="books" then
       while true do
-        local law=referenceBrowser({mode="browse",manage=true})
+        local law=referenceBrowser({mode="browse",manage=true,status=status})
         if not law then break end
         viewLaw(law.ref)
       end
 
     elseif pick.id=="search" then
       while true do
-        local q=prompt("Recherche",query or "")
+        local q=prompt("Recherche",query)
         if q=="" then break end
         query=q
-        local laws,err=rpc("LAW_LIST",{query=q})
+        local laws,err=rpc("LAW_LIST",{query=q,status=status})
         if not laws then
           message("CODE",err,palette.bad)
           break
@@ -972,8 +981,18 @@ local function lawsScreen(query)
         if law then viewLaw(law.ref) else break end
       end
 
+    elseif pick.id=="status" then
+      local s=menu("FILTRER LES ARTICLES",{
+        {text="Tous les statuts",v=""},
+        {text="Actifs / ratifies",v="active"},
+        {text="Brouillons",v="draft"},
+        {text="Suspendus",v="suspended"},
+        {text="Abroges",v="repealed"}
+      })
+      if s then status=s.v end
+
     elseif pick.id=="all" then
-      local laws,err=rpc("LAW_LIST",{query=""})
+      local laws,err=rpc("LAW_LIST",{query="",status=status})
       if not laws then message("CODE",err,palette.bad)
       else
         while true do
@@ -982,6 +1001,10 @@ local function lawsScreen(query)
           viewLaw(law.ref)
         end
       end
+
+    elseif pick.id=="reset" then
+      query=""
+      status=""
     end
   end
 end
