@@ -572,18 +572,20 @@ local function listMissions(state,payload,actor)
   local missionType=common.trim(payload.missionType)
   local stateId=common.trim(payload.stateId):upper()
   local visibility=common.trim(payload.visibility)
+  local conflictId=common.trim(payload.conflictId):upper()
   local out={}
   for _,m in pairs(state.missions or {}) do
     local hit=(q=="" or common.contains(m.id,q) or common.contains(m.title,q) or common.contains(m.mandate,q) or common.contains(m.area,q))
     local statusHit=(status=="" or m.status==status)
     local typeHit=(missionType=="" or m.missionType==missionType)
     local visibilityHit=(visibility=="" or (m.visibility or "public")==visibility)
+    local conflictHit=(conflictId=="" or m.conflictId==conflictId)
     local stateHit=stateId==""
     if not stateHit then
       if m.leadStateId==stateId then stateHit=true end
       for _,id in ipairs(m.participatingStates or {}) do if id==stateId then stateHit=true break end end
     end
-    if hit and statusHit and typeHit and visibilityHit and stateHit and canViewMission(actor,m) then out[#out+1]=missionForActor(actor,m) end
+    if hit and statusHit and typeHit and visibilityHit and conflictHit and stateHit and canViewMission(actor,m) then out[#out+1]=missionForActor(actor,m) end
   end
   table.sort(out,function(a,b) return tostring(a.id)>tostring(b.id) end)
   return out
@@ -649,6 +651,7 @@ local function listIncidents(state,payload,actor)
   local enforcementId=common.trim(payload.enforcementId):upper()
   local resolutionId=common.trim(payload.resolutionId):upper()
   local treatyId=common.trim(payload.treatyId):upper()
+  local conflictId=common.trim(payload.conflictId):upper()
   local out={}
   for _,incident in pairs(state.incidents or {}) do
     local hit=(q=="" or common.contains(incident.id,q) or common.contains(incident.title,q) or
@@ -663,13 +666,14 @@ local function listIncidents(state,payload,actor)
     local enforcementHit=(enforcementId=="" or incident.enforcementId==enforcementId)
     local resolutionHit=(resolutionId=="" or incident.resolutionId==resolutionId)
     local treatyHit=(treatyId=="" or incident.treatyId==treatyId)
+    local conflictHit=(conflictId=="" or incident.conflictId==conflictId)
     local stateHit=(stateId=="")
     if not stateHit then
       if incident.reportingStateId==stateId then stateHit=true end
       for _,id in ipairs(incident.involvedStates or {}) do if id==stateId then stateHit=true break end end
     end
     if hit and statusHit and typeHit and severityHit and dimensionHit and visibilityHit and
-       missionHit and caseHit and enforcementHit and resolutionHit and treatyHit and
+       missionHit and caseHit and enforcementHit and resolutionHit and treatyHit and conflictHit and
        stateHit and canViewIncident(actor,incident) then
       out[#out+1]=incidentForActor(actor,incident)
     end
@@ -1212,11 +1216,17 @@ local function handleAction(state, actor, action, p)
     local treatyId=common.trim(p.treatyId):upper()
     local caseId=common.trim(p.caseId):upper()
     local enforcementId=common.trim(p.enforcementId):upper()
+    local conflictId=common.trim(p.conflictId):upper()
     if missionId~="" and not state.missions[missionId] then return nil,"Mission liee introuvable." end
     if resolutionId~="" and not state.resolutions[resolutionId] then return nil,"Resolution liee introuvable." end
     if treatyId~="" and not state.treaties[treatyId] then return nil,"Traite lie introuvable." end
     if caseId~="" and not state.cases[caseId] then return nil,"Dossier lie introuvable." end
     if enforcementId~="" and not state.enforcements[enforcementId] then return nil,"Mesure d'execution liee introuvable." end
+    if conflictId~="" then
+      local conflict=state.conflicts[conflictId]
+      if not conflict then return nil,"Conflit lie introuvable." end
+      if not canViewConflict(actor,conflict) then return nil,"Acces refuse au conflit lie." end
+    end
 
     local id=makeIncidentId(state)
     local incident={
@@ -1225,7 +1235,7 @@ local function handleAction(state, actor, action, p)
       area=common.trim(p.area),position=incidentPosition(p,nil),
       involvedStates=involved,reportingStateId=reportingStateId,
       missionId=missionId,resolutionId=resolutionId,treatyId=treatyId,
-      caseId=caseId,enforcementId=enforcementId,
+      caseId=caseId,enforcementId=enforcementId,conflictId=conflictId,
       visibility=p.visibility=="restricted" and "restricted" or "public",
       reports={},statusHistory={},
       createdAt=common.now(),createdBy=actor.label,createdRole=actor.role,updatedAt=common.now()
@@ -1235,7 +1245,7 @@ local function handleAction(state, actor, action, p)
       incident.summary,incident.details,incident.area,incident.position,
       incident.involvedStates,incident.reportingStateId,
       incident.missionId,incident.resolutionId,incident.treatyId,
-      incident.caseId,incident.enforcementId,incident.createdAt,incident.createdBy
+      incident.caseId,incident.enforcementId,incident.conflictId,incident.createdAt,incident.createdBy
     })
     state.incidents[id]=incident
 
@@ -2621,9 +2631,15 @@ local function handleAction(state, actor, action, p)
     local resolutionId=common.trim(p.resolutionId):upper()
     local treatyId=common.trim(p.treatyId):upper()
     local caseId=common.trim(p.caseId):upper()
+    local conflictId=common.trim(p.conflictId):upper()
     if resolutionId~="" and not state.resolutions[resolutionId] then return nil,"Resolution source introuvable." end
     if treatyId~="" and not state.treaties[treatyId] then return nil,"Traite source introuvable." end
     if caseId~="" and not state.cases[caseId] then return nil,"Dossier source introuvable." end
+    if conflictId~="" then
+      local conflict=state.conflicts[conflictId]
+      if not conflict then return nil,"Conflit source introuvable." end
+      if not canViewConflict(actor,conflict) then return nil,"Acces refuse au conflit source." end
+    end
 
     local participants={}
     local seen={}
@@ -2646,7 +2662,7 @@ local function handleAction(state, actor, action, p)
       id=id,title=title,missionType=missionType,mandate=mandate,
       area=common.trim(p.area),position=incidentPosition(p,nil),
       startAt=common.trim(p.startAt),endAt=common.trim(p.endAt),
-      resolutionId=resolutionId,treatyId=treatyId,caseId=caseId,
+      resolutionId=resolutionId,treatyId=treatyId,caseId=caseId,conflictId=conflictId,
       participatingStates=participants,leadStateId=leadStateId,
       commander=common.trim(p.commander),status="planned",
       visibility=p.visibility=="restricted" and "restricted" or "public",
@@ -2654,7 +2670,7 @@ local function handleAction(state, actor, action, p)
     }
     m.mandateSeal=officialSeal("UNS-MISSION-MANDATE",{
       m.id,m.title,m.missionType,m.mandate,m.area,m.position,m.startAt,m.endAt,
-      m.resolutionId,m.treatyId,m.caseId,m.participatingStates,m.leadStateId,m.commander,m.createdAt
+      m.resolutionId,m.treatyId,m.caseId,m.conflictId,m.participatingStates,m.leadStateId,m.commander,m.createdAt
     })
     state.missions[id]=m
 
@@ -2690,6 +2706,15 @@ local function handleAction(state, actor, action, p)
     if p.endAt~=nil then m.endAt=common.trim(p.endAt) end
     if p.commander~=nil then m.commander=common.trim(p.commander) end
     if p.visibility~=nil then m.visibility=p.visibility=="restricted" and "restricted" or "public" end
+    if p.conflictId~=nil then
+      local id=common.trim(p.conflictId):upper()
+      if id~="" then
+        local conflict=state.conflicts[id]
+        if not conflict then return nil,"Conflit source introuvable." end
+        if not canViewConflict(actor,conflict) then return nil,"Acces refuse au conflit source." end
+      end
+      m.conflictId=id
+    end
 
     if type(p.participatingStates)=="table" then
       local participants={}
@@ -2717,7 +2742,7 @@ local function handleAction(state, actor, action, p)
     m.updatedBy=actor.label
     m.mandateSeal=officialSeal("UNS-MISSION-MANDATE",{
       m.id,m.title,m.missionType,m.mandate,m.area,m.position,m.startAt,m.endAt,
-      m.resolutionId,m.treatyId,m.caseId,m.participatingStates,m.leadStateId,m.commander,m.updatedAt
+      m.resolutionId,m.treatyId,m.caseId,m.conflictId,m.participatingStates,m.leadStateId,m.commander,m.updatedAt
     })
     mutate(state,actor,"MISSION_EDIT",m.id,m.title)
     return common.deepcopy(m)
