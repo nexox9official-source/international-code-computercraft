@@ -8,6 +8,8 @@ local files={
   "international_code/public.lua",
   "international_code/national.lua",
   "international_code/national_client.lua",
+  "international_code/national_democracy.lua",
+  "international_code/national_democracy_client.lua",
   "international_code/national_printer.lua",
   "international_code/national_public.lua",
   "international_code/national_services.lua",
