@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.16.0
+
+### Organisations / économie
+- registre permanent `NC-ORG-XXXX` ;
+- entreprises, associations, organismes publics, médias, banques et coopératives ;
+- activité, siège, propriétaires citoyens, statut et historique scellé ;
+- publication au Journal officiel des immatriculations et changements majeurs ;
+- gestion réservée à la Présidence / `MIN-ECO`.
+
+### Licences et permis
+- registre `NC-LIC-AAAA-XXXX` ;
+- titulaires citoyens ou organisations ;
+- portefeuille ministériel dérivé du type de licence ;
+- base légale `NC-ART`, conditions, échéance RP et historique ;
+- séparation stricte des compétences ministérielles ;
+- notifications automatiques des titulaires.
+
+### Amendes
+- registre `NC-FINE-AAAA-XXXX` ;
+- article et version juridique figés à l'émission ;
+- unités de pénalité (UP) + équivalent économique libre ;
+- contestation par le citoyen concerné ;
+- décision parquet / juge ;
+- paiement et annulation tracés et scellés ;
+- notifications au citoyen à chaque étape.
+
+### Dossier individuel
+- synthèse calculée par `NC-CIT` ;
+- licences, amendes, organisations et jugements définitifs liés ;
+- accès personnel + accès police/parquet/justice ;
+- impression du dossier individuel.
+
+### Architecture
+- nouveau module `national_services.lua` ;
+- vérification `NC_VERIFY_SEAL` étendue aux organisations, licences et amendes ;
+- installateur et self-tests étendus.
+
 ## 0.15.0
 
 ### Journal officiel
