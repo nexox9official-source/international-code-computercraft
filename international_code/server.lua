@@ -899,6 +899,161 @@ local function handleAction(state, actor, action, p)
     local out=common.deepcopy(bill); out.tally=billTally(state,bill); return out
   end
 
+  if action == "TREATY_LIST" then return listTreaties(state,p) end
+
+  if action == "TREATY_GET" then
+    local treaty=state.treaties[common.trim(p.id):upper()]
+    if not treaty then return nil,"Traite introuvable." end
+    local out=common.deepcopy(treaty)
+    out.signatureStatus=treatySignatureStatus(state,treaty)
+    return out
+  end
+
+  if action == "TREATY_CREATE" then
+    local title=common.trim(p.title)
+    local body=common.trim(p.body)
+    if title=="" or body=="" then return nil,"Titre et texte du traite obligatoires." end
+
+    local allowedTypes={bilateral=true,multilateral=true,defense=true,trade=true,border=true,ceasefire=true,non_aggression=true,other=true}
+    local treatyType=allowedTypes[p.treatyType] and p.treatyType or "other"
+
+    local parties={}
+    local seen={}
+    for _,raw in ipairs(type(p.parties)=="table" and p.parties or {}) do
+      local id=common.trim(raw):upper()
+      if state.states[id] and not seen[id] then
+        seen[id]=true
+        parties[#parties+1]=id
+      end
+    end
+    table.sort(parties)
+    if #parties<2 then return nil,"Un traite doit comporter au moins deux Etats parties." end
+
+    local id=makeTreatyId(state)
+    local treaty={
+      id=id,title=title,treatyType=treatyType,summary=common.trim(p.summary),body=body,
+      parties=parties,stage="draft",version=1,history={},
+      signatures={},signatureHistory={},
+      createdAt=common.now(),updatedAt=common.now(),createdBy=actor.label
+    }
+    state.treaties[id]=treaty
+    mutate(state,actor,"TREATY_CREATE",id,title.." / "..treatyType)
+    local out=common.deepcopy(treaty);out.signatureStatus=treatySignatureStatus(state,treaty);return out
+  end
+
+  if action == "TREATY_EDIT" then
+    local treaty=state.treaties[common.trim(p.id):upper()]
+    if not treaty then return nil,"Traite introuvable." end
+    if treaty.stage~="draft" then return nil,"Le traite est fige des l'ouverture des signatures." end
+
+    treaty.history=treaty.history or {}
+    treaty.history[#treaty.history+1]={
+      version=treaty.version,title=treaty.title,treatyType=treaty.treatyType,
+      summary=treaty.summary,body=treaty.body,parties=common.deepcopy(treaty.parties),
+      archivedAt=common.now(),archivedBy=actor.label
+    }
+
+    if p.title~=nil and common.trim(p.title)~="" then treaty.title=common.trim(p.title) end
+    if p.summary~=nil then treaty.summary=common.trim(p.summary) end
+    if p.body~=nil and common.trim(p.body)~="" then treaty.body=common.trim(p.body) end
+
+    local allowedTypes={bilateral=true,multilateral=true,defense=true,trade=true,border=true,ceasefire=true,non_aggression=true,other=true}
+    if p.treatyType and allowedTypes[p.treatyType] then treaty.treatyType=p.treatyType end
+
+    if type(p.parties)=="table" then
+      local parties={}
+      local seen={}
+      for _,raw in ipairs(p.parties) do
+        local id=common.trim(raw):upper()
+        if state.states[id] and not seen[id] then seen[id]=true;parties[#parties+1]=id end
+      end
+      table.sort(parties)
+      if #parties<2 then return nil,"Un traite doit comporter au moins deux Etats parties." end
+      treaty.parties=parties
+    end
+
+    treaty.version=(treaty.version or 1)+1
+    treaty.signatures={}
+    treaty.updatedAt=common.now()
+    mutate(state,actor,"TREATY_EDIT",treaty.id,"Version "..treaty.version)
+    local out=common.deepcopy(treaty);out.signatureStatus=treatySignatureStatus(state,treaty);return out
+  end
+
+  if action == "TREATY_OPEN_SIGNATURE" then
+    local treaty=state.treaties[common.trim(p.id):upper()]
+    if not treaty then return nil,"Traite introuvable." end
+    if treaty.stage~="draft" then return nil,"Le traite n'est plus au stade brouillon." end
+    treaty.stage="signing"
+    treaty.signatureTextSeal=officialSeal("UNS-TXT",{treaty.id,treaty.version,treaty.title,treaty.treatyType,treaty.parties,treaty.body})
+    treaty.signingOpenedAt=common.now()
+    treaty.signingOpenedBy=actor.label
+    treaty.updatedAt=common.now()
+    mutate(state,actor,"TREATY_OPEN_SIGNATURE",treaty.id,treaty.signatureTextSeal)
+    local out=common.deepcopy(treaty);out.signatureStatus=treatySignatureStatus(state,treaty);return out
+  end
+
+  if action == "TREATY_SIGN" then
+    local treaty=state.treaties[common.trim(p.id):upper()]
+    if not treaty then return nil,"Traite introuvable." end
+    if treaty.stage~="signing" then return nil,"Les signatures ne sont pas ouvertes." end
+    local st=getClientState(state,actor)
+    if not st then return nil,"Ce terminal delegue n'est rattache a aucun Etat." end
+
+    local isParty=false
+    for _,id in ipairs(treaty.parties or {}) do if id==st.id then isParty=true break end end
+    if not isParty then return nil,"Votre Etat n'est pas partie a ce traite." end
+    if treaty.signatures[st.id] then
+      local out=common.deepcopy(treaty);out.signatureStatus=treatySignatureStatus(state,treaty);return out
+    end
+
+    local signature={
+      stateId=st.id,stateName=st.name,at=common.now(),by=actor.label,
+      seal=officialSeal("UNS-SIGN",{treaty.id,treaty.version,treaty.signatureTextSeal,st.id,st.name,actor.label,common.now()})
+    }
+    treaty.signatures[st.id]=signature
+    treaty.signatureHistory=treaty.signatureHistory or {}
+    treaty.signatureHistory[#treaty.signatureHistory+1]=common.deepcopy(signature)
+    treaty.updatedAt=common.now()
+
+    local sigStatus=treatySignatureStatus(state,treaty)
+    if sigStatus.complete then
+      treaty.stage="ready"
+      treaty.readyAt=common.now()
+    end
+    mutate(state,actor,"TREATY_SIGN",treaty.id,st.id)
+    local out=common.deepcopy(treaty);out.signatureStatus=sigStatus;return out
+  end
+
+  if action == "TREATY_ACTIVATE" then
+    local treaty=state.treaties[common.trim(p.id):upper()]
+    if not treaty then return nil,"Traite introuvable." end
+    local sigStatus=treatySignatureStatus(state,treaty)
+    if treaty.stage~="ready" or not sigStatus.complete then return nil,"Toutes les parties doivent signer avant l'entree en vigueur." end
+    treaty.stage="in_force"
+    treaty.effectiveAt=common.now()
+    treaty.activatedBy=actor.label
+    treaty.activationSeal=officialSeal("UNS-TRT",{treaty.id,treaty.version,treaty.signatureTextSeal,treaty.signatures,treaty.effectiveAt})
+    treaty.updatedAt=common.now()
+    mutate(state,actor,"TREATY_ACTIVATE",treaty.id,treaty.activationSeal)
+    local out=common.deepcopy(treaty);out.signatureStatus=sigStatus;return out
+  end
+
+  if action == "TREATY_TERMINATE" then
+    local treaty=state.treaties[common.trim(p.id):upper()]
+    if not treaty then return nil,"Traite introuvable." end
+    if treaty.stage~="in_force" then return nil,"Seul un traite en vigueur peut etre termine." end
+    local reason=common.trim(p.reason)
+    if reason=="" then return nil,"Motif de fin du traite obligatoire." end
+    treaty.stage="terminated"
+    treaty.terminatedAt=common.now()
+    treaty.terminatedBy=actor.label
+    treaty.terminationReason=reason
+    treaty.terminationSeal=officialSeal("UNS-END",{treaty.id,treaty.activationSeal,treaty.terminatedAt,reason})
+    treaty.updatedAt=common.now()
+    mutate(state,actor,"TREATY_TERMINATE",treaty.id,reason)
+    local out=common.deepcopy(treaty);out.signatureStatus=treatySignatureStatus(state,treaty);return out
+  end
+
   if action == "LAW_BOOKS" then return listBooks(state) end
   if action == "LAW_LIST" then return listLaws(state, p) end
   if action == "LAW_GET" then return common.deepcopy(state.laws[normalizeArticleRef(p.ref)]) end
