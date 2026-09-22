@@ -322,10 +322,13 @@ function C.openElection(id)
 end
 
 local function createElection(info)
-  local office=menu("OFFICE A RENOUVELER",{
-    {text="Presidence de la Coalition",v="president"},
-    {text="Conseil de la Coalition",v="council"}
-  })
+  local officeOptions={}
+  if not info.sovereignAuthorityActive then
+    officeOptions[#officeOptions+1]={text="Presidence de la Coalition",v="president"}
+  end
+  officeOptions[#officeOptions+1]={text="Conseil de la Coalition",v="council"}
+  local office=menu("OFFICE A RENOUVELER",officeOptions,
+    info.sovereignAuthorityActive and "Presidence verrouillee: NexoFr_ demeure dirigeant jusqu'a sa propre renonciation." or nil)
   if not office then return end
   local seats=1
   if office.v=="council" then
@@ -410,10 +413,10 @@ function C.run()
         {label="Electeurs",text="Seuls les NC-CIT au statut citizen au moment de l'ouverture du vote appartiennent au corps electoral. Cette liste est ensuite figee."},
         {label="Vote",text="Une seule voix par NC-CIT. Plusieurs terminaux rattaches au meme citoyen ne creent jamais plusieurs voix. Le dernier vote avant cloture remplace le precedent."},
         {label="Quorum",text="Participation minimale: 50 % des citoyens eligibles, arrondie au nombre entier superieur."},
-        {label="Presidence",text="Au premier tour, un candidat doit obtenir plus de 50 % des suffrages valides. Sinon les deux premiers passent au second tour. Le second tour departage a la pluralite; une egalite finale rend le scrutin non concluant."},
+        {label="Presidence",text=info.sovereignAuthorityActive and "NexoFr_ est dirigeant permanent de North Coalition. Aucune election presidentielle, destitution, motion ou decision d'une autre autorite ne peut le remplacer. Une succession ne peut etre ouverte qu'apres sa propre renonciation volontaire, explicite, authentifiee et enregistree." or "La direction souveraine est vacante apres renonciation volontaire; une election presidentielle peut alors etre organisee selon la procedure en vigueur."},
         {label="Conseil",text="Les candidats sont classes au nombre de voix. Les N premiers obtiennent les sieges. Une egalite au seuil du dernier siege declenche un second tour limite aux candidats a egalite."},
         {label="Incompatibilites",text="Un titulaire de portefeuille ministeriel, un juge, procureur, policier ou agent administratif ne peut pas etre candidat tant que sa fonction incompatible est active."},
-        {label="Fondateur",text="La Presidence fondatrice de NexoFr_ reste en fonction tant qu'aucune election presidentielle conclue n'a transfere regulierement le mandat."}
+        {label="Dirigeant permanent",text="NexoFr_ reste dirigeant et autorite souveraine nationale sans limite de duree. Seul NexoFr_ peut mettre fin a cette qualite par une renonciation volontaire enregistree."}
       })
     end
   end
