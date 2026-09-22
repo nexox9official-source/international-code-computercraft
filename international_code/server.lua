@@ -2911,7 +2911,7 @@ local function serverUI(state, lastEvent)
   term.setCursorPos(2,4)
   term.write("Revision  : " .. tostring(state.meta.revision))
 
-  local lc,cc,cl,sc,bv,rv,sopen,ssched,tr,enf=0,0,0,0,0,0,0,0,0,0
+  local lc,cc,cl,sc,bv,rv,sopen,ssched,mis,tr,enf=0,0,0,0,0,0,0,0,0,0,0
   for _ in pairs(state.laws) do lc=lc+1 end
   for _ in pairs(state.cases) do cc=cc+1 end
   for _ in pairs(state.clients) do cl=cl+1 end
@@ -2921,6 +2921,7 @@ local function serverUI(state, lastEvent)
   for _,sess in pairs(state.sessions or {}) do
     if sess.status=="open" then sopen=sopen+1 elseif sess.status=="scheduled" then ssched=ssched+1 end
   end
+  for _,m in pairs(state.missions or {}) do if m.status=="active" then mis=mis+1 end end
   for _,t in pairs(state.treaties or {}) do if t.stage=="in_force" then tr=tr+1 end end
   for _,e in pairs(state.enforcements or {}) do
     if e.status=="ordered" or e.status=="active" or e.status=="partial" or e.status=="breached" then enf=enf+1 end
@@ -2933,7 +2934,7 @@ local function serverUI(state, lastEvent)
   term.setCursorPos(2,7)
   term.write("Sessions: "..sopen.." ouvertes / "..ssched.." prevues")
   term.setCursorPos(2,8)
-  term.write("Execution: "..enf.." Notifications: "..tostring(#(state.notices or {})))
+  term.write("Missions: "..mis.." Execution: "..enf.." Notif: "..tostring(#(state.notices or {})))
   term.setTextColor(colors.cyan)
   term.setCursorPos(2,10)
   term.write("[P] Appairer un terminal   [B] Backup   [Q] Arreter")
