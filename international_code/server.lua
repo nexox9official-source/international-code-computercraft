@@ -667,6 +667,154 @@ local function handleAction(state, actor, action, p)
     local guarded=state.cases[common.trim(p.id):upper()]
     if guarded and not canViewCase(actor,guarded) then return nil,"Acces refuse a ce dossier." end
   end
+  if action == "NOTICE_LIST" then
+    return listNotices(state,actor,p)
+  end
+
+  if action == "NOTICE_MARK_READ" then
+    local id=common.trim(p.id)
+    for _,n in ipairs(state.notices or {}) do
+      if n.id==id and noticeVisible(actor,n) then
+        n.readBy=n.readBy or {}
+        n.readBy[actor.clientId]=true
+        saveState(state)
+        return {ok=true,id=id}
+      end
+    end
+    return nil,"Notification introuvable."
+  end
+
+  if action == "NOTICE_MARK_ALL" then
+    local count=0
+    for _,n in ipairs(state.notices or {}) do
+      if noticeVisible(actor,n) then
+        n.readBy=n.readBy or {}
+        if not n.readBy[actor.clientId] then
+          n.readBy[actor.clientId]=true
+          count=count+1
+        end
+      end
+    end
+    saveState(state)
+    return {count=count}
+  end
+
+  if action == "ENFORCEMENT_LIST" then
+    return listEnforcements(state,actor,p)
+  end
+
+  if action == "ENFORCEMENT_GET" then
+    local e=state.enforcements[common.trim(p.id):upper()]
+    if not e then return nil,"Mesure d'execution introuvable." end
+    if not canViewEnforcement(actor,e) then return nil,"Acces refuse a cette mesure." end
+    return common.deepcopy(e)
+  end
+
+  if action == "ENFORCEMENT_CREATE" then
+    local caseId=common.trim(p.caseId):upper()
+    local case=nil
+    if caseId~="" then
+      case=state.cases[caseId]
+      if not case then return nil,"Dossier lie introuvable." end
+      if not canViewCase(actor,case) then return nil,"Acces refuse au dossier lie." end
+    end
+
+    local targetStateId=common.trim(p.targetStateId):upper()
+    local targetName=common.trim(p.targetName)
+    if targetStateId~="" then
+      local st=state.states[targetStateId]
+      if not st then return nil,"Etat cible introuvable." end
+      if targetName=="" then targetName=st.name end
+    end
+    if targetName=="" then return nil,"Cible obligatoire." end
+
+    local enforcementType=common.trim(p.enforcementType)
+    if enforcementType=="" then enforcementType="other" end
+    local terms=common.trim(p.terms)
+    if terms=="" then return nil,"Conditions d'execution obligatoires." end
+
+    local id=makeEnforcementId(state)
+    local e={
+      id=id,caseId=caseId,judgmentId=common.trim(p.judgmentId),
+      targetType=common.trim(p.targetType),targetStateId=targetStateId,targetName=targetName,
+      enforcementType=enforcementType,summary=common.trim(p.summary),terms=terms,
+      amount=common.trim(p.amount),deadline=common.trim(p.deadline),
+      status="ordered",visibility=p.visibility=="public" and "public" or "restricted",
+      progress={},statusHistory={},
+      createdAt=common.now(),createdBy=actor.label,updatedAt=common.now()
+    }
+    if e.targetType=="" then e.targetType=targetStateId~="" and "state" or "other" end
+    e.seal=officialSeal("CIU-ENF",{e.id,e.caseId,e.judgmentId,e.targetType,e.targetStateId,e.targetName,e.enforcementType,e.summary,e.terms,e.amount,e.deadline,e.createdAt,e.createdBy})
+    state.enforcements[id]=e
+
+    if targetStateId~="" then
+      pushNotice(state,{
+        title="Nouvelle mesure d'execution "..id,
+        body=e.enforcementType.." / "..e.summary,
+        severity="warning",objectType="enforcement",objectId=id,targetStateId=targetStateId
+      })
+    end
+    pushNotice(state,{
+      title="Mesure d'execution enregistree",
+      body=id.." / "..targetName,
+      severity="info",objectType="enforcement",objectId=id,
+      roles={judge=true,clerk=true,admin=true}
+    })
+
+    mutate(state,actor,"ENFORCEMENT_CREATE",id,targetName.." / "..enforcementType)
+    return common.deepcopy(e)
+  end
+
+  if action == "ENFORCEMENT_ADD_PROGRESS" then
+    local e=state.enforcements[common.trim(p.id):upper()]
+    if not e then return nil,"Mesure d'execution introuvable." end
+    if not canViewEnforcement(actor,e) then return nil,"Acces refuse a cette mesure." end
+    local note=common.trim(p.note)
+    if note=="" then return nil,"Compte rendu vide." end
+    e.progress=e.progress or {}
+    local row={
+      id=#e.progress+1,note=note,at=common.now(),by=actor.label,
+      reference=common.trim(p.reference)
+    }
+    row.seal=officialSeal("CIU-ENFLOG",{e.id,row.id,row.note,row.reference,row.at,row.by})
+    e.progress[#e.progress+1]=row
+    e.updatedAt=common.now()
+    mutate(state,actor,"ENFORCEMENT_ADD_PROGRESS",e.id,note:sub(1,100))
+    return common.deepcopy(e)
+  end
+
+  if action == "ENFORCEMENT_UPDATE" then
+    local e=state.enforcements[common.trim(p.id):upper()]
+    if not e then return nil,"Mesure d'execution introuvable." end
+    local allowed={ordered=true,active=true,partial=true,complied=true,breached=true,lifted=true,expired=true}
+    if not allowed[p.status] then return nil,"Statut d'execution invalide." end
+    if e.status==p.status and common.trim(p.reason)=="" then return common.deepcopy(e) end
+
+    local previous=e.status
+    local reason=common.trim(p.reason)
+    e.statusHistory=e.statusHistory or {}
+    local row={
+      from=previous,to=p.status,reason=reason,at=common.now(),by=actor.label
+    }
+    row.seal=officialSeal("CIU-ENFSTAT",{e.id,row.from,row.to,row.reason,row.at,row.by,e.seal})
+    e.statusHistory[#e.statusHistory+1]=row
+    e.status=p.status
+    e.updatedAt=common.now()
+    e.updatedBy=actor.label
+
+    if e.targetStateId and e.targetStateId~="" then
+      pushNotice(state,{
+        title="Mise a jour execution "..e.id,
+        body=previous.." -> "..p.status..(reason~="" and (" / "..reason) or ""),
+        severity=p.status=="breached" and "critical" or "info",
+        objectType="enforcement",objectId=e.id,targetStateId=e.targetStateId
+      })
+    end
+
+    mutate(state,actor,"ENFORCEMENT_UPDATE",e.id,previous.." -> "..p.status..(reason~="" and (" / "..reason) or ""))
+    return common.deepcopy(e)
+  end
+
   if action == "VERIFY_SEAL" then
     local seal=common.trim(p.seal):upper()
     if seal=="" then return nil,"Sceau vide." end
