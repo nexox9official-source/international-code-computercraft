@@ -3,14 +3,14 @@ local S = {}
 
 local permissions = {
   viewer = {
-    PING=true, DASHBOARD=true, SERVER_INFO=true,
+    PING=true, DASHBOARD=true, SERVER_INFO=true, VERIFY_SEAL=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
     BILL_LIST=true, BILL_GET=true, TREATY_LIST=true, TREATY_GET=true
   },
   writer = {
-    PING=true, DASHBOARD=true, SERVER_INFO=true,
+    PING=true, DASHBOARD=true, SERVER_INFO=true, VERIFY_SEAL=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
@@ -21,7 +21,7 @@ local permissions = {
     AUDIT_LIST=true
   },
   clerk = {
-    PING=true, DASHBOARD=true, SERVER_INFO=true,
+    PING=true, DASHBOARD=true, SERVER_INFO=true, VERIFY_SEAL=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
@@ -31,7 +31,7 @@ local permissions = {
     AUDIT_LIST=true
   },
   judge = {
-    PING=true, DASHBOARD=true, SERVER_INFO=true,
+    PING=true, DASHBOARD=true, SERVER_INFO=true, VERIFY_SEAL=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
@@ -42,7 +42,7 @@ local permissions = {
     AUDIT_LIST=true
   },
   delegate = {
-    PING=true, DASHBOARD=true, SERVER_INFO=true,
+    PING=true, DASHBOARD=true, SERVER_INFO=true, VERIFY_SEAL=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
@@ -555,6 +555,92 @@ local function handleAction(state, actor, action, p)
     local guarded=state.cases[common.trim(p.id):upper()]
     if guarded and not canViewCase(actor,guarded) then return nil,"Acces refuse a ce dossier." end
   end
+  if action == "VERIFY_SEAL" then
+    local seal=common.trim(p.seal):upper()
+    if seal=="" then return nil,"Sceau vide." end
+
+    for _,c in pairs(state.cases or {}) do
+      ensureCaseShape(c)
+      local visible=canViewCase(actor,c)
+      for _,j in ipairs(c.judgments or {}) do
+        if tostring(j.seal or ""):upper()==seal then
+          return {
+            valid=true,kind="judgment",seal=seal,parentId=c.id,
+            title=visible and c.title or "Document judiciaire confidentiel",
+            reference="J"..tostring(j.id or "?"),status=j.final and "final" or "intermediate",
+            issuedAt=j.date,issuedBy=visible and j.judge or nil,confidential=not visible
+          }
+        end
+      end
+      for _,h in ipairs(c.hearings or {}) do
+        if tostring(h.seal or ""):upper()==seal then
+          return {
+            valid=true,kind="hearing",seal=seal,parentId=c.id,
+            title=visible and h.subject or "Document judiciaire confidentiel",
+            reference=h.id,status=h.status,issuedAt=h.createdAt,
+            issuedBy=visible and h.createdBy or nil,confidential=not visible
+          }
+        end
+      end
+      for _,o in ipairs(c.orders or {}) do
+        if tostring(o.seal or ""):upper()==seal then
+          return {
+            valid=true,kind="order",seal=seal,parentId=c.id,
+            title=visible and o.subject or "Document judiciaire confidentiel",
+            reference=o.id,status=o.status,issuedAt=o.createdAt,
+            issuedBy=visible and o.createdBy or nil,confidential=not visible
+          }
+        end
+      end
+      for _,a in ipairs(c.appeals or {}) do
+        if tostring(a.seal or ""):upper()==seal then
+          return {
+            valid=true,kind="appeal_filing",seal=seal,parentId=c.id,
+            title=visible and ("Appel "..(a.id or "")) or "Document judiciaire confidentiel",
+            reference=a.id,status=a.status,issuedAt=a.filedAt,
+            issuedBy=visible and a.filedBy or nil,confidential=not visible
+          }
+        end
+        if tostring(a.decisionSeal or ""):upper()==seal then
+          return {
+            valid=true,kind="appeal_decision",seal=seal,parentId=c.id,
+            title=visible and ("Decision d'appel "..(a.id or "")) or "Document judiciaire confidentiel",
+            reference=a.id,status=a.result,issuedAt=a.decidedAt,
+            issuedBy=visible and a.decidedBy or nil,confidential=not visible
+          }
+        end
+      end
+    end
+
+    for _,bill in pairs(state.bills or {}) do
+      if tostring(bill.resultSeal or ""):upper()==seal then
+        return {valid=true,kind="vote_result",seal=seal,parentId=bill.id,title=bill.title,status=bill.result,issuedAt=bill.closedAt,issuedBy=bill.closedBy}
+      end
+      if tostring(bill.enactmentSeal or ""):upper()==seal then
+        return {valid=true,kind="promulgation",seal=seal,parentId=bill.id,title=bill.title,status=bill.stage,issuedAt=bill.enactedAt,issuedBy=bill.enactedBy}
+      end
+    end
+
+    for _,t in pairs(state.treaties or {}) do
+      if tostring(t.signatureTextSeal or ""):upper()==seal then
+        return {valid=true,kind="treaty_text",seal=seal,parentId=t.id,title=t.title,status=t.stage,issuedAt=t.signingOpenedAt,issuedBy=t.signingOpenedBy}
+      end
+      if tostring(t.activationSeal or ""):upper()==seal then
+        return {valid=true,kind="treaty_activation",seal=seal,parentId=t.id,title=t.title,status=t.stage,issuedAt=t.effectiveAt,issuedBy=t.activatedBy}
+      end
+      if tostring(t.terminationSeal or ""):upper()==seal then
+        return {valid=true,kind="treaty_termination",seal=seal,parentId=t.id,title=t.title,status=t.stage,issuedAt=t.terminatedAt,issuedBy=t.terminatedBy}
+      end
+      for stateId,sig in pairs(t.signatures or {}) do
+        if tostring(sig.seal or ""):upper()==seal then
+          return {valid=true,kind="treaty_signature",seal=seal,parentId=t.id,title=t.title,reference=stateId,status="signed",issuedAt=sig.at,issuedBy=sig.by,stateName=sig.stateName}
+        end
+      end
+    end
+
+    return {valid=false,seal=seal}
+  end
+
   if action == "PING" then return { pong=true, time=common.now(), revision=state.meta.revision } end
   if action == "SERVER_INFO" then
     return { meta=state.meta, clientsCount=(function() local n=0 for _ in pairs(state.clients) do n=n+1 end return n end)() }
