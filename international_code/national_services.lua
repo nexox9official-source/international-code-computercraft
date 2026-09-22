@@ -51,6 +51,8 @@ local function ensure(n)
   n.licenseCounters=n.licenseCounters or {}
   n.fines=n.fines or {}
   n.fineCounters=n.fineCounters or {}
+  n.requests=n.requests or {}
+  n.requestCounters=n.requestCounters or {}
 end
 
 local function citizen(n,id)
@@ -262,6 +264,70 @@ function S.ensure(n)
   ensure(n)
 end
 
+local function canCreateRequest(n,actor)
+  local cit=actor and actor.citizenId and citizen(n,actor.citizenId) or nil
+  return cit and cit.status=="citizen"
+end
+
+local function requestAuthority(actor,req)
+  if technicalAdmin(actor) or role(actor)=="president" then return true end
+  return role(actor)=="minister" and actor.ministryCode==req.targetMinistry
+end
+
+local function requestVisible(actor,req)
+  return requestAuthority(actor,req) or (actor and actor.citizenId and actor.citizenId==req.applicantCitizenId)
+end
+
+local function requestTargetForType(requestType,p)
+  if requestType=="license" then return licenseAuthority(p.licenseKind or p.kind) or "PRESIDENCE" end
+  if requestType=="organization" then return "MIN-ECO" end
+  local target=trim(p.targetMinistry):upper()
+  return target~="" and target or "PRESIDENCE"
+end
+
+local function listRequests(n,p,actor)
+  p=p or {}
+  local q=trim(p.query)
+  local status=trim(p.status)
+  local requestType=trim(p.requestType)
+  local ministry=trim(p.targetMinistry):upper()
+  local out={}
+  for _,req in pairs(n.requests or {}) do
+    local hit=q=="" or common.contains(req.id,q) or common.contains(req.title,q) or
+      common.contains(req.body,q) or common.contains(req.applicantIdentity,q) or common.contains(req.targetMinistry,q)
+    if requestVisible(actor,req) and hit and (status=="" or req.status==status) and
+       (requestType=="" or req.requestType==requestType) and
+       (ministry=="" or req.targetMinistry==ministry) then
+      out[#out+1]=copy(req)
+    end
+  end
+  table.sort(out,function(a,b) return tostring(a.id)>tostring(b.id) end)
+  return out
+end
+
+local function addRequestHistory(req,event,actorValue,details)
+  req.history=req.history or {}
+  local row={event=event,at=common.now(),by=actorValue,details=details or ""}
+  row.seal=seal("NC-REQ-HIST",{req.id,row.event,row.at,row.by,row.details,req.seal})
+  req.history[#req.history+1]=row
+  req.updatedAt=row.at
+  return row
+end
+
+local function notifyMinistry(ctx,state,targetMinistry,title,body,objectId)
+  if not ctx or not ctx.notice then return end
+  for _,cl in pairs(state.clients or {}) do
+    if (cl.nationalRole=="minister" and cl.ministryCode==targetMinistry) or
+       (cl.nationalRole=="president") or
+       (cl.role=="admin" and (not cl.nationalRole or cl.nationalRole=="admin")) then
+      ctx.notice({
+        title=title,body=body,severity="info",
+        objectType="nc_request",objectId=objectId,targetClientId=cl.clientId
+      })
+    end
+  end
+end
+
 function S.verifySeal(n,wanted)
   wanted=trim(wanted):upper()
   if wanted=="" then return nil end
@@ -292,6 +358,16 @@ function S.verifySeal(n,wanted)
     for _,h in ipairs(f.history or {}) do
       if tostring(h.seal or ""):upper()==wanted then
         return {kind="fine_history",objectId=f.id,title="Amende / "..tostring(h.event),issuedAt=h.at,issuedBy=h.by}
+      end
+    end
+  end
+  for _,req in pairs(n.requests or {}) do
+    if tostring(req.seal or ""):upper()==wanted then
+      return {kind="administrative_request",objectId=req.id,title=req.title,issuedAt=req.createdAt,issuedBy=req.applicantIdentity}
+    end
+    for _,h in ipairs(req.history or {}) do
+      if tostring(h.seal or ""):upper()==wanted then
+        return {kind="administrative_request_history",objectId=req.id,title=req.title.." / "..tostring(h.event),issuedAt=h.at,issuedBy=h.by}
       end
     end
   end
@@ -507,6 +583,133 @@ function S.handle(state,actor,action,p,ctx)
     notifyCitizen(ctx,state,n,fine.citizenId,"Amende annulee",fine.id.." / "..reason,"success","nc_fine",fine.id)
     if ctx and ctx.mutate then ctx.mutate("NC_FINE_VOID",fine.id,reason) end
     return true,copy(fine)
+  end
+
+  if action=="NC_REQUEST_LIST" then
+    return true,listRequests(n,p,actor)
+  end
+
+  if action=="NC_REQUEST_GET" then
+    local req=n.requests[trim(p.id):upper()]
+    if not req then return true,nil,"Demande administrative introuvable." end
+    if not requestVisible(actor,req) then return true,nil,"Acces refuse a cette demande." end
+    return true,copy(req)
+  end
+
+  if action=="NC_REQUEST_CREATE" then
+    if not canCreateRequest(n,actor) then return true,nil,"Un citoyen actif rattache au terminal est requis." end
+    local requestType=trim(p.requestType)
+    local valid={license=true,organization=true,administrative=true}
+    if not valid[requestType] then return true,nil,"Type de demande invalide." end
+    local title=trim(p.title)
+    local body=trim(p.body)
+    if title=="" or body=="" then return true,nil,"Titre et motivation obligatoires." end
+    local applicant=citizen(n,actor.citizenId)
+    local target=requestTargetForType(requestType,p)
+    local id=nextYearId(n.requestCounters,"NC-REQ")
+    local req={
+      id=id,requestType=requestType,status="submitted",
+      applicantCitizenId=applicant.id,applicantIdentity=applicant.identity,
+      targetMinistry=target,title=title,body=body,
+      createdAt=common.now(),createdBy=identity(actor),updatedAt=common.now(),
+      legalBasis=trim(p.legalBasis),history={},resultObjectId=nil
+    }
+    if req.legalBasis~="" and not law(n,ctx,req.legalBasis) then return true,nil,"Base legale introuvable." end
+
+    if requestType=="license" then
+      local kind=trim(p.licenseKind):lower()
+      if kind=="" then return true,nil,"Type de licence demande obligatoire." end
+      req.payload={
+        kind=kind,title=trim(p.licenseTitle)~="" and trim(p.licenseTitle) or ("Licence "..kind),
+        holderType="citizen",holderId=applicant.id,
+        expiresAt=trim(p.expiresAt),conditionsRequested=trim(p.conditionsRequested)
+      }
+    elseif requestType=="organization" then
+      local validKinds={company=true,association=true,public_body=true,media=true,bank=true,cooperative=true}
+      local kind=validKinds[p.organizationKind] and p.organizationKind or "company"
+      local name=trim(p.organizationName)
+      local activity=trim(p.activity)
+      if name=="" or activity=="" then return true,nil,"Nom et activite de l'organisation obligatoires." end
+      req.payload={
+        kind=kind,name=name,activity=activity,registeredAddress=trim(p.registeredAddress),
+        ownerCitizenIds={applicant.id}
+      }
+    else
+      req.payload={targetMinistry=target}
+    end
+
+    req.seal=seal("NC-REQ",{req.id,req.requestType,req.applicantCitizenId,req.targetMinistry,req.title,req.body,req.legalBasis,req.payload,req.createdAt})
+    addRequestHistory(req,"submitted",req.applicantIdentity,"Demande deposee")
+    n.requests[id]=req
+    notifyMinistry(ctx,state,target,"Nouvelle demande administrative",id.." / "..title.." / "..applicant.identity,id)
+    if ctx and ctx.mutate then ctx.mutate("NC_REQUEST_CREATE",id,requestType.." / "..target.." / "..applicant.id) end
+    return true,copy(req)
+  end
+
+  if action=="NC_REQUEST_START_REVIEW" then
+    local req=n.requests[trim(p.id):upper()]
+    if not req then return true,nil,"Demande introuvable." end
+    if not requestAuthority(actor,req) then return true,nil,"Cette demande releve de "..req.targetMinistry.."." end
+    if req.status~="submitted" then return true,nil,"Cette demande n'est pas en attente initiale." end
+    req.status="in_review";req.reviewedBy=identity(actor);req.reviewStartedAt=common.now()
+    addRequestHistory(req,"in_review",req.reviewedBy,trim(p.note))
+    notifyCitizen(ctx,state,n,req.applicantCitizenId,"Demande en cours d'instruction",req.id.." / "..req.title,"info","nc_request",req.id)
+    if ctx and ctx.mutate then ctx.mutate("NC_REQUEST_START_REVIEW",req.id,req.targetMinistry) end
+    return true,copy(req)
+  end
+
+  if action=="NC_REQUEST_WITHDRAW" then
+    local req=n.requests[trim(p.id):upper()]
+    if not req then return true,nil,"Demande introuvable." end
+    if not actor.citizenId or actor.citizenId~=req.applicantCitizenId then return true,nil,"Seul le demandeur peut retirer cette demande." end
+    if req.status~="submitted" and req.status~="in_review" then return true,nil,"Cette demande ne peut plus etre retiree." end
+    req.status="withdrawn";req.withdrawnAt=common.now();req.withdrawnBy=identity(actor)
+    addRequestHistory(req,"withdrawn",req.withdrawnBy,trim(p.reason))
+    if ctx and ctx.mutate then ctx.mutate("NC_REQUEST_WITHDRAW",req.id,trim(p.reason)) end
+    return true,copy(req)
+  end
+
+  if action=="NC_REQUEST_DECIDE" then
+    local req=n.requests[trim(p.id):upper()]
+    if not req then return true,nil,"Demande introuvable." end
+    if not requestAuthority(actor,req) then return true,nil,"Decision reservee a "..req.targetMinistry.." ou a la Presidence." end
+    if req.status~="submitted" and req.status~="in_review" then return true,nil,"Demande deja finalisee." end
+    local decision=(p.decision=="approved" or p.decision=="rejected") and p.decision or nil
+    if not decision then return true,nil,"Decision invalide." end
+    local reasoning=trim(p.reasoning)
+    if reasoning=="" then return true,nil,"Motivation de la decision obligatoire." end
+
+    local resultObject=nil
+    if decision=="approved" and req.requestType=="license" then
+      local payload=copy(req.payload or {})
+      local _,lic,err=S.handle(state,actor,"NC_LICENSE_ISSUE",{
+        kind=payload.kind,title=payload.title,holderType="citizen",holderId=req.applicantCitizenId,
+        legalBasis=req.legalBasis,expiresAt=payload.expiresAt,
+        conditions=trim(p.conditions)~="" and trim(p.conditions) or payload.conditionsRequested,
+        notes="Delivree apres approbation de "..req.id
+      },ctx)
+      if not lic then return true,nil,err or "Impossible de delivrer la licence." end
+      resultObject=lic.id
+    elseif decision=="approved" and req.requestType=="organization" then
+      local payload=copy(req.payload or {})
+      local _,o,err=S.handle(state,actor,"NC_ORG_CREATE",{
+        name=payload.name,kind=payload.kind,activity=payload.activity,
+        registeredAddress=payload.registeredAddress,ownerCitizenIds=payload.ownerCitizenIds
+      },ctx)
+      if not o then return true,nil,err or "Impossible d'immatriculer l'organisation." end
+      resultObject=o.id
+    end
+
+    req.status=decision;req.decision=decision;req.decisionReason=reasoning
+    req.decidedAt=common.now();req.decidedBy=identity(actor);req.resultObjectId=resultObject
+    local h=addRequestHistory(req,decision,req.decidedBy,reasoning..(resultObject and (" / resultat "..resultObject) or ""))
+    req.decisionSeal=seal("NC-REQ-DEC",{req.id,decision,reasoning,resultObject,req.decidedAt,req.decidedBy,req.seal,h.seal})
+    notifyCitizen(ctx,state,n,req.applicantCitizenId,
+      decision=="approved" and "Demande approuvee" or "Demande rejetee",
+      req.id.." / "..req.title..(resultObject and (" / "..resultObject) or ""),
+      decision=="approved" and "success" or "warning","nc_request",req.id)
+    if ctx and ctx.mutate then ctx.mutate("NC_REQUEST_DECIDE",req.id,decision.." / "..tostring(resultObject or "-")) end
+    return true,copy(req)
   end
 
   if action=="NC_RECORD_GET" then
