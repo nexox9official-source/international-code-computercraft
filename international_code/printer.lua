@@ -156,4 +156,60 @@ function P.timeline(case)
   return printLines((case.id or "DOSSIER").."-CHRONO",lines)
 end
 
+
+function P.hearingNotice(case, hearing)
+  if not hearing then return false,"Audience introuvable." end
+  local lines={}
+  appendWrapped(lines,"AVIS D'AUDIENCE",case.id or "-",25)
+  appendWrapped(lines,"AFFAIRE",case.title or "-",25)
+  appendWrapped(lines,"OBJET",hearing.subject or "-",25)
+  appendWrapped(lines,"DATE / HEURE",hearing.scheduledFor or "-",25)
+  appendWrapped(lines,"LIEU",hearing.location or "-",25)
+  appendWrapped(lines,"STATUT",hearing.status or "-",25)
+  appendWrapped(lines,"NOTES",hearing.notes or "",25)
+  appendWrapped(lines,"EMIS PAR",hearing.createdBy or "-",25)
+  return printLines((case.id or "DOSSIER").."-"..(hearing.id or "AUDIENCE"),lines)
+end
+
+function P.order(case, order)
+  if not order then return false,"Ordonnance introuvable." end
+  local lines={}
+  appendWrapped(lines,"ORDONNANCE / MANDAT",case.id or "-",25)
+  appendWrapped(lines,"REFERENCE",order.id or "-",25)
+  appendWrapped(lines,"TYPE",order.orderType or "order",25)
+  appendWrapped(lines,"AFFAIRE",case.title or "-",25)
+  appendWrapped(lines,"OBJET",order.subject or "-",25)
+  appendWrapped(lines,"CONTENU",order.body or "",25)
+  appendWrapped(lines,"STATUT",order.status or "-",25)
+  appendWrapped(lines,"EXPIRATION",order.expiresAt or "-",25)
+  appendWrapped(lines,"JUGE",order.createdBy or "-",25)
+  appendWrapped(lines,"DATE",order.createdAt or "-",25)
+  return printLines((case.id or "DOSSIER").."-"..(order.id or "ORDRE"),lines)
+end
+
+function P.bill(bill)
+  if not bill then return false,"Proposition introuvable." end
+  local lines={}
+  appendWrapped(lines,"PROPOSITION LEGISLATIVE",bill.id or "-",25)
+  appendWrapped(lines,"TITRE",bill.title or "-",25)
+  appendWrapped(lines,"ETAPE",bill.stage or "-",25)
+  appendWrapped(lines,"TYPE",bill.proposalType or "-",25)
+  if bill.targetRef and bill.targetRef~="" then appendWrapped(lines,"ARTICLE CIBLE",bill.targetRef,25) end
+  appendWrapped(lines,"RESUME",bill.summary or "",25)
+  appendWrapped(lines,"TITRE PROPOSE",bill.proposedTitle or "",25)
+  appendWrapped(lines,"TEXTE PROPOSE",bill.proposedBody or "",25)
+  appendWrapped(lines,"LIVRE",bill.proposedBook or "",25)
+  appendWrapped(lines,"SECTION",bill.proposedSection or "",25)
+  appendWrapped(lines,"REGLE DE VOTE",bill.threshold or "",25)
+  if bill.tally then
+    appendWrapped(lines,"RESULTATS",
+      "Pour: "..tostring(bill.tally.yes or 0)..
+      " / Contre: "..tostring(bill.tally.no or 0)..
+      " / Abstention: "..tostring(bill.tally.abstain or 0)..
+      " / Membres: "..tostring(bill.tally.eligible or 0),25)
+  end
+  if bill.enactedRef then appendWrapped(lines,"PROMULGUE",bill.enactedRef,25) end
+  return printLines(bill.id or "PROPOSITION",lines)
+end
+
 return P
