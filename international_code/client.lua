@@ -1500,21 +1500,60 @@ function C.doctor()
   cfg=common.loadConfig()
   common.openModems()
   clear()
-  bar("DIAGNOSTIC")
+  bar("DIAGNOSTIC v"..common.VERSION)
   local y=4
-  at(2,y,"Configuration: "..(cfg and "OK" or "ABSENTE"),cfg and palette.ok or palette.bad)
-  y=y+1
-  local modems=common.openModems()
-  at(2,y,"Modem(s): "..modems,modems>0 and palette.ok or palette.bad)
-  y=y+1
-  local pa,pn=printer.available()
-  at(2,y,"Imprimante: "..(pa and pn or "absente"),pa and palette.ok or palette.warn)
-  y=y+1
-  if cfg and cfg.role~="server" then
-    local d,e=rpc("PING",{},3)
-    at(2,y,"Serveur: "..(d and "OK" or ("ERREUR - "..tostring(e))),d and palette.ok or palette.bad)
+
+  local function check(label,ok,detail)
+    at(2,y,label..": "..(ok and "OK" or "ERREUR")..(detail and (" - "..detail) or ""),ok and palette.ok or palette.bad)
+    y=y+1
   end
-  wait()
+
+  check("Configuration",cfg~=nil,cfg and (cfg.role or "?") or "absente")
+
+  local required={
+    "/ic.lua",
+    "/international_code/common.lua",
+    "/international_code/server.lua",
+    "/international_code/client.lua",
+    "/international_code/printer.lua"
+  }
+  local missing={}
+  for _,path in ipairs(required) do if not fs.exists(path) then missing[#missing+1]=path end end
+  check("Fichiers programme",#missing==0,#missing==0 and (#required.." presents") or table.concat(missing,", "))
+
+  local seedCount=0
+  local seedOk=true
+  for i=1,5 do
+    local path=string.format("/international_code/seed/%03d.lua",i)
+    if not fs.exists(path) then
+      seedOk=false
+    else
+      local ok,t=pcall(dofile,path)
+      if not ok or type(t)~="table" then seedOk=false else seedCount=seedCount+#t end
+    end
+  end
+  check("Corpus juridique",seedOk and seedCount==500,tostring(seedCount).."/500 articles")
+
+  local modems=common.openModems()
+  check("Modem",modems>0,tostring(modems).." detecte(s)")
+
+  local pa,pn=printer.available()
+  at(2,y,"Imprimante: "..(pa and ("OK - "..pn) or "optionnelle / absente"),pa and palette.ok or palette.warn)
+  y=y+1
+
+  if cfg and cfg.role~="server" then
+    local d,e=rpc("SERVER_INFO",{},3)
+    check("Serveur",d~=nil,d and ("#"..tostring(cfg.serverId)) or tostring(e))
+    if d then
+      local sv=tostring(d.meta and d.meta.version or "?")
+      check("Versions",sv==common.VERSION,"client "..common.VERSION.." / serveur "..sv)
+    end
+  elseif cfg and cfg.role=="server" then
+    check("Etat serveur local",fs.exists(common.STATE),fs.exists(common.STATE) and "base presente" or "base absente")
+  end
+
+  footer("ic update si une version ou un fichier est incorrect")
+  os.pullEvent("key")
 end
 
 return C
