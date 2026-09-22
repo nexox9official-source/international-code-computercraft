@@ -43,6 +43,13 @@ local function hasAccess(state,actor)
   return nationalRole(state,actor)~=nil
 end
 
+local function isNationalMember(state,actor)
+  if not actor then return false end
+  if actor.nationalRole and actor.nationalRole~="" then return true end
+  local n=state.national
+  return n and actor.stateId and actor.stateId==(n.meta.stateId or NORTH_STATE_ID) or false
+end
+
 local function roleIs(state,actor,...)
   local r=nationalRole(state,actor)
   for i=1,select("#",...) do if r==select(i,...) then return true end end
@@ -319,16 +326,18 @@ end
 local function uniqueEligibleIdentities(state,electorate)
   local seen,out={},{}
   for _,cl in pairs(state.clients or {}) do
-    local r=nationalRole(state,cl)
-    local allowed=false
-    if electorate=="council" then
-      allowed=(r=="president" or r=="council")
-    elseif electorate=="citizen" then
-      allowed=(r~=nil and r~="public")
-    end
-    if allowed then
-      local id=identity(cl)
-      if id~="" and not seen[id] then seen[id]=true;out[#out+1]=id end
+    if isNationalMember(state,cl) then
+      local r=cl.nationalRole or "citizen"
+      local allowed=false
+      if electorate=="council" then
+        allowed=(r=="president" or r=="council")
+      elseif electorate=="citizen" then
+        allowed=(r~="public")
+      end
+      if allowed then
+        local id=identity(cl)
+        if id~="" and not seen[id] then seen[id]=true;out[#out+1]=id end
+      end
     end
   end
   table.sort(out)
@@ -405,7 +414,7 @@ local function appointMinister(state,n,ctx,actor,ministry,target,mode,sourceId,r
   if ministry.holderClientId then return nil,"Ce ministere possede deja un titulaire. Revoquez ou faites demissionner le titulaire avant remplacement." end
   if target.nationalRole=="president" then return nil,"Le terminal presidentiel ne peut pas etre converti en poste ministeriel." end
   if target.ministryCode and target.ministryCode~="" then return nil,"Ce terminal detient deja un portefeuille ministeriel." end
-  if not hasAccess(state,target) and target.role~="admin" then return nil,"Le candidat n'est pas autorise sur l'intranet national." end
+  if not isNationalMember(state,target) then return nil,"Le candidat doit d'abord etre enregistre comme membre de l'intranet national." end
 
   target.nationalRole="minister"
   target.ministryCode=ministry.code
@@ -706,7 +715,7 @@ function N.handle(state,actor,action,p,ctx)
     if e.stage~="draft" then return nil,"Les candidatures sont verrouillees apres ouverture." end
     local target=state.clients[common.trim(p.clientId)]
     if not target then return nil,"Terminal candidat introuvable." end
-    if not hasAccess(state,target) and target.role~="admin" then return nil,"Candidat hors intranet national." end
+    if not isNationalMember(state,target) then return nil,"Le candidat doit d'abord etre enregistre dans North Coalition." end
     if target.nationalRole=="president" or (target.ministryCode and target.ministryCode~="") then return nil,"Candidat deja titulaire d'une fonction incompatible." end
     for _,c in ipairs(e.candidates) do if c.clientId==target.clientId then return copy(e) end end
     e.candidates[#e.candidates+1]={clientId=target.clientId,identity=identity(target),addedAt=common.now()}
