@@ -1,5 +1,6 @@
 local common = dofile("/international_code/common.lua")
 local services = dofile("/international_code/national_services.lua")
+local finance = dofile("/international_code/national_finance.lua")
 
 local N = {}
 local CORPUS_PATH = "/international_code/national/corpus_v2.json"
@@ -225,6 +226,7 @@ function N.ensure(state)
   end
   n.nextCitizen=math.max(tonumber(n.nextCitizen) or 1,maxCitizen+1)
   services.ensure(n)
+  finance.ensure(n)
   n.nationalAudit=n.nationalAudit or {}
 
   local corpus=loadCorpus()
@@ -1043,6 +1045,11 @@ function N.handle(state,actor,action,p,ctx)
       return result(svc.kind,svc.objectId,svc.title,svc.issuedAt,svc.issuedBy,false)
     end
 
+    local fin=finance.findSeal(n,wanted)
+    if fin then
+      return result(fin.kind,fin.objectId,fin.title,fin.issuedAt,fin.issuedBy,false)
+    end
+
     return {valid=false,seal=wanted}
   end
 
@@ -1084,6 +1091,7 @@ function N.handle(state,actor,action,p,ctx)
     end
     local unreadNational=0
     for _,row in ipairs(listNationalNotices(ctx,state,actor,{unreadOnly=true})) do if not row.read then unreadNational=unreadNational+1 end end
+    local finSummary=finance.summary(n)
     return {
       laws=total,activeLaws=active,draftLaws=draft,repealedLaws=repealed,
       categories=#(n.categories or {}),ministries=ministriesTotal,filledMinistries=filled,
@@ -1091,6 +1099,8 @@ function N.handle(state,actor,action,p,ctx)
       openElections=openElections,votingBills=votingBills,publishedDecrees=publishedDecrees,
       openCases=openCases,openSessions=openSessions,scheduledSessions=scheduledSessions,
       pendingRequests=pendingRequests,unreadNotices=unreadNational,
+      treasuryBalanceUB=finSummary.balanceUB,treasuryUnit=finSummary.unit,
+      currentBudgetId=finSummary.currentBudgetId,pendingExpenses=finSummary.pendingExpenses,
       foundingMode=n.meta.foundingMode,presidentIdentity=n.meta.presidentIdentity,
       nationalRole=nationalRole(state,actor),nationalIdentity=identity(actor),ministryCode=actor.ministryCode
     }
@@ -2203,6 +2213,18 @@ function N.handle(state,actor,action,p,ctx)
     appeal.gazetteId=gaz.id
     mutate(ctx,state,actor,"NC_CASE_DECIDE_APPEAL",case.id,appeal.id.." / "..appeal.result.." / "..gaz.id)
     return copy(case)
+  end
+
+  do
+    local handled,data,err=finance.handle(state,actor,action,p,{
+      getLaw=getLaw,
+      mutate=function(a,obj,details) return mutate(ctx,state,actor,a,obj,details) end,
+      notice=function(spec) return notice(ctx,state,spec) end,
+      gazette=function(kind,objectId,title,summary,sourceSeal,visibility)
+        return publishGazette(n,actor,kind,objectId,title,summary,sourceSeal,visibility)
+      end
+    })
+    if handled then return data,err end
   end
 
   do
