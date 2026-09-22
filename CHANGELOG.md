@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.12.0
+
+### Intranet North Coalition
+- second espace juridique interne sur le même serveur central ;
+- commande `ic nc` ;
+- contrôle d'accès national séparé des rôles internationaux ;
+- bootstrap sécurisé de la Présidence fondatrice sous l'identité `NexoFr_` ;
+- rôles nationaux président / conseil / ministre / justice / police / administration / citoyen ;
+- journal d'audit national en plus du journal global.
+
+### Code national
+- import exact de `NC-CORPUS-400-V2.0` ;
+- 400 articles `NC-ART-001` à `NC-ART-400` ;
+- 20 catégories juridiques ;
+- navigation branche -> catégorie -> Livre -> Titre -> Chapitre -> article ;
+- références métier `NC-<CAT>-XXX` ;
+- recherche plein texte et par métadonnées ;
+- impression des articles nationaux.
+
+### Gouvernement
+- registre des 11 ministères ;
+- titulaire, portefeuille, compétences, vacance et historique ;
+- nomination directe contrôlée ;
+- phase fondatrice ;
+- délai sans vote de 48 h par défaut ;
+- déblocage après deux scrutins échoués ;
+- révocation motivée et tracée ;
+- sceaux de nomination et de fin de mandat.
+
+### Elections ministérielles
+- identifiants `NC-ELECT-AAAA-XXXX` ;
+- vote du Conseil ou vote citoyen ;
+- corps électoral figé à l'ouverture ;
+- une voix par identité nationale ;
+- quorum de participation ;
+- détection des égalités / absence de vainqueur ;
+- installation automatique du candidat régulièrement élu ;
+- les administrateurs non enregistrés dans North Coalition ne sont pas ajoutés au corps électoral.
+
+### Législation nationale
+- projets `NC-BILL-AAAA-XXXX` ;
+- amendement, abrogation, ratification de catégorie et création d'article ;
+- vote Conseil ou référendum ;
+- majorité simple, majorité absolue ou deux tiers ;
+- promulgation réservée à la Présidence ;
+- versionnement des articles et conservation des anciennes versions.
+
+### Décrets
+- actes `NC-DEC-AAAA-XXXX` ;
+- décrets nationaux présidentiels ;
+- décrets ministériels limités au portefeuille du ministre ;
+- base légale facultative vérifiée ;
+- sceaux de publication et d'abrogation.
+
+### Installation / tests
+- nouveau corpus JSON téléchargé par l'installateur ;
+- nouveaux modules `national.lua`, `national_client.lua`, `national_printer.lua` ;
+- self-test étendu aux 400 articles nationaux ;
+- CI vérifie le nombre d'articles, les 20 catégories et l'identité fondatrice.
+
 ## 0.11.0
 
 ### Conflits et crises
