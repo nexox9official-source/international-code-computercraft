@@ -1516,17 +1516,18 @@ local function serverUI(state, lastEvent)
   term.setCursorPos(2,4)
   term.write("Revision  : " .. tostring(state.meta.revision))
 
-  local lc,cc,cl,sc,bv=0,0,0,0,0
+  local lc,cc,cl,sc,bv,tr=0,0,0,0,0,0
   for _ in pairs(state.laws) do lc=lc+1 end
   for _ in pairs(state.cases) do cc=cc+1 end
   for _ in pairs(state.clients) do cl=cl+1 end
   for _,st in pairs(state.states or {}) do if st.status=="member" then sc=sc+1 end end
   for _,bill in pairs(state.bills or {}) do if bill.stage=="voting" then bv=bv+1 end end
+  for _,t in pairs(state.treaties or {}) do if t.stage=="in_force" then tr=tr+1 end end
 
   term.setCursorPos(2,5)
   term.write("Articles: "..lc.." Dossiers: "..cc.." Clients: "..cl)
   term.setCursorPos(2,6)
-  term.write("Etats: "..sc.." Votes ouverts: "..bv)
+  term.write("Etats: "..sc.." Votes: "..bv.." Traites: "..tr)
   term.setTextColor(colors.cyan)
   term.setCursorPos(2,8)
   term.write("[P] Appairer un terminal   [B] Backup   [Q] Arreter")
