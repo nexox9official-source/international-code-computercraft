@@ -180,6 +180,7 @@ function N.newState()
     elections={},electionCounters={},
     decrees={},decreeCounters={},
     cases={},caseCounters={},
+    sessions={},sessionCounters={},
     citizens={},nextCitizen=1,
     nationalAudit={}
   }
@@ -210,6 +211,8 @@ function N.ensure(state)
   n.decreeCounters=n.decreeCounters or {}
   n.cases=n.cases or {}
   n.caseCounters=n.caseCounters or {}
+  n.sessions=n.sessions or {}
+  n.sessionCounters=n.sessionCounters or {}
   n.citizens=n.citizens or {}
   local maxCitizen=0
   for id in pairs(n.citizens) do
@@ -754,6 +757,86 @@ local function notifyNationalCase(ctx,state,case,title,body,severity)
   end
 end
 
+
+local function nationalSessionManager(state,actor)
+  local r=nationalRole(state,actor)
+  return technicalNationalAdmin(actor) or r=="president" or r=="council"
+end
+
+local function canViewNationalSession(state,actor,sess)
+  if not actor or not sess then return false end
+  if technicalNationalAdmin(actor) then return true end
+  local visibility=sess.visibility or "internal"
+  if visibility~="restricted" then return hasAccess(state,actor) end
+  local r=nationalRole(state,actor)
+  return r=="president" or r=="council" or r=="minister" or r=="judge" or r=="prosecutor"
+end
+
+local function listNationalSessions(n,p,state,actor)
+  p=p or {}
+  local q=common.trim(p.query)
+  local status=common.trim(p.status)
+  local sessionType=common.trim(p.sessionType)
+  local out={}
+  for _,sess in pairs(n.sessions or {}) do
+    local hit=(q=="" or common.contains(sess.id,q) or common.contains(sess.title,q) or
+      common.contains(sess.description,q) or common.contains(sess.location,q))
+    if hit and (status=="" or sess.status==status) and
+       (sessionType=="" or sess.sessionType==sessionType) and
+       canViewNationalSession(state,actor,sess) then
+      local row=copy(sess)
+      row.attendanceCount=0
+      for _ in pairs(sess.attendance or {}) do row.attendanceCount=row.attendanceCount+1 end
+      out[#out+1]=row
+    end
+  end
+  table.sort(out,function(a,b)
+    if a.status~=b.status then
+      local rank={open=4,scheduled=3,closed=2,cancelled=1}
+      return (rank[a.status] or 0)>(rank[b.status] or 0)
+    end
+    return tostring(a.id)>tostring(b.id)
+  end)
+  return out
+end
+
+local function nationalSessionEligible(n,state,actor,sess)
+  if technicalNationalAdmin(actor) then return true end
+  if not isVotingCitizen(n,actor) then return false end
+  local r=nationalRole(state,actor)
+  if sess.sessionType=="council" then return r=="president" or r=="council" end
+  if sess.sessionType=="cabinet" then return r=="president" or r=="minister" end
+  if sess.sessionType=="emergency" then
+    return r=="president" or r=="council" or r=="minister" or r=="judge" or r=="prosecutor" or r=="police"
+  end
+  if sess.sessionType=="committee" then return r~="public" and r~="citizen" end
+  return r~="public"
+end
+
+local function agendaObjectTitle(n,state,actor,kind,ref)
+  ref=common.trim(ref):upper()
+  if kind=="law" then
+    local x=getLaw(n,ref);return x and x.title or nil
+  elseif kind=="bill" then
+    local x=n.bills[ref];return x and x.title or nil
+  elseif kind=="election" then
+    local x=n.elections[ref];return x and x.title or nil
+  elseif kind=="decree" then
+    local x=n.decrees[ref];return x and x.title or nil
+  elseif kind=="case" then
+    local x=n.cases[ref]
+    if x and canViewNationalCase(state,actor,x) then return x.title end
+    return nil
+  elseif kind=="ministry" then
+    local x=n.ministries[ref];return x and x.name or nil
+  elseif kind=="citizen" then
+    local x=n.citizens[ref];return x and x.displayName or nil
+  elseif kind=="custom" then
+    return ref~="" and ref or nil
+  end
+  return nil
+end
+
 function N.handle(state,actor,action,p,ctx)
   p=p or {}
   local n=N.ensure(state)
@@ -825,6 +908,11 @@ function N.handle(state,actor,action,p,ctx)
     for _,case in pairs(n.cases or {}) do
       if case.status~="closed" and case.status~="archived" then openCases=openCases+1 end
     end
+    local openSessions,scheduledSessions=0,0
+    for _,sess in pairs(n.sessions or {}) do
+      if sess.status=="open" then openSessions=openSessions+1
+      elseif sess.status=="scheduled" then scheduledSessions=scheduledSessions+1 end
+    end
     local unreadNational=0
     for _,row in ipairs(listNationalNotices(ctx,state,actor,{unreadOnly=true})) do if not row.read then unreadNational=unreadNational+1 end end
     return {
@@ -832,7 +920,7 @@ function N.handle(state,actor,action,p,ctx)
       categories=#(n.categories or {}),ministries=ministriesTotal,filledMinistries=filled,
       citizens=citizens,activeCitizens=activeCitizens,
       openElections=openElections,votingBills=votingBills,publishedDecrees=publishedDecrees,
-      openCases=openCases,unreadNotices=unreadNational,
+      openCases=openCases,openSessions=openSessions,scheduledSessions=scheduledSessions,unreadNotices=unreadNational,
       foundingMode=n.meta.foundingMode,presidentIdentity=n.meta.presidentIdentity,
       nationalRole=nationalRole(state,actor),nationalIdentity=identity(actor),ministryCode=actor.ministryCode
     }
