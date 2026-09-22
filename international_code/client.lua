@@ -831,6 +831,7 @@ end
 
 
 local enforcementsScreen
+local createEnforcement
 
 local roleAllows={
   lawWrite={writer=true,admin=true},
@@ -1390,6 +1391,7 @@ local function caseDetails(id)
       {text="Audiences ("..#c.hearings..")",id="hearings"},
       {text="Ordonnances / mandats ("..#c.orders..")",id="orders"},
       {text="Appels ("..#c.appeals..")",id="appeals"},
+      {text="Execution / sanctions / reparations",id="enforcement"},
       {text="Consulter les jugements ("..#c.judgments..")",id="judgments"},
       {text="Imprimer le dossier complet",id="print"},
       {text="Imprimer la chronologie",id="printtimeline"}
@@ -1459,6 +1461,9 @@ local function caseDetails(id)
 
     elseif a.id=="appeals" then
       appealsScreen(c)
+
+    elseif a.id=="enforcement" then
+      enforcementsScreen("","","",c.id)
 
     elseif a.id=="judgments" then
       judgmentsScreen(c)
@@ -1540,16 +1545,22 @@ local function caseDetails(id)
       })
       if r then
         local latest=r.judgments and r.judgments[#r.judgments] or nil
-        local nextAction=menu("JUGEMENT ENREGISTRE",{
+        local postItems={
           {text="Revenir au dossier",id="back"},
           {text="Lire le jugement",id="read"},
           {text="Imprimer le jugement maintenant",id="print"}
-        },"Decision archivee avec les versions des articles citees.")
+        }
+        if allowed("enforcementWrite") and latest then
+          postItems[#postItems+1]={text="Creer le suivi d'execution de ce jugement",id="enforcement"}
+        end
+        local nextAction=menu("JUGEMENT ENREGISTRE",postItems,"Decision archivee avec les versions des articles citees.")
         if nextAction and nextAction.id=="read" and latest then
           judgmentDetails(r,latest)
         elseif nextAction and nextAction.id=="print" and latest then
           local ok,pages=printer.judgment(r,latest)
           message("IMPRESSION",ok and ("Jugement imprime: "..pages.." page(s).") or pages,ok and palette.ok or palette.bad)
+        elseif nextAction and nextAction.id=="enforcement" and latest then
+          createEnforcement(r.id,tostring(latest.id or ""))
         end
       else
         message("JUGEMENT",e,palette.bad)
@@ -2350,7 +2361,7 @@ local function chooseStateTarget()
   return p and p.state or nil
 end
 
-local function createEnforcement(prefillCaseId,prefillJudgmentId)
+createEnforcement=function(prefillCaseId,prefillJudgmentId)
   local targetKind=menu("CIBLE DE LA MESURE",{
     {text="Etat membre / candidat",v="state"},
     {text="Personne",v="person"},
