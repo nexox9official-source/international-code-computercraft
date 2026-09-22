@@ -2627,6 +2627,150 @@ local function financeScreen(info)
   end
 end
 
+local function chooseBulletinAudience(info,currentAudience,currentMinistry)
+  local choices={
+    {text="Tous les citoyens / acces national",v="citizens"},
+    {text="Institutions et agents publics",v="institutions"},
+    {text="Un ministere precis",v="ministry"},
+    {text="Justice uniquement",v="judicial"},
+    {text="Justice + securite",v="security"}
+  }
+  local picked=menu("AUDIENCE DU BULLETIN",choices,currentAudience and ("Actuelle: "..currentAudience) or nil)
+  if not picked then return nil,nil end
+
+  local ministryCode=""
+  if picked.v=="ministry" then
+    if info.nationalRole=="minister" and info.ministryCode then
+      ministryCode=info.ministryCode
+    else
+      local rows=rpc("NC_MINISTRY_LIST",{}) or {}
+      local items={}
+      for _,m in ipairs(rows) do items[#items+1]={text=m.code.." / "..m.name,m=m} end
+      local x=menu("MINISTERE DESTINATAIRE",items,#items.." ministere(s)")
+      if not x then return nil,nil end
+      ministryCode=x.m.code
+    end
+  elseif currentMinistry and picked.v=="ministry" then
+    ministryCode=currentMinistry
+  end
+  return picked.v,ministryCode
+end
+
+local function bulletinDetails(id,info)
+  while true do
+    local row,err=rpc("NC_NET_BULLETIN_GET",{id=id})
+    if not row then message("BULLETIN INTERNE",err,palette.bad);return end
+    info=rpc("NC_INFO",{}) or info or {}
+
+    local manager=(info.nationalRole=="admin" or info.nationalRole=="president" or
+      (info.nationalRole=="minister" and info.ministryCode==row.ministryCode) or
+      (row.createdByClientId and cfg and cfg.clientId==row.createdByClientId))
+    local actions={{text="Lire le bulletin complet",id="read"}}
+    if row.status=="draft" and manager then
+      actions[#actions+1]={text="Modifier le brouillon",id="edit"}
+      actions[#actions+1]={text="Publier officiellement",id="publish"}
+    elseif row.status=="published" and manager then
+      actions[#actions+1]={text="Archiver le bulletin",id="archive"}
+    end
+
+    local a=menu(row.id.." - "..row.title,actions,
+      (row.audience or "").." / "..(row.status or "")..
+      (row.ministryCode and row.ministryCode~="" and (" / "..row.ministryCode) or ""))
+    if not a then return end
+
+    if a.id=="read" then
+      local hist={}
+      for _,h in ipairs(row.history or {}) do
+        hist[#hist+1]=(h.at or "").." / "..(h.event or "").." / "..(h.by or "")..
+          "\nSceau: "..(h.seal or "-")
+      end
+      textPage(row.id,{
+        {label="Titre",text=row.title or ""},
+        {label="Resume",text=row.summary or "-"},
+        {label="Audience",text=(row.audience or "")..(row.ministryCode and row.ministryCode~="" and (" / "..row.ministryCode) or "")},
+        {label="Statut",text=row.status or ""},
+        {label="Auteur",text=(row.authorIdentity or "").." / "..(row.authorRole or "")},
+        {label="Creation",text=row.createdAt or ""},
+        {label="Publication",text=(row.publishedAt or "-").." / "..(row.publishedBy or "-")},
+        {label="Contenu",text=row.body or ""},
+        {label="Sceau brouillon",text=row.draftSeal or "-"},
+        {label="Sceau publication",text=row.publishSeal or "-"},
+        {label="Sceau archivage",text=row.archiveSeal or "-"},
+        {label="Historique",text=#hist>0 and table.concat(hist,"\n\n") or "Aucun"}
+      })
+    elseif a.id=="edit" then
+      local title=prompt("Titre",row.title or "")
+      local summary=multi("RESUME DU BULLETIN",row.summary or "")
+      local body=multi("CONTENU DU BULLETIN",row.body or "")
+      local audience,ministryCode=chooseBulletinAudience(info,row.audience,row.ministryCode)
+      if audience then
+        local out,e=rpc("NC_NET_BULLETIN_EDIT",{
+          id=row.id,title=title,summary=summary,body=body,
+          audience=audience,ministryCode=ministryCode
+        })
+        message("BULLETIN",out and "Brouillon mis a jour." or e,out and palette.accent or palette.bad)
+      end
+    elseif a.id=="publish" then
+      local confirm=menu("PUBLIER LE BULLETIN",{
+        {text="Confirmer la publication et le scellement",id="yes"},
+        {text="Annuler",id="no"}
+      },"Audience: "..tostring(row.audience)..(row.ministryCode~="" and (" / "..row.ministryCode) or ""))
+      if confirm and confirm.id=="yes" then
+        local out,e=rpc("NC_NET_BULLETIN_PUBLISH",{id=row.id})
+        message("BULLETIN",out and ("Publie / sceau "..tostring(out.publishSeal)) or e,out and palette.accent or palette.bad)
+      end
+    elseif a.id=="archive" then
+      local out,e=rpc("NC_NET_BULLETIN_ARCHIVE",{id=row.id})
+      message("BULLETIN",out and "Bulletin archive." or e,out and palette.accent or palette.bad)
+    end
+  end
+end
+
+local function bulletinsScreen(info)
+  local query,status="",""
+  while true do
+    info=rpc("NC_INFO",{}) or info or {}
+    local rows,err=rpc("NC_NET_BULLETIN_LIST",{query=query,status=status})
+    if not rows then message("BULLETINS INTERNES",err,palette.bad);return end
+    local canCreate=(info.nationalRole=="admin" or info.nationalRole=="president" or
+      info.nationalRole=="council" or info.nationalRole=="minister")
+    local items={}
+    if canCreate then items[#items+1]={text="[+] Rediger un bulletin officiel",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
+    if query~="" or status~="" then items[#items+1]={text="[R] Reinitialiser",id="reset"} end
+    for _,row in ipairs(rows) do
+      items[#items+1]={
+        text=row.id.." ["..row.status.."] ["..row.audience.."] "..row.title,
+        bulletin=row
+      }
+    end
+    local p=menu("COMMUNICATIONS OFFICIELLES / NORTHNET",items,#rows.." bulletin(s) visible(s)")
+    if not p then return end
+
+    if p.id=="new" then
+      local title=prompt("Titre du bulletin")
+      local summary=multi("RESUME COURT","")
+      local body=multi("CONTENU OFFICIEL","")
+      local audience,ministryCode=chooseBulletinAudience(info)
+      if audience then
+        local out,e=rpc("NC_NET_BULLETIN_CREATE",{
+          title=title,summary=summary,body=body,audience=audience,ministryCode=ministryCode
+        })
+        message("BULLETIN",out and ("Brouillon cree: "..out.id) or e,out and palette.accent or palette.bad)
+      end
+    elseif p.id=="search" then query=prompt("Recherche bulletin",query)
+    elseif p.id=="status" then
+      local st=menu("STATUT",{
+        {text="Tous",v=""},{text="Brouillons autorises",v="draft"},
+        {text="Publies",v="published"},{text="Archives",v="archived"}
+      })
+      if st then status=st.v end
+    elseif p.id=="reset" then query="";status=""
+    elseif p.bulletin then bulletinDetails(p.bulletin.id,info) end
+  end
+end
+
 local function nationalNotices(info)
   while true do
     local rows,err=rpc("NC_NOTICE_LIST",{})
@@ -2667,7 +2811,8 @@ local function nationalNotices(info)
       elseif n.objectType=="nc_request" then actions[#actions+1]={text="Ouvrir la demande",id="open"}
       elseif n.objectType=="nc_budget" then actions[#actions+1]={text="Ouvrir le budget",id="open"}
       elseif n.objectType=="nc_expense" then actions[#actions+1]={text="Ouvrir la depense",id="open"}
-      elseif n.objectType=="nc_contract" then actions[#actions+1]={text="Ouvrir le marche public",id="open"} end
+      elseif n.objectType=="nc_contract" then actions[#actions+1]={text="Ouvrir le marche public",id="open"}
+      elseif n.objectType=="nc_network_bulletin" then actions[#actions+1]={text="Ouvrir le bulletin interne",id="open"} end
       local a=menu(n.title or n.id,actions,(n.severity or "info").." / "..(n.createdAt or ""))
       if a and a.id=="read" then
         textPage(n.id,{
@@ -2692,7 +2837,8 @@ local function nationalNotices(info)
         elseif n.objectType=="nc_request" then requestDetails(n.objectId,info)
         elseif n.objectType=="nc_budget" then budgetDetails(n.objectId,info)
         elseif n.objectType=="nc_expense" then expenseDetails(n.objectId,info)
-        elseif n.objectType=="nc_contract" then contractDetails(n.objectId,info) end
+        elseif n.objectType=="nc_contract" then contractDetails(n.objectId,info)
+        elseif n.objectType=="nc_network_bulletin" then bulletinDetails(n.objectId,info) end
       end
     end
   end
@@ -2810,7 +2956,8 @@ local function portalInstitutionsHub(info,dash)
       {text="ELECTIONS NATIONALES / PRESIDENCE / CONSEIL",id="democracy"},
       {text="SCRUTINS MINISTERIELS",id="elections"},
       {text="SESSIONS / CONSEIL / CABINET / ORDRE DU JOUR",id="sessions"},
-      {text="JOURNAL OFFICIEL INSTITUTIONNEL",id="gazette"}
+      {text="JOURNAL OFFICIEL INSTITUTIONNEL",id="gazette"},
+      {text="COMMUNICATIONS OFFICIELLES / NORTHNET",id="bulletins"}
     }
     local p=menu("INSTITUTIONS NATIONALES",items,
       "President: "..tostring((dash and dash.presidentIdentity) or "-")..
@@ -2820,7 +2967,8 @@ local function portalInstitutionsHub(info,dash)
     elseif p.id=="democracy" then dofile("/international_code/national_democracy_client.lua").run()
     elseif p.id=="elections" then C.electionsScreen()
     elseif p.id=="sessions" then sessionsScreen(info)
-    elseif p.id=="gazette" then gazetteScreen(info) end
+    elseif p.id=="gazette" then gazetteScreen(info)
+    elseif p.id=="bulletins" then bulletinsScreen(info) end
   end
 end
 
@@ -2958,6 +3106,7 @@ function C.run()
       items[#items+1]={text="[!] NOTIFICATIONS PRIORITAIRES ("..tostring(dash.unreadNotices)..")",id="notices"}
     end
     items[#items+1]={text="[?] RECHERCHE NATIONALE / LOIS / ACTES / INSTITUTIONS",id="search"}
+    items[#items+1]={text="COMMUNICATIONS OFFICIELLES / BULLETINS NORTHNET",id="bulletins"}
     items[#items+1]={text="MON ESPACE / IDENTITE / DEMANDES / VOTE",id="my"}
     items[#items+1]={text="DROIT / CODE NATIONAL / JOURNAL OFFICIEL",id="law"}
     items[#items+1]={text="INSTITUTIONS / GOUVERNEMENT / ELECTIONS",id="institutions"}
@@ -2979,6 +3128,7 @@ function C.run()
     if not p or p.id=="back" then clear();return end
     if p.id=="notices" then nationalNotices(info)
     elseif p.id=="search" then portalSearchScreen(info)
+    elseif p.id=="bulletins" then bulletinsScreen(info)
     elseif p.id=="my" then portalMySpace(info,dash)
     elseif p.id=="law" then portalLawHub(info,dash)
     elseif p.id=="institutions" then portalInstitutionsHub(info,dash)
