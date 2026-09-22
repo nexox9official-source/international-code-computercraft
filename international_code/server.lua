@@ -4,6 +4,8 @@ local S = {}
 local permissions = {
   viewer = {
     PING=true, DASHBOARD=true, SERVER_INFO=true, VERIFY_SEAL=true,
+    NOTICE_LIST=true, NOTICE_MARK_READ=true, NOTICE_MARK_ALL=true,
+    ENFORCEMENT_LIST=true, ENFORCEMENT_GET=true,
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true,
     STATE_LIST=true, STATE_GET=true,
@@ -27,6 +29,7 @@ local permissions = {
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
     CASE_REMOVE_ARTICLE=true, CASE_SET_STATUS=true,
     CASE_ADD_HEARING=true, CASE_SET_HEARING_STATUS=true, CASE_FILE_APPEAL=true,
+    ENFORCEMENT_ADD_PROGRESS=true,
     STATE_LIST=true, STATE_GET=true, BILL_LIST=true, BILL_GET=true, TREATY_LIST=true, TREATY_GET=true,
     AUDIT_LIST=true
   },
@@ -38,6 +41,7 @@ local permissions = {
     CASE_REMOVE_ARTICLE=true, CASE_ADD_JUDGMENT=true, CASE_SET_STATUS=true, CASE_SET_VISIBILITY=true,
     CASE_ADD_HEARING=true, CASE_SET_HEARING_STATUS=true, CASE_FILE_APPEAL=true, CASE_DECIDE_APPEAL=true,
     CASE_ADD_ORDER=true, CASE_SET_ORDER_STATUS=true,
+    ENFORCEMENT_CREATE=true, ENFORCEMENT_UPDATE=true, ENFORCEMENT_ADD_PROGRESS=true,
     STATE_LIST=true, STATE_GET=true, BILL_LIST=true, BILL_GET=true, TREATY_LIST=true, TREATY_GET=true,
     AUDIT_LIST=true
   },
@@ -156,6 +160,10 @@ local function freshState()
     billCounters = {},
     treaties = {},
     treatyCounters = {},
+    enforcements = {},
+    enforcementCounters = {},
+    notices = {},
+    noticeCounter = 0,
     clients = {},
     pairing = nil,
     audit = {}
@@ -180,6 +188,10 @@ local function loadState()
   state.billCounters = state.billCounters or {}
   state.treaties = state.treaties or {}
   state.treatyCounters = state.treatyCounters or {}
+  state.enforcements = state.enforcements or {}
+  state.enforcementCounters = state.enforcementCounters or {}
+  state.notices = state.notices or {}
+  state.noticeCounter = state.noticeCounter or 0
   state.meta = state.meta or {}
 
   if next(state.states)==nil then
@@ -206,7 +218,7 @@ local function loadState()
   end
 
   state.meta.version = common.VERSION
-  state.meta.schema = math.max(tonumber(state.meta.schema) or 1,2)
+  state.meta.schema = math.max(tonumber(state.meta.schema) or 1,3)
   return state
 end
 
