@@ -133,7 +133,7 @@ Le réseau gère maintenant une couche institutionnelle complète en plus du Cod
 - rôle `delegate` dédié aux représentants des États ;
 - un administrateur rattache chaque terminal délégué à un État précis ;
 - une proposition législative reçoit un identifiant `BILL-AAAA-XXXX` ;
-- proposition de **nouvel article** ou d'**amendement d'un article existant** ;
+- proposition de **nouvel article**, d'**amendement d'un article existant** ou de **ratification groupée** d'un lot d'articles déjà rédigés ;
 - phases `draft`, `debate`, `voting`, puis adoption/rejet ;
 - scrutin **une voix par État**, même si plusieurs terminaux représentent le même État ;
 - choix POUR / CONTRE / ABSTENTION ;
@@ -142,6 +142,7 @@ Le réseau gère maintenant une couche institutionnelle complète en plus du Cod
 - plusieurs tours possibles lorsqu'un scrutin échoue faute de quorum ;
 - majorité simple, majorité absolue, deux tiers des votes exprimés ou trois quarts de tous les membres ;
 - une proposition adoptée peut être **promulguée directement dans le Code** ;
+- un seul vote peut ratifier tout un Livre ou un lot d'articles grâce au panier juridique et au bouton « ajouter toute cette liste » ;
 - un nouvel article reçoit automatiquement le prochain numéro disponible ;
 - un amendement promulgué crée automatiquement une nouvelle version de l'article et archive l'ancienne.
 
@@ -192,13 +193,19 @@ L'écran alterne toutes les quelques secondes entre :
 - dossiers judiciaires publics ;
 - derniers articles actifs.
 
-Pour afficher un dossier public précis dans une salle d'audience :
+Pour afficher un dossier public précis dans une salle d'audience avec actualisation automatique :
 
 ```text
 ic display CASE-2026-0001
 ```
 
-Un clic sur le Monitor passe aussi à la page publique suivante.
+Pour transformer un Monitor de l'Assemblée en **tableau de scrutin en direct** :
+
+```text
+ic assembly BILL-2026-0001
+```
+
+Le tableau actualise toutes les trois secondes les voix POUR/CONTRE/ABSTENTION, la participation, le quorum et les votes des États. Un clic sur le Monitor du registre public passe à la page suivante.
 
 ## Imprimante
 
@@ -234,6 +241,7 @@ ic pair <role>
 ic backup
 ic public
 ic display CASE-2026-0001
+ic assembly BILL-2026-0001
 ic doctor
 ic update
 ic help
