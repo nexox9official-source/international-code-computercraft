@@ -484,6 +484,7 @@ function P.mission(m)
   appendWrapped(lines,"RESOLUTION",m.resolutionId or "-",25)
   appendWrapped(lines,"TRAITE",m.treatyId or "-",25)
   appendWrapped(lines,"DOSSIER",m.caseId or "-",25)
+  appendWrapped(lines,"CONFLIT",m.conflictId or "-",25)
   appendWrapped(lines,"ETAT RESPONSABLE",m.leadStateId or "-",25)
   appendWrapped(lines,"RESPONSABLE / COMMANDEMENT",m.commander or "-",25)
   appendWrapped(lines,"ETATS PARTICIPANTS",table.concat(m.participatingStates or {},"\n"),25)
@@ -546,6 +547,7 @@ function P.incident(incident)
   appendWrapped(lines,"TRAITE",incident.treatyId or "-",25)
   appendWrapped(lines,"DOSSIER",incident.caseId or "-",25)
   appendWrapped(lines,"EXECUTION",incident.enforcementId or "-",25)
+  appendWrapped(lines,"CONFLIT",incident.conflictId or "-",25)
   appendWrapped(lines,"VISIBILITE",incident.visibility or "public",25)
   appendWrapped(lines,"SCEAU INITIAL",incident.seal or "-",25)
 
@@ -579,6 +581,62 @@ function P.incident(incident)
     end
   end
   return printLines(incident.id or "INCIDENT",lines)
+end
+
+
+function P.conflict(conflict)
+  if not conflict then return false,"Conflit introuvable." end
+  local lines={}
+  appendWrapped(lines,"CONFLIT / CRISE INTERNATIONALE",conflict.id or "-",25)
+  appendWrapped(lines,"TITRE",conflict.title or "-",25)
+  appendWrapped(lines,"TYPE",conflict.conflictType or "-",25)
+  appendWrapped(lines,"STATUT",conflict.status or "-",25)
+  appendWrapped(lines,"RESUME",conflict.summary or "",25)
+  appendWrapped(lines,"PARTIES / GROUPES",conflict.partiesText or "",25)
+  appendWrapped(lines,"ETATS IMPLIQUES",table.concat(conflict.involvedStates or {},"\n"),25)
+  appendWrapped(lines,"PERIODE",(conflict.startAt or "-").." -> "..(conflict.endAt or "-"),25)
+  appendWrapped(lines,"RESOLUTION",conflict.resolutionId or "-",25)
+  appendWrapped(lines,"TRAITE",conflict.treatyId or "-",25)
+  appendWrapped(lines,"CESSEZ-LE-FEU",conflict.ceasefireTreatyId or "-",25)
+  appendWrapped(lines,"DOSSIER",conflict.caseId or "-",25)
+  appendWrapped(lines,"VISIBILITE",conflict.visibility or "public",25)
+  appendWrapped(lines,"SCEAU INITIAL",conflict.seal or "-",25)
+
+  if conflict.zones and #conflict.zones>0 then
+    lines[#lines+1]="ZONES / SECTEURS"
+    for _,zone in ipairs(conflict.zones) do
+      for _,l in ipairs(common.wrap((zone.id or "?").." ["..(zone.status or "?").."] "..(zone.name or ""),25)) do lines[#lines+1]=l end
+      if zone.position then
+        for _,l in ipairs(common.wrap(
+          (zone.position.dimension or "minecraft:overworld")..
+          " X"..tostring(zone.position.x or "?")..
+          " Y"..tostring(zone.position.y or "?")..
+          " Z"..tostring(zone.position.z or "?")..
+          (zone.position.radius and (" R"..tostring(zone.position.radius)) or ""),25)) do lines[#lines+1]=l end
+      end
+      if zone.description and zone.description~="" then
+        for _,l in ipairs(common.wrap(zone.description,25)) do lines[#lines+1]=l end
+      end
+      for _,l in ipairs(common.wrap("Sceau: "..(zone.seal or "-"),25)) do lines[#lines+1]=l end
+      lines[#lines+1]=""
+    end
+  end
+
+  if conflict.statusHistory and #conflict.statusHistory>0 then
+    lines[#lines+1]="HISTORIQUE DE STATUT"
+    for _,row in ipairs(conflict.statusHistory) do
+      for _,l in ipairs(common.wrap((row.at or "").." "..(row.from or "?").." -> "..(row.to or "?"),25)) do lines[#lines+1]=l end
+      if row.ceasefireTreatyId and row.ceasefireTreatyId~="" then
+        for _,l in ipairs(common.wrap("Cessez-le-feu: "..row.ceasefireTreatyId,25)) do lines[#lines+1]=l end
+      end
+      if row.reason and row.reason~="" then
+        for _,l in ipairs(common.wrap(row.reason,25)) do lines[#lines+1]=l end
+      end
+      for _,l in ipairs(common.wrap("Sceau: "..(row.seal or "-"),25)) do lines[#lines+1]=l end
+      lines[#lines+1]=""
+    end
+  end
+  return printLines(conflict.id or "CONFLIT",lines)
 end
 
 return P
