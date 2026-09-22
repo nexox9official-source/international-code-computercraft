@@ -235,6 +235,43 @@ function N.ensure(state)
   return n,false
 end
 
+
+local function notice(ctx,state,spec)
+  if ctx and ctx.pushNotice then return ctx.pushNotice(state,spec) end
+end
+
+local function noticeAll(ctx,state,n,title,body,severity,objectType,objectId)
+  return notice(ctx,state,{
+    title=title,body=body,severity=severity or "info",
+    objectType=objectType,objectId=objectId,targetStateId=n.meta.stateId
+  })
+end
+
+local function noticeEligible(ctx,state,e,title,body,severity,objectType,objectId)
+  if not ctx or not ctx.pushNotice then return end
+  local wanted={}
+  for _,id in ipairs(e.eligibleIdentities or {}) do wanted[id]=true end
+  for _,cl in pairs(state.clients or {}) do
+    local id=identity(cl)
+    if wanted[id] then
+      ctx.pushNotice(state,{
+        title=title,body=body,severity=severity or "info",
+        objectType=objectType,objectId=objectId,targetClientId=cl.clientId
+      })
+    end
+  end
+end
+
+local function listNationalNotices(ctx,state,actor,p)
+  if not ctx or not ctx.listNotices then return {} end
+  local rows=ctx.listNotices(state,actor,{unreadOnly=p and p.unreadOnly==true})
+  local out={}
+  for _,row in ipairs(rows or {}) do
+    if tostring(row.objectType or ""):sub(1,3)=="nc_" then out[#out+1]=row end
+  end
+  return out
+end
+
 local function nationalAudit(state,actor,action,objectId,details)
   local n=state.national
   local row={
@@ -437,6 +474,11 @@ local function appointMinister(state,n,ctx,actor,ministry,target,mode,sourceId,r
     event="appointed",at=ministry.appointedAt,identity=ministry.holderIdentity,
     clientId=target.clientId,mode=mode,sourceId=sourceId,reason=reason or "",seal=ministry.appointmentSeal
   }
+  noticeAll(ctx,state,n,"Nomination ministerielle",
+    ministry.holderIdentity.." devient titulaire de "..ministry.name.." ("..ministry.code..").",
+    "success","nc_ministry",ministry.code)
+  notice(ctx,state,{title="Vous etes nomme ministre",body=ministry.name.." / "..ministry.code,
+    severity="success",objectType="nc_ministry",objectId=ministry.code,targetClientId=target.clientId})
   mutate(ctx,state,actor,"NC_MINISTER_APPOINT",ministry.code,ministry.holderIdentity.." / "..mode)
   return copy(ministry)
 end
@@ -529,6 +571,9 @@ function N.handle(state,actor,action,p,ctx)
     n.meta.presidentIdentity=actor.nationalIdentity
     n.meta.bootstrapAt=n.meta.bootstrapAt or common.now()
     n.meta.foundingMode=true
+    noticeAll(ctx,state,n,"Intranet national initialise",
+      "La Presidence de North Coalition est enregistree sous l'identite "..actor.nationalIdentity..".",
+      "success","nc_government","PRESIDENCY")
     mutate(ctx,state,actor,"NC_BOOTSTRAP",actor.clientId,"President fondateur: "..actor.nationalIdentity)
     return {
       nationalRole=actor.nationalRole,nationalIdentity=actor.nationalIdentity,
@@ -538,6 +583,10 @@ function N.handle(state,actor,action,p,ctx)
 
   local access,accessErr=requireAccess(state,actor)
   if not access then return nil,accessErr end
+
+  if action=="NC_NOTICE_LIST" then
+    return listNationalNotices(ctx,state,actor,p)
+  end
 
   if action=="NC_DASHBOARD" then
     local total,active,draft,repealed=0,0,0,0
@@ -553,10 +602,13 @@ function N.handle(state,actor,action,p,ctx)
     for _,b in pairs(n.bills) do if b.stage=="voting" then votingBills=votingBills+1 end end
     local publishedDecrees=0
     for _,d in pairs(n.decrees) do if d.status=="published" then publishedDecrees=publishedDecrees+1 end end
+    local unreadNational=0
+    for _,row in ipairs(listNationalNotices(ctx,state,actor,{unreadOnly=true})) do if not row.read then unreadNational=unreadNational+1 end end
     return {
       laws=total,activeLaws=active,draftLaws=draft,repealedLaws=repealed,
       categories=#(n.categories or {}),ministries=ministriesTotal,filledMinistries=filled,
       openElections=openElections,votingBills=votingBills,publishedDecrees=publishedDecrees,
+      unreadNotices=unreadNational,
       foundingMode=n.meta.foundingMode,presidentIdentity=n.meta.presidentIdentity,
       nationalRole=nationalRole(state,actor),nationalIdentity=identity(actor),ministryCode=actor.ministryCode
     }
@@ -641,6 +693,9 @@ function N.handle(state,actor,action,p,ctx)
     for _,m in pairs(n.ministries) do
       if not m.holderClientId then m.vacantSince=common.now();m.vacantSinceMs=common.nowMs() end
     end
+    noticeAll(ctx,state,n,"Fin de la phase fondatrice",
+      "Les regles ordinaires de nomination, delais et scrutins sont maintenant applicables.",
+      "warning","nc_government","FOUNDING")
     mutate(ctx,state,actor,"NC_FOUNDING_CLOSE","NORTH-COALITION",n.meta.foundingSeal)
     return {foundingMode=false,seal=n.meta.foundingSeal}
   end
@@ -675,6 +730,11 @@ function N.handle(state,actor,action,p,ctx)
     clearMinisterClient(state,oldId)
     m.holderClientId=nil;m.holderIdentity=nil;m.appointedAt=nil;m.appointmentMode=nil;m.appointmentSourceId=nil;m.appointmentReason=nil;m.appointmentSeal=nil
     m.vacantSince=common.now();m.vacantSinceMs=common.nowMs()
+    noticeAll(ctx,state,n,"Portefeuille ministeriel vacant",
+      m.name.." : fin de fonction de "..tostring(oldIdentity)..". Motif: "..reason,
+      "warning","nc_ministry",m.code)
+    notice(ctx,state,{title="Fin de fonction ministerielle",body=m.name.." / "..reason,
+      severity="warning",objectType="nc_ministry",objectId=m.code,targetClientId=oldId})
     mutate(ctx,state,actor,"NC_MINISTER_REMOVE",m.code,oldIdentity.." / "..reason)
     return copy(m)
   end
@@ -704,6 +764,9 @@ function N.handle(state,actor,action,p,ctx)
     }
     n.elections[id]=e
     ministry.lastElectionId=id
+    noticeAll(ctx,state,n,"Procedure ministerielle creee",
+      e.title.." / "..ministry.name.." / corps electoral: "..electorate,
+      "info","nc_election",id)
     mutate(ctx,state,actor,"NC_ELECTION_CREATE",id,ministry.code.." / "..electorate)
     return copy(e)
   end
@@ -736,6 +799,9 @@ function N.handle(state,actor,action,p,ctx)
     e.openedAt=common.now()
     e.openedBy=identity(actor)
     e.openSeal=seal("NC-ELECT-OPEN",{e.id,e.ministryCode,e.electorate,e.candidates,e.eligibleIdentities,e.openedAt})
+    noticeEligible(ctx,state,e,"Vote ministeriel ouvert",
+      e.title.." / "..e.ministryCode.." : votre identite appartient au corps electoral.",
+      "warning","nc_election",e.id)
     mutate(ctx,state,actor,"NC_ELECTION_OPEN",e.id,e.openSeal)
     local out=copy(e);out.tally=electionTally(e);return out
   end
@@ -777,6 +843,9 @@ function N.handle(state,actor,action,p,ctx)
       e.winnerIdentity=target and identity(target) or e.winnerClientId
     end
     e.resultSeal=seal("NC-ELECT",{e.id,e.ministryCode,e.electorate,e.candidates,e.eligibleIdentities,e.votes,e.result,e.winnerClientId,e.closedAt})
+    noticeAll(ctx,state,n,"Resultat du scrutin "..e.id,
+      e.result=="elected" and ("Candidat elu: "..tostring(e.winnerIdentity or e.winnerClientId)) or ("Scrutin non concluant: "..tostring(e.result)),
+      e.result=="elected" and "success" or "warning","nc_election",e.id)
     if e.stage=="elected" then
       local target=state.clients[e.winnerClientId]
       if not target then return nil,"Candidat elu introuvable au moment de la nomination." end
@@ -842,6 +911,9 @@ function N.handle(state,actor,action,p,ctx)
       if b.proposedTitle=="" or b.proposedText=="" or b.proposedCategoryCode=="" then return nil,"Titre, texte et categorie obligatoires." end
     end
     n.bills[id]=b
+    noticeAll(ctx,state,n,"Nouveau projet de loi",
+      b.id.." / "..b.title.." / "..b.proposalType,
+      "info","nc_bill",b.id)
     mutate(ctx,state,actor,"NC_BILL_CREATE",id,title.." / "..typ)
     return copy(b)
   end
@@ -855,6 +927,9 @@ function N.handle(state,actor,action,p,ctx)
     if #b.eligibleIdentities==0 then return nil,"Aucun electeur eligible." end
     b.votes={};b.stage="voting";b.openedAt=common.now();b.openedBy=identity(actor)
     b.openSeal=seal("NC-BILL-OPEN",{b.id,b.proposalType,b.electorate,b.threshold,b.eligibleIdentities,b.openedAt})
+    noticeEligible(ctx,state,b,"Vote legislatif ouvert",
+      b.id.." / "..b.title.." : votre identite appartient au corps electoral.",
+      "warning","nc_bill",b.id)
     mutate(ctx,state,actor,"NC_BILL_OPEN",b.id,b.openSeal)
     local out=copy(b);out.tally=billTally(b);return out
   end
@@ -884,6 +959,9 @@ function N.handle(state,actor,action,p,ctx)
     elseif tally.adopted then b.stage="adopted";b.result="adopted"
     else b.stage="rejected";b.result="rejected" end
     b.resultSeal=seal("NC-BILL",{b.id,b.result,b.threshold,b.eligibleIdentities,b.votes,b.closedAt})
+    noticeAll(ctx,state,n,"Resultat legislatif "..b.id,
+      b.title.." : "..string.upper(tostring(b.result or "inconnu")),
+      b.result=="adopted" and "success" or "warning","nc_bill",b.id)
     mutate(ctx,state,actor,"NC_BILL_CLOSE",b.id,b.result.." / "..b.resultSeal)
     local out=copy(b);out.tally=tally;return out
   end
@@ -946,6 +1024,9 @@ function N.handle(state,actor,action,p,ctx)
     end
     b.stage="enacted";b.enactedAt=common.now();b.enactedBy=identity(actor);b.enactedRefs=enacted
     b.enactmentSeal=seal("NC-LAW",{b.id,b.resultSeal,enacted,b.enactedAt,b.enactedBy})
+    noticeAll(ctx,state,n,"Promulgation nationale",
+      b.id.." promulgue par "..b.enactedBy.." / articles: "..table.concat(enacted,", "),
+      "success","nc_bill",b.id)
     mutate(ctx,state,actor,"NC_BILL_ENACT",b.id,table.concat(enacted,",").." / "..b.enactmentSeal)
     return copy(b)
   end
@@ -997,6 +1078,9 @@ function N.handle(state,actor,action,p,ctx)
     end
     d.status="published";d.publishedAt=common.now();d.publishedBy=identity(actor)
     d.seal=seal("NC-DEC",{d.id,d.title,d.body,d.scope,d.ministryCode,d.legalBasis,d.publishedAt,d.publishedBy})
+    noticeAll(ctx,state,n,"Decret publie",
+      d.id.." / "..d.title..(d.ministryCode~="" and (" / "..d.ministryCode) or ""),
+      "info","nc_decree",d.id)
     mutate(ctx,state,actor,"NC_DECREE_PUBLISH",d.id,d.seal)
     return copy(d)
   end
@@ -1011,6 +1095,9 @@ function N.handle(state,actor,action,p,ctx)
     if reason=="" then return nil,"Motif d'abrogation obligatoire." end
     d.status="repealed";d.repealedAt=common.now();d.repealedBy=identity(actor);d.repealReason=reason
     d.repealSeal=seal("NC-DEC-END",{d.id,d.seal,reason,d.repealedAt,d.repealedBy})
+    noticeAll(ctx,state,n,"Decret abroge",
+      d.id.." / "..d.title.." / "..reason,
+      "warning","nc_decree",d.id)
     mutate(ctx,state,actor,"NC_DECREE_REPEAL",d.id,reason.." / "..d.repealSeal)
     return copy(d)
   end
