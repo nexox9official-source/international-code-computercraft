@@ -284,13 +284,27 @@ end
 
 local function updateExisting(cfg)
   if cfg and cfg.role=="server" then
-    -- Un serveur deja initialise n'a plus besoin des corpus source.
-    deleteMany(BOOT_SOURCES)
     deleteMany({
       "international_code/client.lua","international_code/printer.lua","international_code/public.lua",
       "international_code/national_client.lua","international_code/national_democracy_client.lua",
       "international_code/national_printer.lua","international_code/national_public.lua"
     })
+
+    if not fs.exists("/international_code/data/state.tbl") then
+      -- Reparation automatique d'un serveur configure mais jamais initialise.
+      cleanupForServerBootstrap()
+      drawHeader("REPARATION SERVEUR","Base absente - creation automatique")
+      downloadSet(SERVER_BOOT)
+      local ok,info=pcall(function()
+        return dofile("/international_code/server.lua").initializeState()
+      end)
+      if not ok then error("Creation de la base serveur impossible: "..tostring(info),0) end
+      drawHeader("REPARATION SERVEUR",tostring(info or "Base creee"))
+    else
+      -- Un serveur initialise n'a plus besoin des corpus source.
+      deleteMany(BOOT_SOURCES)
+    end
+
     downloadSet(SERVER_RUNTIME)
   else
     cleanupForClient()
