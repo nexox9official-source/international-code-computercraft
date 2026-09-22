@@ -1,6 +1,35 @@
 local common=dofile("/international_code/common.lua")
 
 local L={}
+
+local function runFile(path,...)
+  if shell and shell.run then return shell.run(path,...) end
+  if os and os.run then return os.run({},path,...) end
+  error("Impossible d'executer "..tostring(path).." : API shell/os.run indisponible.",0)
+end
+
+local function runRemoteInstaller(mode)
+  if not http or not http.get then return false,"API HTTP indisponible." end
+  local url="https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua"
+  local h,err=http.get(url)
+  if not h then return false,tostring(err or "telechargement impossible") end
+  local source=h.readAll()
+  h.close()
+  local env=_ENV
+  if not env and getfenv then env=getfenv() end
+  local fn,loadErr
+  if load then
+    fn,loadErr=load(source,"@install.lua","t",env)
+  elseif loadstring then
+    fn,loadErr=loadstring(source,"@install.lua")
+    if fn and setfenv and env then setfenv(fn,env) end
+  end
+  source=nil
+  if not fn then return false,tostring(loadErr or "chargement installateur impossible") end
+  local ok,result=pcall(fn,mode)
+  if not ok then return false,tostring(result) end
+  return result~=false,nil
+end
 local palette={
   bg=colors.black,header=colors.blue,panel=colors.gray,button=colors.lightGray,
   selected=colors.cyan,text=colors.white,dark=colors.black,muted=colors.lightGray,
@@ -204,12 +233,11 @@ local function setupWizard()
 end
 
 local function update()
-  local url="https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua"
   fill();header("MISE A JOUR")
   term.setCursorPos(2,4);term.setTextColor(palette.text);term.write("Telechargement de la derniere version...")
-  local ok=shell.run("wget","run",url,"update")
+  local ok,err=runRemoteInstaller("update")
   if ok then message("MISE A JOUR","Mise a jour terminee.",palette.ok)
-  else message("MISE A JOUR","Echec de la mise a jour. Verifiez HTTP et la connexion.",palette.bad) end
+  else message("MISE A JOUR","Echec: "..tostring(err or "inconnu"),palette.bad) end
 end
 
 local function serverMenu(cfg)
@@ -223,7 +251,7 @@ local function serverMenu(cfg)
       {text="QUITTER",id="quit"}
     },"PC #"..os.getComputerID().." / "..tostring(cfg.serverName or "UNS-Code").." / v"..common.VERSION)
     if not p or p.id=="quit" then return end
-    if p.id=="run" then return shell.run("ic","server")
+    if p.id=="run" then return runFile("/ic.lua","server")
     elseif p.id=="pair" then
       local role=chooseRole()
       if role then
