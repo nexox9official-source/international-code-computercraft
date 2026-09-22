@@ -216,6 +216,7 @@ function N.ensure(state)
   end
 
   local n=state.national
+  local changed=false
   n.meta=n.meta or {}
   n.meta.country=n.meta.country or "North Coalition"
   n.meta.stateId=n.meta.stateId or NORTH_STATE_ID
@@ -298,6 +299,7 @@ function N.ensure(state)
       n.meta.ratifiedBy=((corpus.ratification or {}).promulgated_by or "NexoFr_")
       n.meta.corpusRatificationApplied=true
       n.meta.updatedAt=common.now()
+      changed=true
     end
   end
 
@@ -307,7 +309,7 @@ function N.ensure(state)
     m.vacantSince=m.vacantSince or common.now()
     m.vacantSinceMs=m.vacantSinceMs or common.nowMs()
   end
-  return n,false
+  return n,changed
 end
 
 
