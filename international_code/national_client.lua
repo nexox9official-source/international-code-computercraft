@@ -668,6 +668,9 @@ local function billDetails(id)
       if canCouncil then actions[#actions+1]={text="Clore le vote",id="close"} end
     end
     if b.stage=="adopted" and canPresident then actions[#actions+1]={text="Promulguer",id="enact"} end
+    if info.sovereignAuthority and (b.stage=="draft" or b.stage=="debate" or b.stage=="no_quorum" or b.stage=="rejected") then
+      actions[#actions+1]={text="[★] Adopter et promulguer directement (NexoFr_)",id="sovereign_enact"}
+    end
     local a=menu(b.id.." - "..b.title,actions,b.proposalType.." / "..b.stage.." / "..b.electorate)
     if not a then return end
     if a.id=="read" then
@@ -695,8 +698,11 @@ local function billDetails(id)
     elseif a.id=="close" then
       local out,e=rpc("NC_BILL_CLOSE",{id=b.id})
       message("RESULTAT",out and string.upper(out.result or "") or e,out and (out.result=="adopted" and palette.accent or palette.warn) or palette.bad)
-    elseif a.id=="enact" then
-      local out,e=rpc("NC_BILL_ENACT",{id=b.id});message("PROMULGATION",out and ("Promulgue / "..tostring(out.enactmentSeal)) or e,out and palette.accent or palette.bad)
+    elseif a.id=="enact" or a.id=="sovereign_enact" then
+      local out,e=rpc("NC_BILL_ENACT",{id=b.id})
+      message(a.id=="sovereign_enact" and "ACTE SOUVERAIN" or "PROMULGATION",
+        out and ("Adopte et promulgue / "..tostring(out.enactmentSeal)) or e,
+        out and palette.accent or palette.bad)
     end
   end
 end
