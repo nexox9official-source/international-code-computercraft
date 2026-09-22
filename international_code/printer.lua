@@ -418,4 +418,48 @@ function P.resolution(r)
   return printLines(r.id or "RESOLUTION",lines)
 end
 
+
+function P.session(sess)
+  if not sess then return false,"Session introuvable." end
+  local lines={}
+  appendWrapped(lines,"SESSION INSTITUTIONNELLE",sess.id or "-",25)
+  appendWrapped(lines,"TITRE",sess.title or "-",25)
+  appendWrapped(lines,"TYPE",sess.sessionType or "-",25)
+  appendWrapped(lines,"STATUT",sess.status or "-",25)
+  appendWrapped(lines,"DATE / HEURE",sess.scheduledFor or "-",25)
+  appendWrapped(lines,"LIEU",sess.location or "-",25)
+  appendWrapped(lines,"DESCRIPTION",sess.description or "",25)
+  appendWrapped(lines,"SCEAU CONVOCATION",sess.noticeSeal or "-",25)
+
+  if sess.agenda and #sess.agenda>0 then
+    lines[#lines+1]="ORDRE DU JOUR"
+    for _,item in ipairs(sess.agenda) do
+      local head=(item.id or "?").." ["..(item.status or "?").."] "..(item.title or "")
+      for _,l in ipairs(common.wrap(head,25)) do lines[#lines+1]=l end
+      if item.ref and item.ref~="" then
+        for _,l in ipairs(common.wrap("Ref: "..item.ref.." / "..(item.kind or ""),25)) do lines[#lines+1]=l end
+      end
+      if item.outcome and item.outcome~="" then
+        for _,l in ipairs(common.wrap("Issue: "..item.outcome,25)) do lines[#lines+1]=l end
+      end
+      lines[#lines+1]=""
+    end
+  end
+
+  local attendance={}
+  for stateId,row in pairs(sess.attendance or {}) do
+    attendance[#attendance+1]=(row.stateName or stateId).." / "..(row.checkedInAt or "")
+  end
+  table.sort(attendance)
+  appendWrapped(lines,"PRESENCES",#attendance>0 and table.concat(attendance,"\n") or "Aucune presence enregistree.",25)
+
+  if sess.minutes and sess.minutes~="" then appendWrapped(lines,"PROCES-VERBAL",sess.minutes,25) end
+  if sess.outcome and sess.outcome~="" then appendWrapped(lines,"CONCLUSIONS",sess.outcome,25) end
+  if sess.openSeal then appendWrapped(lines,"SCEAU OUVERTURE",sess.openSeal,25) end
+  if sess.closeSeal then appendWrapped(lines,"SCEAU DU PV",sess.closeSeal,25) end
+  if sess.cancelSeal then appendWrapped(lines,"SCEAU ANNULATION",sess.cancelSeal,25) end
+
+  return printLines(sess.id or "SESSION",lines)
+end
+
 return P
