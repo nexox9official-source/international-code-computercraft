@@ -3262,6 +3262,24 @@ local function sessionsScreen(query,status)
   end
 end
 
+local function positionText(pos)
+  pos=pos or {}
+  local dimension=pos.dimension or "minecraft:overworld"
+  if pos.x==nil or pos.z==nil then return dimension.." / coordonnees non renseignees" end
+  return dimension.." / X "..tostring(pos.x).." Y "..tostring(pos.y or "?").." Z "..tostring(pos.z)..
+    (pos.radius and (" / rayon "..tostring(pos.radius)) or "")
+end
+
+local function askPosition(current)
+  current=current or {}
+  local dimension=prompt("Dimension",current.dimension or "minecraft:overworld")
+  local x=prompt("Coordonnee X",current.x~=nil and tostring(current.x) or "")
+  local y=prompt("Coordonnee Y (optionnel)",current.y~=nil and tostring(current.y) or "")
+  local z=prompt("Coordonnee Z",current.z~=nil and tostring(current.z) or "")
+  local radius=prompt("Rayon / zone autour du point (optionnel)",current.radius~=nil and tostring(current.radius) or "")
+  return {dimension=dimension,x=x,y=y,z=z,radius=radius}
+end
+
 local function missionTypeLabel(v)
   local labels={
     observer="Mission d'observation",peacekeeping="Maintien de la paix",
@@ -3306,6 +3324,8 @@ local function missionReportText(m)
   for _,r in ipairs(m.reports or {}) do
     rows[#rows+1]=(r.id or "?").." ["..(r.classification or "public").."] "..(r.title or "")..
       "\n"..(r.at or "").." / "..(r.by or "")..
+      ((r.incidentId and r.incidentId~="") and ("\nIncident: "..r.incidentId) or "")..
+      "\nPosition: "..positionText(r.position)..
       "\n"..((r.classification=="restricted" and cfg.role=="viewer") and "[CONTENU RESTREINT]" or (r.body or ""))..
       "\nSceau: "..(r.seal or "-")
   end
@@ -3348,6 +3368,7 @@ missionDetails=function(id)
         {label="Mission",text=m.title or ""},
         {label="Type / statut",text=missionTypeLabel(m.missionType).." / "..(m.status or "")},
         {label="Zone / periode",text=(m.area or "-").." / "..(m.startAt or "-").." -> "..(m.endAt or "-")},
+        {label="Coordonnees Minecraft",text=positionText(m.position)},
         {label="Mandat",text=m.mandate or ""},
         {label="Sources",text="Resolution: "..(m.resolutionId or "-").."\nTraite: "..(m.treatyId or "-").."\nDossier: "..(m.caseId or "-")},
         {label="Etat responsable",text=m.leadStateId or "-"},
@@ -3379,9 +3400,12 @@ missionDetails=function(id)
         {text="Public",v="public"},
         {text="Restreint",v="restricted"}
       })
+      local incidentId=prompt("Incident lie INC-... (optionnel)")
+      local pos=askPosition(m.position)
       local body=multi("RAPPORT DE MISSION","")
       local out,e=rpc("MISSION_ADD_REPORT",{
-        id=m.id,title=title,classification=classification and classification.v or "public",body=body
+        id=m.id,title=title,classification=classification and classification.v or "public",body=body,
+        incidentId=incidentId,dimension=pos.dimension,x=pos.x,y=pos.y,z=pos.z,radius=pos.radius
       })
       message("MISSION",out and "Rapport ajoute et scelle." or e,out and palette.ok or palette.bad)
 
@@ -3389,6 +3413,7 @@ missionDetails=function(id)
       local title=prompt("Titre",m.title)
       local typ=chooseMissionType(m.missionType)
       local area=prompt("Zone / territoire",m.area or "")
+      local pos=askPosition(m.position)
       local startAt=prompt("Debut",m.startAt or "")
       local endAt=prompt("Fin prevue",m.endAt or "")
       local commander=prompt("Responsable / commandement",m.commander or "")
@@ -3399,8 +3424,9 @@ missionDetails=function(id)
         {text="Publique",v="public"},{text="Restreinte",v="restricted"}
       },"Actuel: "..(m.visibility or "public"))
       local out,e=rpc("MISSION_EDIT",{
-        id=m.id,title=title,missionType=typ,area=area,startAt=startAt,endAt=endAt,
-        commander=commander,participatingStates=participants,leadStateId=lead,
+        id=m.id,title=title,missionType=typ,area=area,
+        dimension=pos.dimension,x=pos.x,y=pos.y,z=pos.z,radius=pos.radius,
+        startAt=startAt,endAt=endAt,commander=commander,participatingStates=participants,leadStateId=lead,
         mandate=mandate,visibility=visibility and visibility.v or m.visibility
       })
       message("MISSION",out and "Mandat mis a jour et rescelle." or e,out and palette.ok or palette.bad)
@@ -3452,6 +3478,7 @@ local function missionsScreen(query,status)
       local treatyId=prompt("Traite source TREATY-... (optionnel)")
       local caseId=prompt("Dossier source CASE-... (optionnel)")
       local area=prompt("Zone / territoire")
+      local pos=askPosition({})
       local startAt=prompt("Debut prevu")
       local endAt=prompt("Fin prevue")
       local commander=prompt("Responsable / commandement")
@@ -3463,7 +3490,8 @@ local function missionsScreen(query,status)
       })
       local out,e=rpc("MISSION_CREATE",{
         title=title,missionType=typ,resolutionId=resolutionId,treatyId=treatyId,caseId=caseId,
-        area=area,startAt=startAt,endAt=endAt,commander=commander,
+        area=area,dimension=pos.dimension,x=pos.x,y=pos.y,z=pos.z,radius=pos.radius,
+        startAt=startAt,endAt=endAt,commander=commander,
         participatingStates=participants,leadStateId=lead,mandate=mandate,
         visibility=visibility and visibility.v or "public"
       })
