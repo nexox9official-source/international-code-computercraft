@@ -462,4 +462,47 @@ function P.session(sess)
   return printLines(sess.id or "SESSION",lines)
 end
 
+
+function P.mission(m)
+  if not m then return false,"Mission introuvable." end
+  local lines={}
+  appendWrapped(lines,"MISSION INTERNATIONALE",m.id or "-",25)
+  appendWrapped(lines,"TITRE",m.title or "-",25)
+  appendWrapped(lines,"TYPE",m.missionType or "-",25)
+  appendWrapped(lines,"STATUT",m.status or "-",25)
+  appendWrapped(lines,"ZONE",m.area or "-",25)
+  appendWrapped(lines,"PERIODE",(m.startAt or "-").." -> "..(m.endAt or "-"),25)
+  appendWrapped(lines,"MANDAT",m.mandate or "",25)
+  appendWrapped(lines,"RESOLUTION",m.resolutionId or "-",25)
+  appendWrapped(lines,"TRAITE",m.treatyId or "-",25)
+  appendWrapped(lines,"DOSSIER",m.caseId or "-",25)
+  appendWrapped(lines,"ETAT RESPONSABLE",m.leadStateId or "-",25)
+  appendWrapped(lines,"RESPONSABLE / COMMANDEMENT",m.commander or "-",25)
+  appendWrapped(lines,"ETATS PARTICIPANTS",table.concat(m.participatingStates or {},"\n"),25)
+  appendWrapped(lines,"SCEAU DU MANDAT",m.mandateSeal or "-",25)
+
+  if m.activationSeal then appendWrapped(lines,"SCEAU D'ACTIVATION",m.activationSeal,25) end
+
+  if m.reports and #m.reports>0 then
+    lines[#lines+1]="RAPPORTS"
+    for _,r in ipairs(m.reports) do
+      for _,l in ipairs(common.wrap((r.id or "?").." ["..(r.classification or "public").."] "..(r.title or ""),25)) do lines[#lines+1]=l end
+      for _,l in ipairs(common.wrap((r.at or "").." / "..(r.by or "?"),25)) do lines[#lines+1]=l end
+      if r.classification~="restricted" then
+        for _,l in ipairs(common.wrap(r.body or "",25)) do lines[#lines+1]=l end
+      else
+        lines[#lines+1]="[CONTENU RESTREINT]"
+      end
+      for _,l in ipairs(common.wrap("Sceau: "..(r.seal or "-"),25)) do lines[#lines+1]=l end
+      lines[#lines+1]=""
+    end
+  end
+
+  if m.completionReason and m.completionReason~="" then appendWrapped(lines,"CLOTURE",m.completionReason,25) end
+  if m.completionSeal then appendWrapped(lines,"SCEAU DE CLOTURE",m.completionSeal,25) end
+  if m.cancelReason and m.cancelReason~="" then appendWrapped(lines,"ANNULATION",m.cancelReason,25) end
+  if m.cancellationSeal then appendWrapped(lines,"SCEAU D'ANNULATION",m.cancellationSeal,25) end
+  return printLines(m.id or "MISSION",lines)
+end
+
 return P
