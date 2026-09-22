@@ -21,6 +21,7 @@ local function help()
   print("ic public                  Affichage public sur Monitor")
   print("ic display <CASE-ID>       Afficher un dossier public au tribunal")
   print("ic assembly <BILL-ID>      Tableau LIVE d'un scrutin sur Monitor")
+  print("ic resolution <RES-ID>     Tableau LIVE d'une resolution")
   print("ic treaty <TREATY-ID>      Tableau LIVE des signatures d'un traite")
   print("ic verify <SCEAU>          Verifier l'authenticite d'un document")
   print("ic inbox                   Ouvrir le centre de notifications")
@@ -48,6 +49,10 @@ end
 if cmd=="assembly" then
   if not args[2] then error("Usage: ic assembly BILL-AAAA-0001",0) end
   dofile(ROOT.."/public.lua").billDisplay(args[2]);return
+end
+if cmd=="resolution" then
+  if not args[2] then error("Usage: ic resolution RES-AAAA-0001",0) end
+  dofile(ROOT.."/public.lua").resolutionDisplay(args[2]);return
 end
 if cmd=="treaty" then
   if not args[2] then error("Usage: ic treaty TREATY-AAAA-0001",0) end
