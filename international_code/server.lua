@@ -1025,6 +1025,33 @@ local function handleAction(state, actor, action, p)
       end
     end
 
+    for _,sess in pairs(state.sessions or {}) do
+      if tostring(sess.noticeSeal or ""):upper()==seal then
+        return {
+          valid=true,kind="session_notice",seal=seal,parentId=sess.id,title=sess.title,
+          status=sess.status,issuedAt=sess.updatedAt or sess.createdAt,issuedBy=sess.updatedBy or sess.createdBy
+        }
+      end
+      if tostring(sess.openSeal or ""):upper()==seal then
+        return {
+          valid=true,kind="session_opening",seal=seal,parentId=sess.id,title=sess.title,
+          status=sess.status,issuedAt=sess.openedAt,issuedBy=sess.openedBy
+        }
+      end
+      if tostring(sess.closeSeal or ""):upper()==seal then
+        return {
+          valid=true,kind="session_minutes",seal=seal,parentId=sess.id,title=sess.title,
+          status=sess.status,issuedAt=sess.closedAt,issuedBy=sess.closedBy
+        }
+      end
+      if tostring(sess.cancelSeal or ""):upper()==seal then
+        return {
+          valid=true,kind="session_cancellation",seal=seal,parentId=sess.id,title=sess.title,
+          status=sess.status,issuedAt=sess.cancelledAt,issuedBy=sess.cancelledBy
+        }
+      end
+    end
+
     for _,r in pairs(state.resolutions or {}) do
       if tostring(r.resultSeal or ""):upper()==seal then
         return {
@@ -1075,7 +1102,7 @@ local function handleAction(state, actor, action, p)
     return { meta=state.meta, clientsCount=(function() local n=0 for _ in pairs(state.clients) do n=n+1 end return n end)() }
   end
   if action == "DASHBOARD" then
-    local lc, cc, openCases, activeLaws, sc, votingBills, votingResolutions, activeTreaties, signingTreaties, activeEnforcements = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    local lc, cc, openCases, activeLaws, sc, votingBills, votingResolutions, openSessions, scheduledSessions, activeTreaties, signingTreaties, activeEnforcements = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     for _,law in pairs(state.laws) do lc=lc+1 if law.status=="active" then activeLaws=activeLaws+1 end end
     for _,c in pairs(state.cases) do
       if canViewCase(actor,c) then
@@ -1086,6 +1113,10 @@ local function handleAction(state, actor, action, p)
     for _,st in pairs(state.states or {}) do if st.status=="member" then sc=sc+1 end end
     for _,bill in pairs(state.bills or {}) do if bill.stage=="voting" then votingBills=votingBills+1 end end
     for _,r in pairs(state.resolutions or {}) do if r.stage=="voting" then votingResolutions=votingResolutions+1 end end
+    for _,sess in pairs(state.sessions or {}) do
+      if sess.status=="open" then openSessions=openSessions+1 end
+      if sess.status=="scheduled" then scheduledSessions=scheduledSessions+1 end
+    end
     for _,t in pairs(state.treaties or {}) do
       if t.stage=="in_force" then activeTreaties=activeTreaties+1 end
       if t.stage=="signing" or t.stage=="ready" then signingTreaties=signingTreaties+1 end
@@ -1097,7 +1128,9 @@ local function handleAction(state, actor, action, p)
     end
     return {
       laws=lc, activeLaws=activeLaws, cases=cc, openCases=openCases,
-      states=sc, votingBills=votingBills, votingResolutions=votingResolutions, activeTreaties=activeTreaties, signingTreaties=signingTreaties,
+      states=sc, votingBills=votingBills, votingResolutions=votingResolutions,
+      openSessions=openSessions, scheduledSessions=scheduledSessions,
+      activeTreaties=activeTreaties, signingTreaties=signingTreaties,
       activeEnforcements=activeEnforcements, unreadNotices=countUnreadNotices(state,actor),
       stateId=actor.stateId,
       revision=state.meta.revision, codeStatus=state.meta.codeStatus
