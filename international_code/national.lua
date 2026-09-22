@@ -547,6 +547,115 @@ local function ministryScopeAllowed(state,actor,ministryCode)
   return nationalRole(state,actor)=="minister" and actor.ministryCode==ministryCode
 end
 
+local function nationalCaseInstitutionalRole(state,actor)
+  local r=nationalRole(state,actor)
+  return actor and (actor.role=="admin" or r=="judge" or r=="prosecutor" or r=="police")
+end
+
+local function nationalCaseJudicialRole(state,actor)
+  local r=nationalRole(state,actor)
+  return actor and (actor.role=="admin" or r=="judge")
+end
+
+local function canViewNationalCase(state,actor,case)
+  if not actor or not case then return false end
+  local r=nationalRole(state,actor)
+  local visibility=case.visibility or "restricted"
+  if actor.role=="admin" or r=="judge" or r=="prosecutor" then return true end
+  if r=="police" then return visibility~="sealed" end
+  local who=identity(actor)
+  if who~="" and (who==case.complainant or who==case.accused) then return visibility~="sealed" end
+  return visibility=="public"
+end
+
+local function ensureNationalCaseShape(case)
+  case.facts=case.facts or {}
+  case.evidence=case.evidence or {}
+  case.citedArticles=case.citedArticles or {}
+  case.hearings=case.hearings or {}
+  case.judgments=case.judgments or {}
+  case.orders=case.orders or {}
+  case.appeals=case.appeals or {}
+  case.timeline=case.timeline or {}
+  case.visibility=case.visibility or "restricted"
+  case.status=case.status or "open"
+  return case
+end
+
+local function addNationalCaseTimeline(case,kind,title,details,actor)
+  ensureNationalCaseShape(case)
+  case.timeline[#case.timeline+1]={
+    at=common.now(),kind=kind,title=title,details=details or "",
+    actor=actor and identity(actor) or "system"
+  }
+  while #case.timeline>500 do table.remove(case.timeline,1) end
+end
+
+local function listNationalCases(n,p,state,actor)
+  p=p or {}
+  local q=common.trim(p.query)
+  local status=common.trim(p.status)
+  local caseType=common.trim(p.caseType)
+  local visibility=common.trim(p.visibility)
+  local out={}
+  for _,case in pairs(n.cases or {}) do
+    ensureNationalCaseShape(case)
+    local hit=(q=="" or common.contains(case.id,q) or common.contains(case.title,q) or
+      common.contains(case.complainant,q) or common.contains(case.accused,q) or common.contains(case.summary,q))
+    if hit and (status=="" or case.status==status) and
+       (caseType=="" or case.caseType==caseType) and
+       (visibility=="" or case.visibility==visibility) and
+       canViewNationalCase(state,actor,case) then
+      out[#out+1]={
+        id=case.id,title=case.title,caseType=case.caseType,status=case.status,
+        visibility=case.visibility,complainant=case.complainant,accused=case.accused,
+        createdAt=case.createdAt,updatedAt=case.updatedAt
+      }
+    end
+  end
+  table.sort(out,function(a,b) return tostring(a.id)>tostring(b.id) end)
+  return out
+end
+
+local function nationalCaseId(n)
+  return nextId(n.caseCounters,"NC-CASE")
+end
+
+local function nationalLawSnapshot(n,refs)
+  local out={}
+  for _,raw in ipairs(refs or {}) do
+    local law=getLaw(n,raw)
+    if law then
+      out[#out+1]={
+        id=law.id,display_reference=law.display_reference,title=law.title,
+        version=law.version,status=law.status,category_code=law.category_code
+      }
+    end
+  end
+  return out
+end
+
+local function notifyNationalCase(ctx,state,case,title,body,severity)
+  if not ctx or not ctx.pushNotice then return end
+  local wanted={}
+  if case.complainant and case.complainant~="" then wanted[case.complainant]=true end
+  if case.accused and case.accused~="" then wanted[case.accused]=true end
+  local sent={}
+  for _,cl in pairs(state.clients or {}) do
+    local r=nationalRole(state,cl)
+    local id=identity(cl)
+    if wanted[id] or r=="judge" or r=="prosecutor" then
+      if not sent[cl.clientId] then
+        sent[cl.clientId]=true
+        ctx.pushNotice(state,{
+          title=title,body=body,severity=severity or "info",
+          objectType="nc_case",objectId=case.id,targetClientId=cl.clientId
+        })
+      end
+    end
+  end
+end
+
 function N.handle(state,actor,action,p,ctx)
   p=p or {}
   local n=N.ensure(state)
