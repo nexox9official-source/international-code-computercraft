@@ -851,7 +851,8 @@ local function lawHistoryScreen(law)
       {label="Classement",text=(v.book or law.book or "").." / "..(v.section or law.section or "")},
       {label="Statut",text=tostring(v.status or "?")},
       {label="Archive / mise a jour",text=tostring(v.archivedAt or law.updatedAt or "")},
-      {label="Auteur archive",text=tostring(v.archivedBy or "-")}
+      {label="Auteur archive",text=tostring(v.archivedBy or "-")},
+      {label="Motif de remplacement",text=tostring(v.supersededByReason or law.lastChangeReason or "-")}
     })
   end
 end
@@ -917,10 +918,11 @@ local function viewLaw(ref)
       message("IMPRESSION",ok and ("Impression lancee: "..r.." page(s).") or r,ok and palette.ok or palette.bad)
 
     elseif a.id=="amend" then
+      local reason=prompt("Motif bref de la modification")
       local title=prompt("Nouveau titre (Entree = conserver)",law.title)
       local body=multi("NOUVELLE VERSION",law.body)
       local updated,e=rpc("LAW_AMEND",{
-        ref=law.ref,title=title,body=body,book=law.book,section=law.section
+        ref=law.ref,title=title,body=body,book=law.book,section=law.section,reason=reason
       })
       message("ARTICLE",updated and (law.ref.." passe en version "..updated.version) or e,updated and palette.ok or palette.bad)
 
