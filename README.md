@@ -4,7 +4,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** destiné au Code interna
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. `North Coalition` est conservé uniquement comme État proposant dans le corpus juridique initial.
 
-## Ce que fait la v0.4
+## Ce que fait la v0.5
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `viewer`, `admin`) ;
@@ -76,7 +76,7 @@ wget run https://raw.githubusercontent.com/nexox9official-source/international-c
 wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua admin
 ```
 
-## Navigation v0.4
+## Navigation v0.5
 
 Le Code n'affiche plus simplement une liste brute de 500 articles. Le terminal propose maintenant :
 
@@ -207,6 +207,37 @@ ic assembly BILL-2026-0001
 
 Le tableau actualise toutes les trois secondes les voix POUR/CONTRE/ABSTENTION, la participation, le quorum et les votes des États. Un clic sur le Monitor du registre public passe à la page suivante.
 
+## Traités et diplomatie v0.5
+
+Le système gère maintenant les accords internationaux sous forme de documents officiels `TREATY-AAAA-XXXX`.
+
+Un traité suit un cycle complet :
+
+1. rédaction du projet ;
+2. sélection de deux États parties ou plus ;
+3. modification et versionnement tant que le texte reste au brouillon ;
+4. gel définitif du texte avant signature avec un **sceau du texte** ;
+5. ouverture des signatures ;
+6. chaque État partie signe depuis un terminal `delegate` qui lui est officiellement rattaché ;
+7. lorsque toutes les signatures requises sont présentes, le traité passe à l'état `ready` ;
+8. l'administration législative peut le faire entrer en vigueur ;
+9. l'entrée en vigueur reçoit un nouveau sceau ;
+10. une éventuelle fin du traité reste archivée avec son motif et son propre sceau.
+
+Types prévus : accord bilatéral, traité multilatéral, défense/alliance, commerce, frontière, cessez-le-feu, non-agression ou autre.
+
+Les versions anciennes d'un projet de traité restent archivées avant l'ouverture des signatures. Une fois les signatures ouvertes, le texte est figé : il faut produire une nouvelle version/procédure au lieu de modifier silencieusement ce que les États ont signé.
+
+### Tableau diplomatique LIVE
+
+Dans une salle diplomatique, un Monitor peut suivre en direct les signatures d'un traité :
+
+```text
+ic treaty TREATY-2026-0001
+```
+
+L'écran indique les États ayant signé, ceux encore en attente, l'état du traité et son entrée en vigueur éventuelle.
+
 ## Imprimante
 
 Une imprimante connectée physiquement au terminal est détectée automatiquement. Les articles et dossiers peuvent être imprimés sur plusieurs pages.
@@ -242,6 +273,7 @@ ic backup
 ic public
 ic display CASE-2026-0001
 ic assembly BILL-2026-0001
+ic treaty TREATY-2026-0001
 ic doctor
 ic update
 ic help
@@ -357,4 +389,4 @@ Les 25 Livres du Code sont automatiquement associés aux articles par groupes de
 
 ## Statut
 
-**v0.4 - institutions, États membres, Assemblée, votes, audiences, ordonnances, appels, sceaux officiels et affichage public Monitor.** Le code Lua est structuré pour être étendu avec audiences, mandats, appels formels, signatures/quorum, réplication vers un second serveur et écran Monitor public.
+**v0.5 - institutions complètes : Code, Cour, États, Assemblée, votes, ratification groupée, traités internationaux, signatures d'État, appels et affichages LIVE.** Le code Lua est structuré pour être étendu avec audiences, mandats, appels formels, signatures/quorum, réplication vers un second serveur et écran Monitor public.
