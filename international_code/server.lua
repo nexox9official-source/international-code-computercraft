@@ -3,26 +3,49 @@ local S = {}
 
 local permissions = {
   viewer = {
-    PING=true, DASHBOARD=true, SERVER_INFO=true, LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
-    CASE_LIST=true, CASE_GET=true
+    PING=true, DASHBOARD=true, SERVER_INFO=true,
+    LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
+    CASE_LIST=true, CASE_GET=true,
+    STATE_LIST=true, STATE_GET=true,
+    BILL_LIST=true, BILL_GET=true
   },
   writer = {
-    PING=true, DASHBOARD=true, SERVER_INFO=true, LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
-    CASE_LIST=true, CASE_GET=true, LAW_CREATE=true, LAW_AMEND=true, LAW_REPEAL=true,
-    LAW_SET_STATUS=true, AUDIT_LIST=true
+    PING=true, DASHBOARD=true, SERVER_INFO=true,
+    LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
+    CASE_LIST=true, CASE_GET=true,
+    STATE_LIST=true, STATE_GET=true,
+    BILL_LIST=true, BILL_GET=true, BILL_CREATE=true, BILL_EDIT=true,
+    BILL_OPEN_VOTE=true, BILL_CLOSE=true, BILL_ENACT=true,
+    LAW_CREATE=true, LAW_AMEND=true, LAW_REPEAL=true, LAW_SET_STATUS=true,
+    AUDIT_LIST=true
   },
   clerk = {
-    PING=true, DASHBOARD=true, SERVER_INFO=true, LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
+    PING=true, DASHBOARD=true, SERVER_INFO=true,
+    LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
-    CASE_REMOVE_ARTICLE=true, CASE_SET_STATUS=true, AUDIT_LIST=true
+    CASE_REMOVE_ARTICLE=true, CASE_SET_STATUS=true, CASE_SET_VISIBILITY=true,
+    CASE_ADD_HEARING=true, CASE_SET_HEARING_STATUS=true,
+    STATE_LIST=true, STATE_GET=true, BILL_LIST=true, BILL_GET=true,
+    AUDIT_LIST=true
   },
   judge = {
-    PING=true, DASHBOARD=true, SERVER_INFO=true, LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
+    PING=true, DASHBOARD=true, SERVER_INFO=true,
+    LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
-    CASE_REMOVE_ARTICLE=true, CASE_ADD_JUDGMENT=true, CASE_SET_STATUS=true,
+    CASE_REMOVE_ARTICLE=true, CASE_ADD_JUDGMENT=true, CASE_SET_STATUS=true, CASE_SET_VISIBILITY=true,
+    CASE_ADD_HEARING=true, CASE_SET_HEARING_STATUS=true,
+    CASE_ADD_ORDER=true, CASE_SET_ORDER_STATUS=true,
+    STATE_LIST=true, STATE_GET=true, BILL_LIST=true, BILL_GET=true,
     AUDIT_LIST=true
+  },
+  delegate = {
+    PING=true, DASHBOARD=true, SERVER_INFO=true,
+    LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
+    CASE_LIST=true, CASE_GET=true,
+    STATE_LIST=true, STATE_GET=true,
+    BILL_LIST=true, BILL_GET=true, BILL_VOTE=true
   },
   admin = { ["*"]=true }
 }
@@ -120,6 +143,16 @@ local function freshState()
     nextArticle = maxN + 1,
     cases = {},
     caseCounters = {},
+    states = {
+      ["STATE-001"] = {
+        id="STATE-001", name="North Coalition", shortName="North Coalition",
+        status="member", government="", representative="", notes="Etat proposant du projet initial.",
+        createdAt=now, updatedAt=now
+      }
+    },
+    nextState = 2,
+    bills = {},
+    billCounters = {},
     clients = {},
     pairing = nil,
     audit = {}
@@ -139,8 +172,35 @@ local function loadState()
   state.audit = state.audit or {}
   state.caseCounters = state.caseCounters or {}
   state.nextArticle = state.nextArticle or 1
+  state.states = state.states or {}
+  state.bills = state.bills or {}
+  state.billCounters = state.billCounters or {}
   state.meta = state.meta or {}
+
+  if next(state.states)==nil then
+    local now=common.now()
+    state.states["STATE-001"]={
+      id="STATE-001", name="North Coalition", shortName="North Coalition",
+      status="member", government="", representative="", notes="Etat proposant du projet initial.",
+      createdAt=now, updatedAt=now
+    }
+  end
+
+  local maxState=0
+  for id in pairs(state.states) do
+    local n=tonumber(tostring(id):match("STATE%-(%d+)")) or 0
+    if n>maxState then maxState=n end
+  end
+  state.nextState=state.nextState or (maxState+1)
+
+  for _,c in pairs(state.cases) do
+    c.visibility=c.visibility or "restricted"
+    c.hearings=c.hearings or {}
+    c.orders=c.orders or {}
+  end
+
   state.meta.version = common.VERSION
+  state.meta.schema = math.max(tonumber(state.meta.schema) or 1,2)
   return state
 end
 
