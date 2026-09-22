@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.19.0
+
+### Élections nationales
+- registre `NC-GE-AAAA-XXXX` distinct des scrutins ministériels ;
+- élections de la Présidence et du Conseil de la Coalition ;
+- nombre de sièges du Conseil configurable ;
+- phases draft / candidacy / voting / runoff / concluded / failed / cancelled ;
+- candidatures citoyennes ou enregistrées par l'autorité de scrutin ;
+- corps électoral figé en `NC-CIT` à l'ouverture ;
+- une seule voix par citoyen permanent ;
+- quorum de participation à 50 % ;
+- majorité absolue au premier tour présidentiel ;
+- second tour présidentiel entre les deux premiers si nécessaire ;
+- second tour automatique en cas d'égalité au seuil du dernier siège du Conseil.
+
+### Incompatibilités et sécurité
+- candidat obligatoirement citoyen actif ;
+- candidat obligatoirement rattaché à au moins un terminal national ;
+- ministres, juges, procureurs, policiers et agents administratifs exclus des candidatures tant que leur fonction incompatible reste active ;
+- le Président en exercice ne peut pas être candidat au Conseil ;
+- un Président élu libère automatiquement un éventuel siège au Conseil ;
+- le rôle technique admin ne crée pas de voix supplémentaire.
+
+### Mandats
+- registre append-only `NC-MANDATE-AAAA-XXXX` ;
+- historique des mandats présidentiels et du Conseil ;
+- sceau d'entrée en fonction et sceau de fin de mandat ;
+- transfert automatique des habilitations de terminal ;
+- remplacement propre de l'ancienne Présidence ou de l'ancien Conseil ;
+- publication des résultats et investitures au Journal officiel.
+
+### Interface
+- nouveau bureau `DEMOCRATIE NATIONALE` ;
+- lecture, candidature, vote, dépouillement, second tour et annulation ;
+- registre des mandats ;
+- impression des élections et mandats ;
+- page dédiée sur `ic nc-display` ;
+- notifications ouvrant directement le scrutin concerné.
+
 ## 0.18.0
 
 ### Trésor national
