@@ -2306,6 +2306,274 @@ local function treatiesScreen(query,stage,stateId)
   end
 end
 
+local function enforcementTypeLabel(v)
+  local labels={
+    fine="Amende / paiement",restitution="Restitution",compensation="Indemnisation",
+    embargo="Embargo",military_embargo="Embargo militaire",asset_freeze="Gel d'avoirs",
+    trade_restriction="Restriction commerciale",suspension="Suspension de droits",
+    cease="Ordre de cessation",inspection="Inspection internationale",
+    demilitarized_zone="Zone demilitarisee",other="Autre mesure"
+  }
+  return labels[v] or tostring(v or "")
+end
+
+local function chooseEnforcementType(current)
+  local p=menu("TYPE DE MESURE",{
+    {text="Amende / paiement",v="fine"},
+    {text="Restitution",v="restitution"},
+    {text="Indemnisation",v="compensation"},
+    {text="Embargo",v="embargo"},
+    {text="Embargo militaire",v="military_embargo"},
+    {text="Gel d'avoirs",v="asset_freeze"},
+    {text="Restriction commerciale",v="trade_restriction"},
+    {text="Suspension de droits",v="suspension"},
+    {text="Ordre de cessation",v="cease"},
+    {text="Inspection internationale",v="inspection"},
+    {text="Zone demilitarisee",v="demilitarized_zone"},
+    {text="Autre mesure",v="other"}
+  },"Actuel: "..enforcementTypeLabel(current))
+  return p and p.v or current or "other"
+end
+
+local function chooseStateTarget()
+  local states,err=rpc("STATE_LIST",{})
+  if not states then message("ETATS",err,palette.bad);return nil end
+  local items={}
+  for _,st in ipairs(states) do
+    items[#items+1]={text=st.id.."  "..st.name.."  ["..st.status.."]",state=st}
+  end
+  local p=menu("ETAT CIBLE",items,"Selectionnez l'Etat concerne.")
+  return p and p.state or nil
+end
+
+local function createEnforcement(prefillCaseId,prefillJudgmentId)
+  local targetKind=menu("CIBLE DE LA MESURE",{
+    {text="Etat membre / candidat",v="state"},
+    {text="Personne",v="person"},
+    {text="Organisation / entreprise",v="organization"},
+    {text="Autre",v="other"}
+  })
+  if not targetKind then return end
+
+  local targetStateId=""
+  local targetName=""
+  if targetKind.v=="state" then
+    local st=chooseStateTarget()
+    if not st then return end
+    targetStateId=st.id
+    targetName=st.name
+  else
+    targetName=prompt("Nom de la cible")
+  end
+
+  local typ=chooseEnforcementType("other")
+  local summary=prompt("Objet court de la mesure")
+  local terms=multi("CONDITIONS / OBLIGATIONS D'EXECUTION","")
+  local amount=prompt("Montant / valeur (optionnel)")
+  local deadline=prompt("Echeance (optionnel)")
+  local caseId=prefillCaseId or prompt("Dossier lie CASE-... (optionnel)")
+  local judgmentId=prefillJudgmentId or prompt("Jugement lie (optionnel)")
+  local visibility=menu("VISIBILITE",{
+    {text="Restreinte au circuit institutionnel",v="restricted"},
+    {text="Publique",v="public"}
+  })
+
+  local r,e=rpc("ENFORCEMENT_CREATE",{
+    caseId=caseId or "",judgmentId=judgmentId or "",
+    targetType=targetKind.v,targetStateId=targetStateId,targetName=targetName,
+    enforcementType=typ,summary=summary,terms=terms,amount=amount,deadline=deadline,
+    visibility=visibility and visibility.v or "restricted"
+  })
+  message("EXECUTION",r and ("Mesure creee: "..r.id) or e,r and palette.ok or palette.bad)
+  return r
+end
+
+local function enforcementSections(e)
+  local progress={}
+  for _,row in ipairs(e.progress or {}) do
+    progress[#progress+1]="#"..tostring(row.id or "?").." / "..(row.at or "").." / "..(row.by or "?")..
+      "\n"..(row.note or "")..
+      ((row.reference and row.reference~="") and ("\nReference: "..row.reference) or "")..
+      "\nSceau: "..(row.seal or "-")
+  end
+  local history={}
+  for _,row in ipairs(e.statusHistory or {}) do
+    history[#history+1]=(row.at or "").." / "..(row.from or "?").." -> "..(row.to or "?")..
+      ((row.reason and row.reason~="") and (" / "..row.reason) or "")..
+      "\nSceau: "..(row.seal or "-")
+  end
+
+  return {
+    {label="Mesure",text=(e.id or "").." / "..enforcementTypeLabel(e.enforcementType)},
+    {label="Statut / visibilite",text=(e.status or "").." / "..(e.visibility or "restricted")},
+    {label="Cible",text=(e.targetName or "")..((e.targetStateId and e.targetStateId~="") and (" / "..e.targetStateId) or "")},
+    {label="Dossier / jugement",text=(e.caseId or "-").." / "..(e.judgmentId or "-")},
+    {label="Objet",text=e.summary or ""},
+    {label="Conditions",text=e.terms or ""},
+    {label="Montant",text=e.amount or "-"},
+    {label="Echeance",text=e.deadline or "-"},
+    {label="Ordonnance",text=(e.createdBy or "").." / "..(e.createdAt or "")},
+    {label="Sceau initial",text=e.seal or "-"},
+    {label="Suivi d'execution",text=#progress>0 and table.concat(progress,"\n\n") or "Aucun compte rendu."},
+    {label="Historique de statut",text=#history>0 and table.concat(history,"\n\n") or "Aucun changement."}
+  }
+end
+
+local function enforcementDetails(id)
+  while true do
+    local e,err=rpc("ENFORCEMENT_GET",{id=id})
+    if not e then message("EXECUTION",err,palette.bad);return end
+
+    local actions={
+      {text="Lire la fiche complete",id="read"},
+      {text="Imprimer la mesure",id="print"}
+    }
+    if e.caseId and e.caseId~="" then actions[#actions+1]={text="Ouvrir le dossier lie",id="case"} end
+    if allowed("enforcementProgress") then actions[#actions+1]={text="Ajouter un compte rendu d'execution",id="progress"} end
+    if allowed("enforcementWrite") then actions[#actions+1]={text="Changer le statut d'execution",id="status"} end
+
+    local a=menu(e.id.." - "..e.targetName,actions,
+      "["..e.status.."] "..enforcementTypeLabel(e.enforcementType).." / "..(e.visibility or "restricted"))
+    if not a then return end
+
+    if a.id=="read" then
+      textPage(e.id,enforcementSections(e))
+
+    elseif a.id=="print" then
+      local ok,r=printer.enforcement(e)
+      message("IMPRESSION",ok and ("Mesure imprimee: "..r.." page(s).") or r,ok and palette.ok or palette.bad)
+
+    elseif a.id=="case" then
+      caseDetails(e.caseId)
+
+    elseif a.id=="progress" then
+      local reference=prompt("Reference / preuve associee (optionnel)")
+      local note=multi("COMPTE RENDU D'EXECUTION","")
+      local r,er=rpc("ENFORCEMENT_ADD_PROGRESS",{id=e.id,reference=reference,note=note})
+      message("EXECUTION",r and "Compte rendu ajoute et scelle." or er,r and palette.ok or palette.bad)
+
+    elseif a.id=="status" then
+      local st=menu("STATUT D'EXECUTION",{
+        {text="Ordonnee",v="ordered"},
+        {text="Active / en cours",v="active"},
+        {text="Partiellement executee",v="partial"},
+        {text="Executee / respectee",v="complied"},
+        {text="Violation / non-respect",v="breached"},
+        {text="Levee",v="lifted"},
+        {text="Expiree",v="expired"}
+      },"Actuel: "..e.status)
+      if st then
+        local reason=prompt("Motif / observation")
+        local r,er=rpc("ENFORCEMENT_UPDATE",{id=e.id,status=st.v,reason=reason})
+        message("EXECUTION",r and ("Statut: "..r.status) or er,r and palette.ok or palette.bad)
+      end
+    end
+  end
+end
+
+enforcementsScreen=function(query,status,stateId,caseId)
+  query=query or ""
+  status=status or ""
+  stateId=stateId or ""
+  caseId=caseId or ""
+
+  while true do
+    local rows,err=rpc("ENFORCEMENT_LIST",{query=query,status=status,stateId=stateId,caseId=caseId})
+    if not rows then message("EXECUTION",err,palette.bad);return end
+
+    local items={}
+    if allowed("enforcementWrite") then items[#items+1]={text="[+] Creer une mesure d'execution",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer par statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
+    if query~="" or status~="" then items[#items+1]={text="[R] Reinitialiser recherche/statut",id="reset"} end
+
+    for _,e in ipairs(rows) do
+      items[#items+1]={
+        text=e.id.."  "..e.targetName.."  "..enforcementTypeLabel(e.enforcementType).."  ["..e.status.."]",
+        enforcement=e
+      }
+    end
+
+    local scope=""
+    if stateId~="" then scope=scope.." / Etat "..stateId end
+    if caseId~="" then scope=scope.." / Dossier "..caseId end
+    local p=menu("EXECUTION / SANCTIONS",items,#rows.." mesure(s)"..scope)
+    if not p then return end
+
+    if p.id=="new" then
+      createEnforcement(caseId~="" and caseId or nil,nil)
+
+    elseif p.id=="search" then
+      query=prompt("Recherche execution",query)
+
+    elseif p.id=="status" then
+      local st=menu("FILTRER LES MESURES",{
+        {text="Toutes",v=""},{text="Ordonnees",v="ordered"},{text="Actives",v="active"},
+        {text="Partielles",v="partial"},{text="Executees",v="complied"},
+        {text="En violation",v="breached"},{text="Levees",v="lifted"},{text="Expirees",v="expired"}
+      })
+      if st then status=st.v end
+
+    elseif p.id=="reset" then
+      query="";status=""
+
+    elseif p.enforcement then
+      enforcementDetails(p.enforcement.id)
+    end
+  end
+end
+
+local function notificationCenter()
+  while true do
+    local rows,err=rpc("NOTICE_LIST",{})
+    if not rows then message("NOTIFICATIONS",err,palette.bad);return end
+
+    local unread=0
+    local items={
+      {text="[OK] Marquer toutes comme lues",id="all"}
+    }
+    for _,n in ipairs(rows) do
+      if not n.read then unread=unread+1 end
+      local sev=string.upper(n.severity or "info")
+      items[#items+1]={
+        text=(n.read and "    " or "[!] ").."["..sev.."] "..n.title,
+        notice=n
+      }
+    end
+
+    local p=menu("CENTRE DE NOTIFICATIONS",items,unread.." non lue(s) / "..#rows.." visible(s)")
+    if not p then return end
+
+    if p.id=="all" then
+      local r,e=rpc("NOTICE_MARK_ALL",{})
+      message("NOTIFICATIONS",r and (tostring(r.count).." notification(s) marquee(s) comme lues.") or e,r and palette.ok or palette.bad)
+
+    elseif p.notice then
+      local n=p.notice
+      if not n.read then rpc("NOTICE_MARK_READ",{id=n.id}) end
+      local actions={
+        {text="Lire le message",id="read"}
+      }
+      if n.objectType and n.objectId then actions[#actions+1]={text="Ouvrir l'element associe",id="open"} end
+      local a=menu(n.title,actions,(n.createdAt or "").." / "..string.upper(n.severity or "info"))
+      if a and a.id=="read" then
+        textPage(n.id,{
+          {label=n.title,text=n.body or ""},
+          {label="Importance",text=n.severity or "info"},
+          {label="Date",text=n.createdAt or ""},
+          {label="Element associe",text=(n.objectType or "-").." / "..(n.objectId or "-")}
+        })
+      elseif a and a.id=="open" then
+        if n.objectType=="bill" then billDetails(n.objectId)
+        elseif n.objectType=="treaty" then treatyDetails(n.objectId)
+        elseif n.objectType=="case" then caseDetails(n.objectId)
+        elseif n.objectType=="enforcement" then enforcementDetails(n.objectId)
+        else message("NOTIFICATION","Type d'element non navigable: "..tostring(n.objectType),palette.warn) end
+      end
+    end
+  end
+end
+
 local function auditScreen()
   local rows,err=rpc("AUDIT_LIST",{limit=100})
   if not rows then message("JOURNAL",err,palette.bad);return end
