@@ -127,6 +127,23 @@ local function drawCases(t,cases)
   fillLine(t,h," Cour internationale de l'Union",colors.gray)
 end
 
+local function drawTreaties(t,treaties)
+  t.setBackgroundColor(colors.black);t.clear()
+  header(t,"TRAITES EN VIGUEUR","Registre diplomatique")
+  local _,h=t.getSize()
+  local y=4
+  if #treaties==0 then
+    fillLine(t,y," Aucun traite en vigueur.",colors.lightGray)
+  else
+    for _,tr in ipairs(treaties) do
+      if y>=h then break end
+      fillLine(t,y," "..tr.id.." ["..tostring(tr.treatyType or "?").."]",colors.cyan);y=y+1
+      if y<h then fillLine(t,y,"   "..tostring(tr.title or ""),colors.white);y=y+1 end
+    end
+  end
+  fillLine(t,h," Registre des traites internationaux",colors.gray)
+end
+
 local function drawLaws(t,laws)
   t.setBackgroundColor(colors.black);t.clear()
   header(t,"CODE INTERNATIONAL","Selection des derniers articles actifs")
@@ -162,18 +179,20 @@ function P.run()
       local states=rpc(cfg,"STATE_LIST",{status="member"},4) or {}
       local bills=rpc(cfg,"BILL_LIST",{stage="voting"},4) or {}
       local cases=rpc(cfg,"CASE_LIST",{visibility="public"},4) or {}
+      local treaties=rpc(cfg,"TREATY_LIST",{stage="in_force"},4) or {}
       local laws=rpc(cfg,"LAW_LIST",{status="active"},4) or {}
       if page==1 then drawOverview(target,dash,states,bills,cases)
       elseif page==2 then drawStates(target,states)
       elseif page==3 then drawBills(target,bills)
-      elseif page==4 then drawCases(target,cases)
+      elseif page==4 then drawTreaties(target,treaties)
+      elseif page==5 then drawCases(target,cases)
       else drawLaws(target,laws) end
     end
 
     local timer=os.startTimer(8)
     while true do
       local ev,a=os.pullEvent()
-      if ev=="timer" and a==timer then page=page%5+1 break
+      if ev=="timer" and a==timer then page=page%6+1 break
       elseif ev=="key" and (a==keys.q or a==keys.escape) then
         term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
       elseif ev=="monitor_touch" then page=page%5+1 break end
@@ -276,6 +295,60 @@ function P.billDisplay(billId)
     end
 
     local timer=os.startTimer(3)
+    while true do
+      local ev,a=os.pullEvent()
+      if ev=="timer" and a==timer then break
+      elseif ev=="key" and (a==keys.q or a==keys.escape) then
+        term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
+      end
+    end
+  end
+end
+
+
+function P.treatyDisplay(treatyId)
+  local cfg=common.loadConfig()
+  if not cfg or cfg.role=="server" then error("Terminal client requis.",0) end
+  local monitor=findMonitor()
+  local old=term.current()
+  local target=monitor or old
+  if monitor and monitor.setTextScale then pcall(monitor.setTextScale,0.5) end
+  term.redirect(target)
+
+  while true do
+    target.setCursorBlink(false)
+    target.setBackgroundColor(colors.black);target.clear()
+    local tr,err=rpc(cfg,"TREATY_GET",{id=treatyId},4)
+    if not tr then
+      drawOffline(target,err)
+    else
+      local sig=tr.signatureStatus or {}
+      header(target,"DIPLOMATIE / "..tr.id,tr.title or "")
+      local _,h=target.getSize()
+      local y=4
+      fillLine(target,y," Statut: "..tostring(tr.stage).." / v"..tostring(tr.version or 1),colors.cyan);y=y+1
+      fillLine(target,y," Type: "..tostring(tr.treatyType or "?"),colors.lightGray);y=y+2
+      fillLine(target,y," Signatures: "..tostring(sig.signed or 0).."/"..tostring(sig.required or 0),sig.complete and colors.lime or colors.yellow);y=y+2
+
+      local rows={}
+      for stateId,s in pairs(tr.signatures or {}) do rows[#rows+1]={id=stateId,s=s} end
+      table.sort(rows,function(a,b) return a.id<b.id end)
+      for _,row in ipairs(rows) do
+        if y>=h then break end
+        fillLine(target,y," [SIGNE] "..(row.s.stateName or row.id),colors.lime);y=y+1
+      end
+      for _,stateId in ipairs(sig.missing or {}) do
+        if y>=h then break end
+        fillLine(target,y," [ATTENTE] "..stateId,colors.yellow);y=y+1
+      end
+
+      if tr.stage=="in_force" and y<h then
+        fillLine(target,y," EN VIGUEUR depuis "..tostring(tr.effectiveAt or "-"),colors.lime)
+      end
+      fillLine(target,h," LIVE / actualisation 4s / Q pour quitter",colors.gray)
+    end
+
+    local timer=os.startTimer(4)
     while true do
       local ev,a=os.pullEvent()
       if ev=="timer" and a==timer then break
