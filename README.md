@@ -4,7 +4,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** destiné au Code interna
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. `North Coalition` est conservé uniquement comme État proposant dans le corpus juridique initial.
 
-## Ce que fait la v0.2
+## Ce que fait la v0.3
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `viewer`, `admin`) ;
@@ -76,7 +76,7 @@ wget run https://raw.githubusercontent.com/nexox9official-source/international-c
 wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua admin
 ```
 
-## Navigation v0.2
+## Navigation v0.3
 
 Le Code n'affiche plus simplement une liste brute de 500 articles. Le terminal propose maintenant :
 
@@ -96,12 +96,31 @@ Il n'est plus nécessaire de fermer le texte en cours pour retrouver une loi :
 - **F2** : ouvre directement les Livres / catégories du Code ;
 - **F3** : recherche un article par numéro, titre ou mot ;
 - **F4** : parcourt/recherche le Code puis insère la référence choisie **à la position du curseur** ;
+- **F6** : ouvre un **panier juridique multi-sélection** pour préparer plusieurs articles, les lire, les ajouter/retirer puis les insérer d'un coup ;
+- **F7** : affiche les anciens brouillons autosauvegardés du terminal et permet d'en réinsérer un dans le texte en cours ;
 - **F5** : termine la rédaction et utilise le texte ;
 - **Échap** : ouvre le menu de sortie sans perdre le brouillon.
 
 Pendant F2/F3/F4, le tampon d'édition reste en mémoire et une copie est enregistrée sur le PC. En revenant de la bibliothèque juridique, le texte, les lignes et le brouillon sont toujours présents.
 
 Ainsi, au milieu d'une motivation, un juge peut faire **F3**, rechercher « légitime défense », lire l'article, revenir à son texte puis faire **F4** pour insérer `[UNS-ART-244] Légitime défense individuelle` exactement là où se trouve le curseur.
+
+## Dossiers et jugements v0.3
+
+Les dossiers judiciaires disposent maintenant d'un vrai suivi de procédure :
+
+- **chronologie automatique** pour l'ouverture du dossier, les faits, preuves, changements de statut, citations d'articles et jugements ;
+- **panier juridique multi-sélection** permettant d'ajouter ou retirer plusieurs articles sans quitter le dossier ;
+- filtres des dossiers par statut : ouvert, enquête, audience, jugé, appel, clos ou archivé ;
+- chaque jugement fige une **photographie des références, titres et versions des articles** utilisés au moment de la décision ;
+- consultation séparée de chaque jugement ;
+- impression du **dossier complet**, de la **chronologie** ou d'un **jugement individuel** ;
+- le tableau de bord distingue maintenant les articles actifs des articles totaux et les dossiers encore ouverts ;
+- le diagnostic affiche la version du client et du serveur pour détecter rapidement un poste qui n'a pas été mis à jour.
+
+### Historique juridique
+
+Un article affiche désormais son **historique de versions**. Une ancienne version peut être relue avec son statut, sa date d'archivage et son auteur d'archivage. Depuis un article, il est également possible d'ouvrir directement les autres articles de son Livre.
 
 ## Imprimante
 
@@ -237,4 +256,4 @@ Les 25 Livres du Code sont automatiquement associés aux articles par groupes de
 
 ## Statut
 
-**v0.2 - navigation juridique et bureau de rédaction persistant.** Le code Lua est structuré pour être étendu avec audiences, mandats, appels formels, signatures/quorum, réplication vers un second serveur et écran Monitor public.
+**v0.3 - navigation avancée, panier juridique, chronologie judiciaire et impressions spécialisées.** Le code Lua est structuré pour être étendu avec audiences, mandats, appels formels, signatures/quorum, réplication vers un second serveur et écran Monitor public.
