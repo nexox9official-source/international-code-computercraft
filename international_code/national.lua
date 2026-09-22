@@ -211,7 +211,12 @@ function N.ensure(state)
   n.cases=n.cases or {}
   n.caseCounters=n.caseCounters or {}
   n.citizens=n.citizens or {}
-  n.nextCitizen=n.nextCitizen or 1
+  local maxCitizen=0
+  for id in pairs(n.citizens) do
+    local num=tonumber(tostring(id):match("NC%-CIT%-(%d+)")) or 0
+    if num>maxCitizen then maxCitizen=num end
+  end
+  n.nextCitizen=math.max(tonumber(n.nextCitizen) or 1,maxCitizen+1)
   n.nationalAudit=n.nationalAudit or {}
 
   local corpus=loadCorpus()
@@ -258,7 +263,7 @@ local function noticeEligible(ctx,state,e,title,body,severity,objectType,objectI
   local wanted={}
   for _,id in ipairs(e.eligibleIdentities or {}) do wanted[id]=true end
   for _,cl in pairs(state.clients or {}) do
-    local id=votingKey(state.national,cl) or identity(cl)
+    local id=(cl.citizenId and state.national and state.national.citizens and state.national.citizens[cl.citizenId]) and cl.citizenId or identity(cl)
     if wanted[id] then
       ctx.pushNotice(state,{
         title=title,body=body,severity=severity or "info",
@@ -507,7 +512,7 @@ local function appointMinister(state,n,ctx,actor,ministry,target,mode,sourceId,r
   if ministry.holderClientId then return nil,"Ce ministere possede deja un titulaire. Revoquez ou faites demissionner le titulaire avant remplacement." end
   if target.nationalRole=="president" then return nil,"Le terminal presidentiel ne peut pas etre converti en poste ministeriel." end
   if target.ministryCode and target.ministryCode~="" then return nil,"Ce terminal detient deja un portefeuille ministeriel." end
-  if not isNationalMember(state,target) then return nil,"Le candidat doit d'abord etre enregistre comme membre de l'intranet national." end
+  if not isNationalMember(state,target) or not isVotingCitizen(n,target) then return nil,"Le candidat doit etre un citoyen national enregistre et actif." end
 
   target.nationalRole="minister"
   target.ministryCode=ministry.code
@@ -736,6 +741,8 @@ function N.handle(state,actor,action,p,ctx)
     actor.nationalIdentity=n.meta.foundingAccount or "NexoFr_"
     actor.ministryCode=nil
     actor.stateId=n.meta.stateId
+    local founder=select(1,createCitizen(n,actor.nationalIdentity,"citizen",actor.nationalIdentity,"Compte fondateur de North Coalition"))
+    actor.citizenId=founder and founder.id or actor.citizenId
     n.meta.presidentClientId=actor.clientId
     n.meta.presidentIdentity=actor.nationalIdentity
     n.meta.bootstrapAt=n.meta.bootstrapAt or common.now()
@@ -818,7 +825,7 @@ function N.handle(state,actor,action,p,ctx)
       out[#out+1]={
         clientId=cl.clientId,computerId=cl.computerId,label=cl.label,role=cl.role,
         stateId=cl.stateId,nationalRole=nationalRole(state,cl),storedNationalRole=cl.nationalRole,
-        nationalIdentity=identity(cl),ministryCode=cl.ministryCode
+        nationalIdentity=identity(cl),citizenId=cl.citizenId,ministryCode=cl.ministryCode
       }
     end
     table.sort(out,function(a,b) return tostring(a.nationalIdentity)<tostring(b.nationalIdentity) end)
@@ -844,7 +851,14 @@ function N.handle(state,actor,action,p,ctx)
     end
     target.nationalRole=(wanted~="" and wanted or nil)
     target.nationalIdentity=common.trim(p.identity)~="" and common.safeName(p.identity) or (target.nationalIdentity or target.label)
-    if target.nationalRole then target.stateId=n.meta.stateId end
+    if target.nationalRole then
+      target.stateId=n.meta.stateId
+      if target.nationalRole~="public" then
+        local citizen,er=createCitizen(n,target.nationalIdentity,"citizen",identity(actor),"Enregistrement automatique lors de l'attribution d'une fonction nationale")
+        if not citizen then return nil,er end
+        target.citizenId=citizen.id
+      end
+    end
     if wanted=="president" then
       if actor.role~="admin" then return nil,"Seul l'administrateur peut transferer la fonction presidentielle." end
       local old=n.meta.presidentClientId and state.clients[n.meta.presidentClientId]
@@ -951,7 +965,7 @@ function N.handle(state,actor,action,p,ctx)
     if e.stage~="draft" then return nil,"Les candidatures sont verrouillees apres ouverture." end
     local target=state.clients[common.trim(p.clientId)]
     if not target then return nil,"Terminal candidat introuvable." end
-    if not isNationalMember(state,target) then return nil,"Le candidat doit d'abord etre enregistre dans North Coalition." end
+    if not isNationalMember(state,target) or not isVotingCitizen(n,target) then return nil,"Le candidat doit etre un citoyen national enregistre et actif." end
     if target.nationalRole=="president" or (target.ministryCode and target.ministryCode~="") then return nil,"Candidat deja titulaire d'une fonction incompatible." end
     for _,c in ipairs(e.candidates) do if c.clientId==target.clientId then return copy(e) end end
     e.candidates[#e.candidates+1]={clientId=target.clientId,identity=identity(target),addedAt=common.now()}
