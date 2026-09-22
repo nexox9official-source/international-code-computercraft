@@ -24,7 +24,7 @@ local permissions = {
     LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
-    CASE_REMOVE_ARTICLE=true, CASE_SET_STATUS=true, CASE_SET_VISIBILITY=true,
+    CASE_REMOVE_ARTICLE=true, CASE_SET_STATUS=true,
     CASE_ADD_HEARING=true, CASE_SET_HEARING_STATUS=true,
     STATE_LIST=true, STATE_GET=true, BILL_LIST=true, BILL_GET=true,
     AUDIT_LIST=true
@@ -310,8 +310,10 @@ end
 local function canViewCase(actor,c)
   if not c then return false end
   local role=actor and actor.role or "viewer"
-  if role=="admin" or role=="judge" or role=="clerk" then return true end
-  return (c.visibility or "restricted")=="public"
+  local visibility=c.visibility or "restricted"
+  if role=="admin" or role=="judge" then return true end
+  if role=="clerk" then return visibility~="sealed" end
+  return visibility=="public"
 end
 
 local function listCases(state, payload, actor)
