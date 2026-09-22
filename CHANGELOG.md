@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.14.0
+
+### Registre civil
+- identifiants permanents `NC-CIT-XXXX` ;
+- citoyens, résidents, suspensions et archivage/décès ;
+- rattachement d'un ou plusieurs terminaux à une identité permanente ;
+- historique scellé des modifications d'état civil ;
+- gestion réservée à la Présidence, à l'administration de secours ou au `MIN-INT` ;
+- protection des titulaires : impossible de retirer la citoyenneté du Président ou d'un ministre sans transfert préalable.
+
+### Sécurité électorale
+- les corps électoraux sont désormais figés avec des `NC-CIT`, pas de simples pseudos ;
+- plusieurs terminaux du même citoyen ne créent qu'une seule voix ;
+- seuls les citoyens actifs peuvent voter ou être candidats à un ministère ;
+- migration automatique des anciennes habilitations vers le registre citoyen.
+
+### Sessions nationales
+- registre `NC-SESSION-AAAA-XXXX` ;
+- Conseil, Cabinet, urgence, commission et audition publique ;
+- ordre du jour relié aux lois, projets, élections, décrets, dossiers, ministères et citoyens ;
+- présence enregistrée par citoyen ;
+- ouverture, pilotage des points, procès-verbal, conclusions, annulation et clôture scellées ;
+- impression complète des sessions ;
+- intégration au Monitor national et aux notifications.
+
+## 0.13.0
+
+### Justice nationale
+- dossiers `NC-CASE-AAAA-XXXX` séparés de la CIU ;
+- matières pénale, civile, administrative et constitutionnelle ;
+- niveaux public / restricted / sealed ;
+- faits et preuves scellés ;
+- citations de `NC-ART` ;
+- audiences et procès-verbaux ;
+- ordonnances judiciaires ;
+- jugements motivés avec versions d'articles figées ;
+- appels et décisions d'appel ;
+- impression dossier/jugement ;
+- page Justice sur le Monitor national.
+
+### Séparation des pouvoirs
+- rôle national `prosecutor` ajouté ;
+- la fonction présidentielle n'hérite plus automatiquement des pouvoirs judiciaires du super-admin technique dans l'interface nationale ;
+- police, parquet et juge disposent de capacités distinctes.
+
+### Notifications / Monitor
+- centre de notifications North Coalition ;
+- alertes pour élections, lois, décrets, ministères et dossiers judiciaires ;
+- `ic nc-display` fournit un Monitor national rotatif.
+
 ## 0.12.0
 
 ### Intranet North Coalition
