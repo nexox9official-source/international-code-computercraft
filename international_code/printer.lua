@@ -293,4 +293,51 @@ function P.treaty(treaty)
   return printLines(treaty.id or "TRAITE",lines)
 end
 
+
+function P.enforcement(e)
+  if not e then return false,"Mesure d'execution introuvable." end
+  local lines={}
+  appendWrapped(lines,"MESURE D'EXECUTION",e.id or "-",25)
+  appendWrapped(lines,"TYPE",e.enforcementType or "-",25)
+  appendWrapped(lines,"STATUT",e.status or "-",25)
+  appendWrapped(lines,"CIBLE",e.targetName or "-",25)
+  if e.targetStateId and e.targetStateId~="" then appendWrapped(lines,"ETAT",e.targetStateId,25) end
+  if e.caseId and e.caseId~="" then appendWrapped(lines,"DOSSIER",e.caseId,25) end
+  if e.judgmentId and e.judgmentId~="" then appendWrapped(lines,"JUGEMENT",e.judgmentId,25) end
+  appendWrapped(lines,"OBJET",e.summary or "",25)
+  appendWrapped(lines,"CONDITIONS",e.terms or "",25)
+  if e.amount and e.amount~="" then appendWrapped(lines,"MONTANT",e.amount,25) end
+  if e.deadline and e.deadline~="" then appendWrapped(lines,"ECHEANCE",e.deadline,25) end
+  appendWrapped(lines,"VISIBILITE",e.visibility or "restricted",25)
+  appendWrapped(lines,"ORDONNE PAR",(e.createdBy or "-").." / "..(e.createdAt or "-"),25)
+  appendWrapped(lines,"SCEAU INITIAL",e.seal or "-",25)
+
+  if e.progress and #e.progress>0 then
+    lines[#lines+1]="SUIVI D'EXECUTION"
+    for _,row in ipairs(e.progress) do
+      for _,l in ipairs(common.wrap("#"..tostring(row.id or "?").." "..(row.at or "").." / "..(row.by or "?"),25)) do lines[#lines+1]=l end
+      for _,l in ipairs(common.wrap(row.note or "",25)) do lines[#lines+1]=l end
+      if row.reference and row.reference~="" then
+        for _,l in ipairs(common.wrap("Ref: "..row.reference,25)) do lines[#lines+1]=l end
+      end
+      for _,l in ipairs(common.wrap("Sceau: "..(row.seal or "-"),25)) do lines[#lines+1]=l end
+      lines[#lines+1]=""
+    end
+  end
+
+  if e.statusHistory and #e.statusHistory>0 then
+    lines[#lines+1]="HISTORIQUE DE STATUT"
+    for _,row in ipairs(e.statusHistory) do
+      for _,l in ipairs(common.wrap((row.at or "").." "..(row.from or "?").." -> "..(row.to or "?"),25)) do lines[#lines+1]=l end
+      if row.reason and row.reason~="" then
+        for _,l in ipairs(common.wrap(row.reason,25)) do lines[#lines+1]=l end
+      end
+      for _,l in ipairs(common.wrap("Sceau: "..(row.seal or "-"),25)) do lines[#lines+1]=l end
+      lines[#lines+1]=""
+    end
+  end
+
+  return printLines(e.id or "EXECUTION",lines)
+end
+
 return P
