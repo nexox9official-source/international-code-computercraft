@@ -23,7 +23,7 @@ end
 assert(total==500,"expected 500 seed articles, got "..total)
 for n=1,500 do assert(seen[n],"missing article "..n) end
 
-assert(common.VERSION=="0.18.0","unexpected application version: "..tostring(common.VERSION))
+assert(common.VERSION=="0.19.0","unexpected application version: "..tostring(common.VERSION))
 
 local function readSource(path)
   local h=assert(io.open(path,"r"))
@@ -43,6 +43,8 @@ local nationalPrinter=readSource("international_code/national_printer.lua")
 local nationalPublic=readSource("international_code/national_public.lua")
 local nationalServices=readSource("international_code/national_services.lua")
 local nationalFinance=readSource("international_code/national_finance.lua")
+local nationalDemocracy=readSource("international_code/national_democracy.lua")
+local nationalDemocracyClient=readSource("international_code/national_democracy_client.lua")
 local nationalCorpus=readSource("international_code/national/corpus_v2.json")
 
 assert(server:find('CONFLICT_CREATE',1,true),"conflict server actions missing")
@@ -96,6 +98,11 @@ assert(nationalFinance:find('NC_EXPENSE_PRESIDENT_DECIDE',1,true),"high-value pr
 assert(nationalFinance:find('NC_EXPENSE_PAY',1,true),"public payment workflow missing")
 assert(nationalFinance:find('NC_CONTRACT_CREATE',1,true),"public procurement workflow missing")
 assert(nationalFinance:find('NC_CONTRACT_AWARD',1,true),"public contract award missing")
+assert(nationalDemocracy:find('NC_GE_CREATE',1,true),"general election creation missing")
+assert(nationalDemocracy:find('NC_GE_OPEN_CANDIDACY',1,true),"general election candidacy phase missing")
+assert(nationalDemocracy:find('NC_GE_VOTE',1,true),"general election voting missing")
+assert(nationalDemocracy:find('NC_GE_OPEN_RUNOFF',1,true),"general election runoff missing")
+assert(nationalDemocracy:find('NC_MANDATE_LIST',1,true),"national mandates missing")
 assert(national:find('NC%-GAZ'),"official Gazette IDs/seals missing")
 assert(nationalClient:find('CODE NATIONAL / CATEGORIES / RECHERCHE',1,true),"national categorized code UI missing")
 assert(nationalClient:find('NOTIFICATIONS NATIONALES',1,true),"national notification center missing")
@@ -113,6 +120,9 @@ assert(nationalClient:find('FINANCES PUBLIQUES',1,true),"national finance UI mis
 assert(nationalClient:find('BUDGETS NATIONAUX',1,true),"national budget UI missing")
 assert(nationalClient:find('DEPENSES PUBLIQUES',1,true),"national expense UI missing")
 assert(nationalClient:find('MARCHES PUBLICS',1,true),"public procurement UI missing")
+assert(nationalClient:find('ELECTIONS NATIONALES / PRESIDENCE / CONSEIL',1,true),"general elections entry missing")
+assert(nationalDemocracyClient:find('DEMOCRATIE NATIONALE',1,true),"general elections workstation missing")
+assert(nationalDemocracyClient:find('REGISTRE DES MANDATS',1,true),"mandate registry UI missing")
 assert(nationalPrinter:find('function P.law',1,true),"national law printing missing")
 assert(nationalPrinter:find('function P.caseFile',1,true),"national case printing missing")
 assert(nationalPrinter:find('function P.judgment',1,true),"national judgment printing missing")
@@ -127,10 +137,13 @@ assert(nationalPrinter:find('function P.budget',1,true),"budget printing missing
 assert(nationalPrinter:find('function P.revenue',1,true),"revenue printing missing")
 assert(nationalPrinter:find('function P.expense',1,true),"expense printing missing")
 assert(nationalPrinter:find('function P.contract',1,true),"public contract printing missing")
+assert(nationalPrinter:find('function P.generalElection',1,true),"general election printing missing")
+assert(nationalPrinter:find('function P.mandate',1,true),"mandate printing missing")
 assert(nationalPublic:find('JUSTICE NATIONALE',1,true),"national justice monitor missing")
 assert(nationalPublic:find('SESSIONS NATIONALES',1,true),"national session monitor missing")
 assert(nationalPublic:find('NC-GAZ / actes officiels scelles',1,true),"official Gazette monitor missing")
 assert(nationalPublic:find('FINANCES PUBLIQUES',1,true),"national finance monitor missing")
+assert(nationalPublic:find('DEMOCRATIE NATIONALE',1,true),"national democracy monitor missing")
 assert(cli:find('cmd=="nc%-verify"'),"national seal verification CLI missing")
 
 local ncCount=0
@@ -140,4 +153,4 @@ assert(nationalCorpus:find('"founding_phase_account": "NexoFr_"',1,true),"NexoFr
 local forbiddenServerName="Astra".."lium"
 assert(not nationalCorpus:find(forbiddenServerName,1,true),"forbidden server name leaked into national corpus")
 
-print("Self-test OK: 500 UNS articles + 400 NC articles + v0.18 national treasury and procurement")
+print("Self-test OK: 500 UNS articles + 400 NC articles + v0.19 regulated national elections and mandates")
