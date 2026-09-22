@@ -2115,6 +2115,304 @@ local function billsScreen(query,stage)
   end
 end
 
+local function resolutionTypeLabel(v)
+  local labels={
+    general="Resolution generale",sanctions="Sanctions / mesures coercitives",
+    peace_security="Paix et securite",membership="Adhesion / statut d'un Etat",
+    humanitarian="Humanitaire",emergency="Urgence internationale",
+    investigation="Enquete / mission d'etablissement des faits",ceasefire="Cessez-le-feu",
+    observer_mission="Mission d'observation",economic="Mesure economique",other="Autre"
+  }
+  return labels[v] or tostring(v or "")
+end
+
+local function chooseResolutionType(current)
+  local p=menu("TYPE DE RESOLUTION",{
+    {text="Resolution generale",v="general"},
+    {text="Sanctions / mesures coercitives",v="sanctions"},
+    {text="Paix et securite",v="peace_security"},
+    {text="Adhesion / statut d'un Etat",v="membership"},
+    {text="Humanitaire",v="humanitarian"},
+    {text="Urgence internationale",v="emergency"},
+    {text="Enquete / mission d'etablissement des faits",v="investigation"},
+    {text="Cessez-le-feu",v="ceasefire"},
+    {text="Mission d'observation",v="observer_mission"},
+    {text="Mesure economique",v="economic"},
+    {text="Autre",v="other"}
+  },"Actuel: "..resolutionTypeLabel(current))
+  return p and p.v or current or "general"
+end
+
+local function chooseResolutionTarget(current)
+  local states,err=rpc("STATE_LIST",{})
+  if not states then message("ETATS",err,palette.bad);return current or "" end
+  local items={{text="[AUCUN ETAT CIBLE]",id=""}}
+  for _,st in ipairs(states) do
+    items[#items+1]={text=st.id.."  "..st.name.."  ["..st.status.."]",id=st.id}
+  end
+  local p=menu("ETAT CIBLE",items,"Optionnel selon la resolution.")
+  return p and p.id or current or ""
+end
+
+local function chooseResolutionEnforcementType(current)
+  local p=menu("MESURE D'EXECUTION",{
+    {text="Amende / paiement",v="fine"},
+    {text="Restitution",v="restitution"},
+    {text="Indemnisation",v="compensation"},
+    {text="Embargo",v="embargo"},
+    {text="Embargo militaire",v="military_embargo"},
+    {text="Gel d'avoirs",v="asset_freeze"},
+    {text="Restriction commerciale",v="trade_restriction"},
+    {text="Suspension de droits",v="suspension"},
+    {text="Ordre de cessation",v="cease"},
+    {text="Inspection internationale",v="inspection"},
+    {text="Zone demilitarisee",v="demilitarized_zone"},
+    {text="Autre",v="other"}
+  },"Actuel: "..tostring(current or ""))
+  return p and p.v or current or "other"
+end
+
+local function resolutionSections(r)
+  local tally=r.tally or {}
+  local votes={}
+  for stateId,v in pairs(r.votes or {}) do
+    votes[#votes+1]=(v.stateName or stateId).." : "..string.upper(v.choice or "?")..
+      (v.at and (" / "..v.at) or "")
+  end
+  table.sort(votes)
+
+  return {
+    {label="Resolution",text=r.id.." / "..(r.title or "")},
+    {label="Type",text=resolutionTypeLabel(r.resolutionType)},
+    {label="Etape",text=r.stage or ""},
+    {label="Etat cible",text=r.targetStateId or "-"},
+    {label="Dossier lie",text=r.linkedCaseId or "-"},
+    {label="Resume",text=r.summary or ""},
+    {label="Texte integral",text=r.body or ""},
+    {label="Regle de vote",text=thresholdLabel(r.threshold)},
+    {label="Tour / quorum",text="Tour "..tostring(r.votingRound or 0).." / "..tostring(tally.participation or 0)..
+      "/"..tostring(tally.eligible or 0).." participants / minimum "..tostring(tally.quorumRequired or 0)..
+      " / "..(tally.quorumMet and "ATTEINT" or "NON ATTEINT")},
+    {label="Resultat",text="Pour "..tostring(tally.yes or 0).." / Contre "..tostring(tally.no or 0)..
+      " / Abstention "..tostring(tally.abstain or 0).." / "..tostring(r.result or "-")},
+    {label="Votes par Etat",text=#votes>0 and table.concat(votes,"\n") or "Aucun vote."},
+    {label="Sceau du scrutin",text=r.resultSeal or "-"},
+    {label="Execution automatique",text=r.createsEnforcement and
+      ((r.enforcementType or "other").." / "..(r.enforcementTerms or "")..
+      ((r.enforcementAmount and r.enforcementAmount~="") and (" / "..r.enforcementAmount) or "")..
+      ((r.enforcementDeadline and r.enforcementDeadline~="") and (" / echeance "..r.enforcementDeadline) or ""))
+      or "Aucune mesure automatique"},
+    {label="Mesure creee",text=r.enforcementId or "-"},
+    {label="Sceau d'execution",text=r.executionSeal or "-"}
+  }
+end
+
+local function resolutionDetails(id)
+  while true do
+    local r,err=rpc("RESOLUTION_GET",{id=id})
+    if not r then message("RESOLUTION",err,palette.bad);return end
+    local tally=r.tally or {}
+
+    local actions={
+      {text="Lire la resolution et le scrutin",id="read"},
+      {text="Imprimer la resolution",id="print"}
+    }
+
+    if allowed("resolutionVote") and r.stage=="voting" then
+      actions[#actions+1]={text="Voter au nom de mon Etat",id="vote"}
+    end
+
+    if allowed("resolutionWrite") and (r.stage=="draft" or r.stage=="debate") then
+      actions[#actions+1]={text="Modifier le projet",id="edit"}
+      actions[#actions+1]={text=r.stage=="draft" and "Ouvrir le debat" or "Revenir au brouillon",id="stage"}
+      actions[#actions+1]={text="Ouvrir le vote",id="open"}
+    end
+
+    if allowed("resolutionWrite") and r.stage=="voting" then
+      actions[#actions+1]={text="Clore et depouiller le vote",id="close"}
+    end
+
+    if allowed("resolutionWrite") and r.stage=="no_quorum" then
+      actions[#actions+1]={text="Ouvrir un nouveau tour de scrutin",id="reopen"}
+    end
+
+    if allowed("resolutionWrite") and r.stage=="adopted" then
+      actions[#actions+1]={text="Executer / publier la resolution",id="execute"}
+    end
+
+    if r.enforcementId and r.enforcementId~="" then
+      actions[#actions+1]={text="Ouvrir la mesure d'execution associee",id="enforcement"}
+    end
+
+    local a=menu(r.id.." - "..r.title,actions,
+      "["..r.stage.."] "..resolutionTypeLabel(r.resolutionType).." | Pour "..tostring(tally.yes or 0)..
+      " / Contre "..tostring(tally.no or 0))
+    if not a then return end
+
+    if a.id=="read" then
+      textPage(r.id,resolutionSections(r))
+
+    elseif a.id=="print" then
+      local ok,pages=printer.resolution(r)
+      message("IMPRESSION",ok and ("Resolution imprimee: "..pages.." page(s).") or pages,ok and palette.ok or palette.bad)
+
+    elseif a.id=="vote" then
+      local v=menu("VOTE OFFICIEL",{
+        {text="POUR",v="yes"},{text="CONTRE",v="no"},{text="ABSTENTION",v="abstain"}
+      },"Une voix par Etat.")
+      if v then
+        local out,e=rpc("RESOLUTION_VOTE",{id=r.id,choice=v.v})
+        message("VOTE",out and ("Vote enregistre. Pour "..out.tally.yes.." / Contre "..out.tally.no) or e,out and palette.ok or palette.bad)
+      end
+
+    elseif a.id=="edit" then
+      local title=prompt("Titre",r.title)
+      local typ=chooseResolutionType(r.resolutionType)
+      local target=chooseResolutionTarget(r.targetStateId)
+      local linkedCase=prompt("Dossier lie CASE-... (optionnel)",r.linkedCaseId or "")
+      local summary=multi("EXPOSE / RESUME",r.summary or "")
+      local body=multi("TEXTE DE LA RESOLUTION",r.body or "")
+      local threshold=chooseThreshold(r.threshold)
+
+      local createChoice=menu("EXECUTION AUTOMATIQUE",{
+        {text="Conserver / activer une mesure d'execution",v=true},
+        {text="Aucune mesure automatique",v=false}
+      },r.createsEnforcement and "Actuellement activee" or "Actuellement desactivee")
+      local creates=createChoice and createChoice.v or false
+      local enforcementType=r.enforcementType or ""
+      local enforcementTerms=r.enforcementTerms or ""
+      local enforcementAmount=r.enforcementAmount or ""
+      local enforcementDeadline=r.enforcementDeadline or ""
+
+      if creates then
+        enforcementType=chooseResolutionEnforcementType(enforcementType)
+        enforcementTerms=multi("CONDITIONS D'EXECUTION",enforcementTerms)
+        enforcementAmount=prompt("Montant / valeur (optionnel)",enforcementAmount)
+        enforcementDeadline=prompt("Echeance (optionnel)",enforcementDeadline)
+      end
+
+      local out,e=rpc("RESOLUTION_EDIT",{
+        id=r.id,title=title,resolutionType=typ,targetStateId=target,linkedCaseId=linkedCase,
+        summary=summary,body=body,threshold=threshold,createsEnforcement=creates,
+        enforcementType=enforcementType,enforcementTerms=enforcementTerms,
+        enforcementAmount=enforcementAmount,enforcementDeadline=enforcementDeadline
+      })
+      message("RESOLUTION",out and "Projet mis a jour." or e,out and palette.ok or palette.bad)
+
+    elseif a.id=="stage" then
+      local nextStage=r.stage=="draft" and "debate" or "draft"
+      local out,e=rpc("RESOLUTION_SET_STAGE",{id=r.id,stage=nextStage})
+      message("RESOLUTION",out and ("Etape: "..out.stage) or e,out and palette.ok or palette.bad)
+
+    elseif a.id=="open" or a.id=="reopen" then
+      local out,e=rpc("RESOLUTION_OPEN_VOTE",{id=r.id})
+      message("RESOLUTION",out and ("Scrutin ouvert / tour "..tostring(out.votingRound or "?")) or e,out and palette.ok or palette.bad)
+
+    elseif a.id=="close" then
+      local confirm=menu("CLOTURER LE SCRUTIN",{
+        {text="Clore et calculer le resultat",id="yes"},{text="Annuler",id="no"}
+      },thresholdLabel(r.threshold))
+      if confirm and confirm.id=="yes" then
+        local out,e=rpc("RESOLUTION_CLOSE",{id=r.id})
+        local msg=e
+        local col=palette.bad
+        if out then
+          if out.result=="adopted" then msg="RESOLUTION ADOPTEE";col=palette.ok
+          elseif out.result=="no_quorum" then msg="QUORUM NON ATTEINT";col=palette.warn
+          else msg="RESOLUTION REJETEE";col=palette.warn end
+        end
+        message("RESULTAT",msg,col)
+      end
+
+    elseif a.id=="execute" then
+      local confirm=menu("EXECUTER LA RESOLUTION",{
+        {text="Publier et executer maintenant",id="yes"},{text="Annuler",id="no"}
+      },"Une eventuelle mesure ENF sera creee automatiquement.")
+      if confirm and confirm.id=="yes" then
+        local out,e=rpc("RESOLUTION_EXECUTE",{id=r.id})
+        message("RESOLUTION",out and ("Execution enregistree"..(out.enforcementId and (" / "..out.enforcementId) or "")) or e,out and palette.ok or palette.bad)
+      end
+
+    elseif a.id=="enforcement" then
+      enforcementsScreen(r.enforcementId,"","","")
+    end
+  end
+end
+
+local function resolutionsScreen(query,stage)
+  query=query or ""
+  stage=stage or ""
+
+  while true do
+    local rows,err=rpc("RESOLUTION_LIST",{query=query,stage=stage})
+    if not rows then message("RESOLUTIONS",err,palette.bad);return end
+
+    local items={}
+    if allowed("resolutionWrite") then items[#items+1]={text="[+] Deposer une nouvelle resolution",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[E] Filtrer par etape"..(stage~="" and (" ["..stage.."]") or ""),id="stage"}
+    if query~="" or stage~="" then items[#items+1]={text="[R] Reinitialiser les filtres",id="reset"} end
+
+    for _,r in ipairs(rows) do
+      items[#items+1]={text=r.id.."  "..r.title.."  ["..r.stage.."]",resolution=r}
+    end
+
+    local p=menu("RESOLUTIONS DE L'UNION",items,#rows.." resolution(s)")
+    if not p then return end
+
+    if p.id=="new" then
+      local title=prompt("Titre de la resolution")
+      local typ=chooseResolutionType("general")
+      local target=chooseResolutionTarget("")
+      local linkedCase=prompt("Dossier lie CASE-... (optionnel)")
+      local summary=multi("EXPOSE / RESUME","")
+      local body=multi("TEXTE DE LA RESOLUTION","")
+      local threshold=chooseThreshold("simple_cast")
+
+      local createChoice=menu("CREER UNE MESURE D'EXECUTION SI ADOPTEE ?",{
+        {text="Non",v=false},{text="Oui",v=true}
+      },"Particulierement utile pour sanctions, reparations et inspections.")
+      local creates=createChoice and createChoice.v or false
+      local enforcementType=""
+      local enforcementTerms=""
+      local enforcementAmount=""
+      local enforcementDeadline=""
+      if creates then
+        enforcementType=chooseResolutionEnforcementType("other")
+        enforcementTerms=multi("CONDITIONS D'EXECUTION","")
+        enforcementAmount=prompt("Montant / valeur (optionnel)")
+        enforcementDeadline=prompt("Echeance (optionnel)")
+      end
+
+      local out,e=rpc("RESOLUTION_CREATE",{
+        title=title,resolutionType=typ,targetStateId=target,linkedCaseId=linkedCase,
+        summary=summary,body=body,threshold=threshold,createsEnforcement=creates,
+        enforcementType=enforcementType,enforcementTerms=enforcementTerms,
+        enforcementAmount=enforcementAmount,enforcementDeadline=enforcementDeadline
+      })
+      message("RESOLUTION",out and ("Deposee: "..out.id) or e,out and palette.ok or palette.bad)
+
+    elseif p.id=="search" then
+      query=prompt("Recherche resolution",query)
+
+    elseif p.id=="stage" then
+      local st=menu("ETAPE DE LA RESOLUTION",{
+        {text="Toutes",v=""},{text="Brouillons",v="draft"},{text="En debat",v="debate"},
+        {text="Vote ouvert",v="voting"},{text="Sans quorum",v="no_quorum"},
+        {text="Adoptees",v="adopted"},{text="Rejetees",v="rejected"},
+        {text="Executees",v="executed"}
+      })
+      if st then stage=st.v end
+
+    elseif p.id=="reset" then
+      query="";stage=""
+
+    elseif p.resolution then
+      resolutionDetails(p.resolution.id)
+    end
+  end
+end
+
 local function stateBasketBrowser(initial)
   local selected={}
   for _,id in ipairs(initial or {}) do selected[id]=true end
