@@ -1201,7 +1201,14 @@ local function hearingsScreen(c)
         {text="Lire l'avis d'audience",id="read"},
         {text="Imprimer l'avis",id="print"}
       }
-      if allowed("caseWrite") then actions[#actions+1]={text="Changer le statut",id="status"} end
+      if h.recordSeal then
+        actions[#actions+1]={text="Lire le proces-verbal",id="minutes"}
+        actions[#actions+1]={text="Imprimer le proces-verbal",id="printminutes"}
+      end
+      if allowed("caseWrite") then
+        actions[#actions+1]={text=h.recordSeal and "Mettre a jour le proces-verbal" or "Enregistrer le proces-verbal",id="record"}
+        actions[#actions+1]={text="Changer le statut",id="status"}
+      end
       local a=menu(h.id.." - "..h.subject,actions,(h.scheduledFor or "").." / "..(h.status or ""))
       if a and a.id=="read" then
         textPage(c.id.." / "..h.id,{
@@ -1216,6 +1223,32 @@ local function hearingsScreen(c)
       elseif a and a.id=="print" then
         local ok,r=printer.hearingNotice(c,h)
         message("IMPRESSION",ok and ("Avis imprime: "..r.." page(s).") or r,ok and palette.ok or palette.bad)
+
+      elseif a and a.id=="minutes" then
+        textPage(c.id.." / PV "..h.id,{
+          {label="Audience",text=h.subject or ""},
+          {label="Date / lieu",text=(h.scheduledFor or "").." / "..(h.location or "")},
+          {label="Participants",text=h.participants or ""},
+          {label="Proces-verbal",text=h.minutes or ""},
+          {label="Issue / suite",text=h.outcome or ""},
+          {label="Enregistre par",text=(h.recordedBy or "").." / "..(h.recordedAt or "")},
+          {label="Sceau du PV",text=h.recordSeal or "-"}
+        })
+
+      elseif a and a.id=="printminutes" then
+        local ok,r=printer.hearingMinutes(c,h)
+        message("IMPRESSION",ok and ("Proces-verbal imprime: "..r.." page(s).") or r,ok and palette.ok or palette.bad)
+
+      elseif a and a.id=="record" then
+        local participants=multi("PARTICIPANTS A L'AUDIENCE",h.participants or "")
+        local minutes=multi("PROCES-VERBAL / COMPTE RENDU",h.minutes or "")
+        local outcome=multi("ISSUE / SUITE DE L'AUDIENCE",h.outcome or "")
+        local r,e=rpc("CASE_RECORD_HEARING",{
+          id=c.id,hearingId=h.id,participants=participants,minutes=minutes,outcome=outcome
+        })
+        message("AUDIENCE",r and "Proces-verbal enregistre, scelle et archive." or e,r and palette.ok or palette.bad)
+        if r then c=r end
+
       elseif a and a.id=="status" then
         local st=menu("STATUT AUDIENCE",{
           {text="Programmee",v="scheduled"},{text="Tenue",v="held"},
