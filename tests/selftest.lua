@@ -23,7 +23,7 @@ end
 assert(total==500,"expected 500 seed articles, got "..total)
 for n=1,500 do assert(seen[n],"missing article "..n) end
 
-assert(common.VERSION=="0.21.0","unexpected application version: "..tostring(common.VERSION))
+assert(common.VERSION=="0.22.0","unexpected application version: "..tostring(common.VERSION))
 
 local function readSource(path)
   local h=assert(io.open(path,"r"))
@@ -72,6 +72,8 @@ assert(national:find('NC_ELECTION_VOTE',1,true),"national minister elections mis
 assert(national:find('NC_BILL_ENACT',1,true),"national legislation workflow missing")
 assert(national:find('NC_BILL_SOVEREIGN_ADOPT',1,true),"sovereign direct legislation missing")
 assert(national:find('nationalRoot',1,true),"NexoFr sovereign national access missing")
+assert(national:find('NC_SOVEREIGN_RELINQUISH',1,true),"voluntary sovereign relinquishment action missing")
+assert(national:find('JE RENONCE VOLONTAIREMENT A LA DIRECTION DE NORTH COALITION',1,true),"guarded sovereign relinquishment confirmation missing")
 assert(national:find('NC_DECREE_PUBLISH',1,true),"national decrees missing")
 assert(national:find('NC_NOTICE_LIST',1,true),"national notifications missing")
 assert(national:find('NC_PORTAL_SEARCH',1,true),"national portal search action missing")
@@ -115,6 +117,8 @@ assert(nationalDemocracy:find('NC_GE_OPEN_CANDIDACY',1,true),"general election c
 assert(nationalDemocracy:find('NC_GE_VOTE',1,true),"general election voting missing")
 assert(nationalDemocracy:find('NC_GE_OPEN_RUNOFF',1,true),"general election runoff missing")
 assert(nationalDemocracy:find('NC_MANDATE_LIST',1,true),"national mandates missing")
+assert(nationalDemocracy:find('presidencyLockedError',1,true),"permanent leadership electoral lock missing")
+assert(nationalDemocracy:find('sovereignLeadershipActive',1,true),"sovereign leadership state guard missing")
 assert(national:find('NC%-GAZ'),"official Gazette IDs/seals missing")
 assert(nationalClient:find('PORTAIL NATIONAL NORTH COALITION',1,true),"national portal home missing")
 assert(nationalClient:find('AUTORITE SOUVERAINE %- NexoFr_'),"NexoFr sovereign authority UI missing")
@@ -169,10 +173,13 @@ assert(nationalCorpus:find('"founding_phase_account": "NexoFr_"',1,true),"NexoFr
 assert(nationalCorpus:find('"status": "ratified"',1,true),"North Coalition corpus is not ratified")
 assert(nationalCorpus:find('"sovereign_authority_account": "NexoFr_"',1,true),"NexoFr sovereign authority missing")
 assert(nationalCorpus:find('"sovereign_authority_scope": "all_national_powers"',1,true),"full national authority scope missing")
+assert(nationalCorpus:find('"sovereign_authority_tenure": "perpetual_until_voluntary_relinquishment"',1,true),"permanent sovereign tenure rule missing")
+assert(nationalCorpus:find('"sovereign_authority_no_term_limit": true',1,true),"no-term-limit sovereign rule missing")
+assert(nationalCorpus:find('"sovereign_authority_election_rule"',1,true),"presidential election lock rule missing")
 local activeNc=0
 for _ in nationalCorpus:gmatch('"status"%s*:%s*"active"') do activeNc=activeNc+1 end
 assert(activeNc>=400,"expected all 400 North Coalition articles active after ratification")
 local forbiddenServerName="Astra".."lium"
 assert(not nationalCorpus:find(forbiddenServerName,1,true),"forbidden server name leaked into national corpus")
 
-print("Self-test OK: v0.21 / 500 UNS articles ratified + 400 NC articles ratified + NexoFr sovereign national authority")
+print("Self-test OK: v0.22 / NexoFr permanent North Coalition leadership until voluntary self-relinquishment")
