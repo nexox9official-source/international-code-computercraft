@@ -98,6 +98,7 @@ local ncCount=0
 for _ in nationalCorpus:gmatch('"id"%s*:%s*"NC%-ART%-%d%d%d"') do ncCount=ncCount+1 end
 assert(ncCount==400,"expected 400 North Coalition articles, got "..ncCount)
 assert(nationalCorpus:find('"founding_phase_account": "NexoFr_"',1,true),"NexoFr_ founding account missing")
-assert(not nationalCorpus:find("Astralium",1,true),"forbidden server name leaked into national corpus")
+local forbiddenServerName="Astra".."lium"
+assert(not nationalCorpus:find(forbiddenServerName,1,true),"forbidden server name leaked into national corpus")
 
 print("Self-test OK: 500 UNS articles + 400 NC articles + v0.15 regulated national state intranet")
