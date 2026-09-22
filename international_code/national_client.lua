@@ -1583,6 +1583,349 @@ local function gazetteScreen(info)
   end
 end
 
+
+local function chooseCitizen(title)
+  local rows,err=rpc("NC_CITIZEN_LIST",{status="citizen"})
+  if not rows then message("REGISTRE CIVIL",err,palette.bad);return nil end
+  local items={}
+  for _,cit in ipairs(rows) do
+    items[#items+1]={text=cit.id.." / "..(cit.displayName or cit.identity),citizen=cit}
+  end
+  local p=menu(title or "CHOISIR UN CITOYEN",items,#items.." citoyen(s) actif(s)")
+  return p and p.citizen or nil
+end
+
+local function chooseOrganization(title)
+  local rows,err=rpc("NC_ORG_LIST",{status="active"})
+  if not rows then message("ORGANISATIONS",err,palette.bad);return nil end
+  local items={}
+  for _,o in ipairs(rows) do items[#items+1]={text=o.id.." / "..o.name.." / "..o.kind,org=o} end
+  local p=menu(title or "CHOISIR UNE ORGANISATION",items,#items.." organisation(s)")
+  return p and p.org or nil
+end
+
+local function organizationDetails(id,info)
+  while true do
+    local o,err=rpc("NC_ORG_GET",{id=id})
+    if not o then message("ORGANISATION",err,palette.bad);return end
+    local canManage=(info.nationalRole=="admin" or info.nationalRole=="president" or
+      (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
+    local actions={{text="Lire la fiche",id="read"},{text="Imprimer",id="print"}}
+    if canManage then actions[#actions+1]={text="Modifier / suspendre / dissoudre",id="edit"} end
+    local a=menu(o.id.." - "..o.name,actions,(o.kind or "").." / "..(o.status or ""))
+    if not a then return end
+    if a.id=="read" then
+      local owners={}
+      for _,x in ipairs(o.owners or {}) do owners[#owners+1]=(x.citizenId or "?").." / "..(x.identity or "") end
+      local hist={}
+      for _,h in ipairs(o.history or {}) do hist[#hist+1]=(h.at or "").." / "..(h.by or "").." / "..(h.oldStatus or "").." -> "..(h.newStatus or "").."\nSceau: "..(h.seal or "-") end
+      textPage(o.id,{
+        {label="Nom",text=o.name or ""},{label="Type / statut",text=(o.kind or "").." / "..(o.status or "")},
+        {label="Activite",text=o.activity or ""},{label="Siege / adresse",text=o.registeredAddress or "-"},
+        {label="Proprietaires / titulaires",text=#owners>0 and table.concat(owners,"\n") or "Aucun"},
+        {label="Immatriculation",text=(o.createdAt or "-").." / "..(o.createdBy or "-")},
+        {label="Sceau",text=o.registrationSeal or "-"},{label="Historique",text=#hist>0 and table.concat(hist,"\n\n") or "Aucune modification"}
+      })
+    elseif a.id=="print" then
+      local ok,pages=printer.organization(o)
+      message("IMPRESSION",ok and ("Organisation imprimee: "..pages.." page(s).") or pages,ok and palette.accent or palette.bad)
+    elseif a.id=="edit" then
+      local name=prompt("Nom",o.name)
+      local activity=prompt("Activite",o.activity)
+      local address=prompt("Siege / adresse",o.registeredAddress or "")
+      local st=menu("STATUT",{
+        {text="Active",v="active"},{text="Suspendue",v="suspended"},{text="Dissoute",v="dissolved"}
+      },"Actuel: "..(o.status or ""))
+      local out,e=rpc("NC_ORG_UPDATE",{id=o.id,name=name,activity=activity,registeredAddress=address,status=st and st.v or o.status})
+      message("ORGANISATION",out and "Registre mis a jour." or e,out and palette.accent or palette.bad)
+    end
+  end
+end
+
+local function organizationsScreen(info)
+  local query,status="",""
+  while true do
+    local rows,err=rpc("NC_ORG_LIST",{query=query,status=status})
+    if not rows then message("ORGANISATIONS",err,palette.bad);return end
+    local canManage=(info.nationalRole=="admin" or info.nationalRole=="president" or
+      (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
+    local items={}
+    if canManage then items[#items+1]={text="[+] Immatriculer une organisation",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
+    if query~="" or status~="" then items[#items+1]={text="[R] Reinitialiser",id="reset"} end
+    for _,o in ipairs(rows) do items[#items+1]={text=o.id.." ["..o.status.."] "..o.name.." / "..o.kind,org=o} end
+    local p=menu("REGISTRE DES ORGANISATIONS",items,#rows.." organisation(s)")
+    if not p then return end
+    if p.id=="new" then
+      local kind=menu("TYPE",{
+        {text="Entreprise",v="company"},{text="Association",v="association"},
+        {text="Organisme public",v="public_body"},{text="Media",v="media"},
+        {text="Banque",v="bank"},{text="Cooperative",v="cooperative"}
+      })
+      if kind then
+        local name=prompt("Nom officiel")
+        local activity=prompt("Activite principale")
+        local address=prompt("Siege / adresse")
+        local owners={}
+        while true do
+          local x=menu("PROPRIETAIRES / TITULAIRES",{
+            {text="[+] Ajouter un citoyen",id="add"},{text="Terminer",id="done"}
+          },"Actuellement: "..tostring(#owners))
+          if not x or x.id=="done" then break end
+          local cit=chooseCitizen("PROPRIETAIRE")
+          if cit then owners[#owners+1]=cit.id end
+        end
+        local out,e=rpc("NC_ORG_CREATE",{name=name,kind=kind.v,activity=activity,registeredAddress=address,ownerCitizenIds=owners})
+        message("ORGANISATION",out and ("Immatriculee: "..out.id) or e,out and palette.accent or palette.bad)
+      end
+    elseif p.id=="search" then query=prompt("Recherche",query)
+    elseif p.id=="status" then
+      local st=menu("STATUT",{{text="Tous",v=""},{text="Actives",v="active"},{text="Suspendues",v="suspended"},{text="Dissoutes",v="dissolved"}})
+      if st then status=st.v end
+    elseif p.id=="reset" then query="";status=""
+    elseif p.org then organizationDetails(p.org.id,info) end
+  end
+end
+
+local function licenseDetails(id,info)
+  while true do
+    local l,err=rpc("NC_LICENSE_GET",{id=id})
+    if not l then message("LICENCE",err,palette.bad);return end
+    local isMinister=info.nationalRole=="minister"
+    local canManage=(info.nationalRole=="admin" or info.nationalRole=="president" or isMinister)
+    local actions={{text="Lire la licence",id="read"},{text="Imprimer",id="print"}}
+    if canManage then actions[#actions+1]={text="Modifier le statut",id="status"} end
+    local a=menu(l.id.." - "..l.title,actions,(l.kind or "").." / "..(l.status or "").." / "..(l.holderName or l.holderId or ""))
+    if not a then return end
+    if a.id=="read" then
+      local hist={}
+      for _,h in ipairs(l.history or {}) do hist[#hist+1]=(h.at or "").." / "..(h.old or "").." -> "..(h.new or "").." / "..(h.reason or "").."\nSceau: "..(h.seal or "-") end
+      textPage(l.id,{
+        {label="Titre",text=l.title or ""},{label="Type / statut",text=(l.kind or "").." / "..(l.status or "")},
+        {label="Titulaire",text=(l.holderId or "").." / "..(l.holderName or "")},
+        {label="Autorite",text=l.authority or ""},{label="Base legale",text=l.legalBasis or "-"},
+        {label="Conditions",text=l.conditions or "-"},{label="Notes",text=l.notes or "-"},
+        {label="Delivree",text=(l.issuedAt or "-").." / "..(l.issuedBy or "-")},
+        {label="Expiration",text=l.expiresAt or "-"},{label="Sceau",text=l.seal or "-"},
+        {label="Historique",text=#hist>0 and table.concat(hist,"\n\n") or "Aucune modification"}
+      })
+    elseif a.id=="print" then
+      local ok,pages=printer.license(l)
+      message("IMPRESSION",ok and ("Licence imprimee: "..pages.." page(s).") or pages,ok and palette.accent or palette.bad)
+    elseif a.id=="status" then
+      local st=menu("STATUT DE LICENCE",{
+        {text="Active",v="active"},{text="Suspendue",v="suspended"},
+        {text="Revoquee",v="revoked"},{text="Expiree",v="expired"}
+      },"Actuel: "..(l.status or ""))
+      if st then
+        local reason=prompt("Motif")
+        local out,e=rpc("NC_LICENSE_SET_STATUS",{id=l.id,status=st.v,reason=reason})
+        message("LICENCE",out and ("Statut: "..out.status) or e,out and palette.accent or palette.bad)
+      end
+    end
+  end
+end
+
+local function licensesScreen(info)
+  local query,status="",""
+  while true do
+    local rows,err=rpc("NC_LICENSE_LIST",{query=query,status=status})
+    if not rows then message("LICENCES",err,palette.bad);return end
+    local canIssue=(info.nationalRole=="admin" or info.nationalRole=="president" or info.nationalRole=="minister")
+    local items={}
+    if canIssue then items[#items+1]={text="[+] Delivrer une licence / autorisation",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
+    if query~="" or status~="" then items[#items+1]={text="[R] Reinitialiser",id="reset"} end
+    for _,l in ipairs(rows) do items[#items+1]={text=l.id.." ["..l.status.."] "..l.title.." / "..(l.holderName or l.holderId),license=l} end
+    local p=menu("LICENCES / AUTORISATIONS",items,#rows.." licence(s) visible(s)")
+    if not p then return end
+    if p.id=="new" then
+      local kinds={
+        {text="Commerce / entreprise",v="business"},{text="Banque / finance",v="bank"},
+        {text="Conduite",v="driving"},{text="Vehicule / transport",v="vehicle"},
+        {text="Construction",v="construction"},{text="Securite",v="security"},
+        {text="Armes / port reglemente",v="weapons"},{text="Medical / sante",v="medical"},
+        {text="Cyber / numerique",v="cyber"},{text="Matieres dangereuses",v="hazardous"},
+        {text="Travail / professionnel",v="labor"},{text="Defense",v="defense"},
+        {text="Reconstruction / crise",v="reconstruction"},{text="Affaires etrangeres",v="foreign"},
+        {text="Generique presidentiel",v="generic"}
+      }
+      local kind=menu("TYPE DE LICENCE",kinds)
+      if kind then
+        local holderType=menu("TITULAIRE",{{text="Citoyen",v="citizen"},{text="Organisation",v="organization"}})
+        local holder=nil
+        if holderType and holderType.v=="citizen" then holder=chooseCitizen("TITULAIRE DE LA LICENCE")
+        elseif holderType then holder=chooseOrganization("ORGANISATION TITULAIRE") end
+        if holder then
+          local title=prompt("Titre de la licence","Licence "..kind.v)
+          local legalBasis=prompt("Base legale NC-ART-... (optionnel)")
+          local expiresAt=prompt("Expiration / echeance RP (optionnel)")
+          local conditions=multi("CONDITIONS DE LA LICENCE","")
+          local notes=multi("NOTES ADMINISTRATIVES","")
+          local out,e=rpc("NC_LICENSE_ISSUE",{
+            kind=kind.v,title=title,holderType=holderType.v,holderId=holder.id,
+            legalBasis=legalBasis,expiresAt=expiresAt,conditions=conditions,notes=notes
+          })
+          message("LICENCE",out and ("Delivree: "..out.id) or e,out and palette.accent or palette.bad)
+        end
+      end
+    elseif p.id=="search" then query=prompt("Recherche licence",query)
+    elseif p.id=="status" then
+      local st=menu("STATUT",{{text="Tous",v=""},{text="Actives",v="active"},{text="Suspendues",v="suspended"},{text="Revoquees",v="revoked"},{text="Expirees",v="expired"}})
+      if st then status=st.v end
+    elseif p.id=="reset" then query="";status=""
+    elseif p.license then licenseDetails(p.license.id,info) end
+  end
+end
+
+local function fineDetails(id,info)
+  while true do
+    local fine,err=rpc("NC_FINE_GET",{id=id})
+    if not fine then message("AMENDE",err,palette.bad);return end
+    local judicial=(info.nationalRole=="admin" or info.nationalRole=="judge" or info.nationalRole=="prosecutor")
+    local finance=(info.nationalRole=="admin" or info.nationalRole=="judge" or info.nationalRole=="prosecutor" or
+      (info.nationalRole=="minister" and info.ministryCode=="MIN-ECO"))
+    local own=(info.citizenId and info.citizenId==fine.citizenId)
+    local actions={{text="Lire l'amende",id="read"},{text="Imprimer",id="print"}}
+    if own and fine.status=="issued" then actions[#actions+1]={text="Contester cette amende",id="contest"} end
+    if judicial and fine.status=="contested" then actions[#actions+1]={text="Trancher la contestation",id="resolve"} end
+    if finance and fine.status=="issued" then actions[#actions+1]={text="Enregistrer paiement",id="paid"} end
+    if judicial and fine.status~="paid" and fine.status~="void" then actions[#actions+1]={text="Annuler l'amende",id="void"} end
+    local a=menu(fine.id,actions,(fine.status or "").." / "..(fine.citizenIdentity or fine.citizenId).." / "..tostring(fine.penaltyUnits or 0).." UP")
+    if not a then return end
+    if a.id=="read" then
+      local hist={}
+      for _,h in ipairs(fine.history or {}) do hist[#hist+1]=(h.at or "").." / "..(h.event or "").." / "..(h.by or "").." / "..(h.reason or h.decision or h.paymentRef or "").."\nSceau: "..(h.seal or "-") end
+      textPage(fine.id,{
+        {label="Citoyen",text=(fine.citizenId or "").." / "..(fine.citizenIdentity or "")},
+        {label="Statut",text=fine.status or ""},{label="Article",text=(fine.articleDisplay or fine.articleRef or "").." / v"..tostring(fine.articleVersion or "")},
+        {label="Motif",text=fine.reason or ""},{label="Penalite",text=tostring(fine.penaltyUnits or 0).." UP"..((fine.amountText and fine.amountText~="") and (" / "..fine.amountText) or "")},
+        {label="Emission",text=(fine.issuedAt or "").." / "..(fine.issuedBy or "")},
+        {label="Contestation",text=fine.contestReason or "-"},
+        {label="Decision contestation",text=(fine.contestDecision or "-").." / "..(fine.contestDecisionReason or "-")},
+        {label="Paiement",text=fine.paidAt and ((fine.paidAt or "").." / "..(fine.paymentRef or "-")) or "-"},
+        {label="Annulation",text=fine.voidReason or "-"},
+        {label="Sceau",text=fine.seal or "-"},
+        {label="Historique",text=#hist>0 and table.concat(hist,"\n\n") or "Aucun"}
+      })
+    elseif a.id=="print" then
+      local ok,pages=printer.fine(fine)
+      message("IMPRESSION",ok and ("Amende imprimee: "..pages.." page(s).") or pages,ok and palette.accent or palette.bad)
+    elseif a.id=="contest" then
+      local reason=multi("MOTIFS DE CONTESTATION","")
+      local out,e=rpc("NC_FINE_CONTEST",{id=fine.id,reason=reason})
+      message("CONTESTATION",out and "Contestation enregistree." or e,out and palette.accent or palette.bad)
+    elseif a.id=="resolve" then
+      local d=menu("DECISION",{{text="Maintenir l'amende",v="upheld"},{text="Annuler l'amende",v="void"}})
+      if d then
+        local reasoning=multi("MOTIVATION DE LA DECISION","")
+        local out,e=rpc("NC_FINE_RESOLVE",{id=fine.id,decision=d.v,reasoning=reasoning})
+        message("DECISION",out and ("Decision: "..d.v) or e,out and palette.accent or palette.bad)
+      end
+    elseif a.id=="paid" then
+      local paymentRef=prompt("Reference de paiement / justificatif")
+      local out,e=rpc("NC_FINE_MARK_PAID",{id=fine.id,paymentRef=paymentRef})
+      message("PAIEMENT",out and "Paiement enregistre." or e,out and palette.accent or palette.bad)
+    elseif a.id=="void" then
+      local reason=multi("MOTIF D'ANNULATION","")
+      local out,e=rpc("NC_FINE_VOID",{id=fine.id,reason=reason})
+      message("AMENDE",out and "Amende annulee." or e,out and palette.accent or palette.bad)
+    end
+  end
+end
+
+local function finesScreen(info)
+  local query,status="",""
+  while true do
+    local rows,err=rpc("NC_FINE_LIST",{query=query,status=status})
+    if not rows then message("AMENDES",err,palette.bad);return end
+    local canIssue=(info.nationalRole=="admin" or info.nationalRole=="judge" or info.nationalRole=="prosecutor" or info.nationalRole=="police")
+    local items={}
+    if canIssue then items[#items+1]={text="[+] Emettre une amende",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
+    if query~="" or status~="" then items[#items+1]={text="[R] Reinitialiser",id="reset"} end
+    for _,fine in ipairs(rows) do
+      items[#items+1]={text=fine.id.." ["..fine.status.."] "..(fine.citizenIdentity or fine.citizenId).." / "..tostring(fine.penaltyUnits or 0).." UP",fine=fine}
+    end
+    local p=menu("AMENDES / SANCTIONS PECUNIAIRES",items,#rows.." amende(s) visible(s)")
+    if not p then return end
+    if p.id=="new" then
+      local cit=chooseCitizen("CITOYEN VERBALISE")
+      if cit then
+        local law=chooseLaw("")
+        if law then
+          local units=prompt("Unites de penalite (UP)","1")
+          local amountText=prompt("Equivalent monetaire / note (optionnel)")
+          local reason=prompt("Motif",law.title)
+          local out,e=rpc("NC_FINE_ISSUE",{citizenId=cit.id,articleRef=law.id,penaltyUnits=tonumber(units),amountText=amountText,reason=reason})
+          message("AMENDE",out and ("Emise: "..out.id) or e,out and palette.accent or palette.bad)
+        end
+      end
+    elseif p.id=="search" then query=prompt("Recherche amende / citoyen / article",query)
+    elseif p.id=="status" then
+      local st=menu("STATUT",{{text="Tous",v=""},{text="Emises",v="issued"},{text="Contestees",v="contested"},{text="Payees",v="paid"},{text="Annulees",v="void"}})
+      if st then status=st.v end
+    elseif p.id=="reset" then query="";status=""
+    elseif p.fine then fineDetails(p.fine.id,info) end
+  end
+end
+
+local function citizenRecordScreen(info)
+  local citizenId=info.citizenId
+  if info.nationalRole=="admin" or info.nationalRole=="judge" or info.nationalRole=="prosecutor" or info.nationalRole=="police" then
+    local cit=chooseCitizen("DOSSIER INDIVIDUEL")
+    if not cit then return end
+    citizenId=cit.id
+  end
+  if not citizenId then message("DOSSIER INDIVIDUEL","Aucune identite citoyenne rattachee a ce terminal.",palette.warn);return end
+  local record,err=rpc("NC_RECORD_GET",{citizenId=citizenId})
+  if not record then message("DOSSIER INDIVIDUEL",err,palette.bad);return end
+  local licenses,fines,orgs,judgments={},{},{},{}
+  for _,x in ipairs(record.licenses or {}) do licenses[#licenses+1]=x.id.." ["..x.status.."] "..x.title end
+  for _,x in ipairs(record.fines or {}) do fines[#fines+1]=x.id.." ["..x.status.."] "..tostring(x.penaltyUnits or 0).." UP / "..(x.articleDisplay or x.articleRef or "") end
+  for _,x in ipairs(record.organizations or {}) do orgs[#orgs+1]=x.id.." ["..x.status.."] "..x.name end
+  for _,x in ipairs(record.judgments or {}) do judgments[#judgments+1]=(x.caseId or "").." / "..(x.judgmentId or "").." / "..(x.verdict or "") end
+  local a=menu("DOSSIER INDIVIDUEL / "..record.citizen.id,{
+    {text="Lire la synthese",id="read"},{text="Imprimer le dossier",id="print"}
+  },record.citizen.displayName or record.citizen.identity)
+  if not a then return end
+  if a.id=="read" then
+    textPage(record.citizen.id,{
+      {label="Citoyen",text=(record.citizen.displayName or "").." / "..(record.citizen.identity or "")},
+      {label="Statut",text=record.citizen.status or ""},
+      {label="Licences",text=#licenses>0 and table.concat(licenses,"\n") or "Aucune"},
+      {label="Amendes",text=#fines>0 and table.concat(fines,"\n") or "Aucune"},
+      {label="Organisations",text=#orgs>0 and table.concat(orgs,"\n") or "Aucune"},
+      {label="Jugements definitifs lies",text=#judgments>0 and table.concat(judgments,"\n") or "Aucun"}
+    })
+  elseif a.id=="print" then
+    local ok,pages=printer.citizenRecord(record)
+    message("IMPRESSION",ok and ("Dossier citoyen imprime: "..pages.." page(s).") or pages,ok and palette.accent or palette.bad)
+  end
+end
+
+local function administrationScreen(info)
+  while true do
+    info=rpc("NC_INFO",{}) or info or {}
+    local items={
+      {text="REGISTRE DES ORGANISATIONS / ENTREPRISES",id="orgs"},
+      {text="LICENCES / AUTORISATIONS / PERMIS",id="licenses"},
+      {text="AMENDES / SANCTIONS PECUNIAIRES",id="fines"},
+      {text="DOSSIER INDIVIDUEL / SYNTHESE",id="record"}
+    }
+    local p=menu("ADMINISTRATION NATIONALE",items,
+      roleLabel(info.nationalRole)..(info.ministryCode and (" / "..info.ministryCode) or ""))
+    if not p then return end
+    if p.id=="orgs" then organizationsScreen(info)
+    elseif p.id=="licenses" then licensesScreen(info)
+    elseif p.id=="fines" then finesScreen(info)
+    elseif p.id=="record" then citizenRecordScreen(info) end
+  end
+end
+
 local function nationalNotices(info)
   while true do
     local rows,err=rpc("NC_NOTICE_LIST",{})
@@ -1616,7 +1959,9 @@ local function nationalNotices(info)
       elseif n.objectType=="nc_government" then actions[#actions+1]={text="Ouvrir le Gouvernement",id="open"}
       elseif n.objectType=="nc_case" then actions[#actions+1]={text="Ouvrir le dossier judiciaire",id="open"}
       elseif n.objectType=="nc_citizen" then actions[#actions+1]={text="Ouvrir la fiche citoyenne",id="open"}
-      elseif n.objectType=="nc_session" then actions[#actions+1]={text="Ouvrir la session",id="open"} end
+      elseif n.objectType=="nc_session" then actions[#actions+1]={text="Ouvrir la session",id="open"}
+      elseif n.objectType=="nc_license" then actions[#actions+1]={text="Ouvrir la licence",id="open"}
+      elseif n.objectType=="nc_fine" then actions[#actions+1]={text="Ouvrir l'amende",id="open"} end
       local a=menu(n.title or n.id,actions,(n.severity or "info").." / "..(n.createdAt or ""))
       if a and a.id=="read" then
         textPage(n.id,{
@@ -1634,7 +1979,9 @@ local function nationalNotices(info)
         elseif n.objectType=="nc_government" then governmentScreen(info)
         elseif n.objectType=="nc_case" then caseDetails(n.objectId)
         elseif n.objectType=="nc_citizen" then citizenDetails(n.objectId,info)
-        elseif n.objectType=="nc_session" then sessionDetails(n.objectId,info) end
+        elseif n.objectType=="nc_session" then sessionDetails(n.objectId,info)
+        elseif n.objectType=="nc_license" then licenseDetails(n.objectId,info)
+        elseif n.objectType=="nc_fine" then fineDetails(n.objectId,info) end
       end
     end
   end
@@ -1693,6 +2040,7 @@ function C.run()
       {text=(dash.unreadNotices or 0)>0 and ("[!] NOTIFICATIONS NATIONALES ("..dash.unreadNotices..")") or "NOTIFICATIONS NATIONALES",id="notices"},
       {text="CODE NATIONAL / CATEGORIES / RECHERCHE",id="code"},
       {text="REGISTRE CIVIL / CITOYENS / IDENTITES",id="citizens"},
+      {text="ADMINISTRATION / ORGANISATIONS / LICENCES / AMENDES",id="adminservices"},
       {text="GOUVERNEMENT / MINISTERES / FONCTIONS",id="gov"},
       {text="CALENDRIER / SESSIONS / ORDRE DU JOUR",id="sessions"},
       {text="LEGISLATION / PROJETS / VOTES",id="bills"},
@@ -1712,6 +2060,7 @@ function C.run()
     if p.id=="notices" then nationalNotices(info)
     elseif p.id=="code" then codeScreen()
     elseif p.id=="citizens" then citizensScreen(info)
+    elseif p.id=="adminservices" then administrationScreen(info)
     elseif p.id=="gov" then governmentScreen(info)
     elseif p.id=="sessions" then sessionsScreen(info)
     elseif p.id=="bills" then billsScreen()
