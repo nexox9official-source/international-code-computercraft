@@ -1,4 +1,4 @@
-# Architecture v0.17
+# Architecture v0.18
 
 ## Topologie
 
@@ -48,6 +48,10 @@ state
          +-- licenses[NC-LIC-...]
          +-- fines[NC-FINE-...]
          +-- requests[NC-REQ-...]
+         +-- budgets[NC-BUD-...]
+         +-- revenues[NC-REV-...]
+         +-- expenses[NC-EXP-...]
+         +-- contracts[NC-CONTRACT-...]
          +-- nationalAudit
 ```
 
@@ -222,6 +226,39 @@ Le routage est calculé côté serveur. Un client ne peut pas contourner le port
 
 Le workflow crée donc deux traces distinctes lorsqu'une autorisation est accordée : la décision sur `NC-REQ`, puis l'acte administratif final. Chacune possède son historique et ses sceaux.
 
+## Finances publiques nationales
+
+Le module `national_finance.lua` isole les opérations de trésorerie et d'exécution budgétaire.
+
+```text
+NC-BUD (budget promulgué)
+   |
+   +-- allocations[MIN-...]
+   |       |
+   |       +--> NC-EXP requested
+   |              |
+   |              +--> validation MIN-ECO
+   |              +--> validation Président si seuil élevé
+   |              +--> paid
+   |
+   +-- NC-REV --------------------------+
+                                        |
+                                        v
+                                  SOLDE DU TRESOR
+
+NC-EXP autorisée
+   |
+   +--> NC-CONTRACT --> NC-ORG
+```
+
+Le solde du Trésor n'est pas stocké comme une valeur modifiable : il est recalculé à partir des recettes enregistrées moins les dépenses payées. Cela évite qu'une écriture soit contournée par une modification directe du solde.
+
+Le contrôle de disponibilité d'un ministère prend en compte les dépenses déjà payées **et** les engagements validés, afin d'empêcher de promettre deux fois le même crédit.
+
+Les opérations de grande valeur utilisent un seuil configurable. À partir de ce seuil, l'accord du `MIN-ECO` ne suffit plus : la Présidence doit autoriser séparément la dépense.
+
+Les marchés publics réutilisent le registre `NC-ORG`. Le prestataire doit donc exister avant l'attribution et la dépense correspondante doit déjà avoir franchi le contrôle financier.
+
 ## Journal officiel national
 
 Le Journal officiel constitue un registre dérivé mais **persistant**. Une opération juridique crée l'acte source, puis ajoute une nouvelle entrée `NC-GAZ` avant que la mutation soit sauvegardée.
@@ -286,6 +323,10 @@ Le mécanisme reste un dispositif d'intégrité RP, pas une signature cryptograp
 - Citoyen : `NC-CIT-0001`
 - Dossier national : `NC-CASE-AAAA-0001`
 - Session nationale : `NC-SESSION-AAAA-0001`
+- Budget national : `NC-BUD-AAAA-0001`
+- Recette publique : `NC-REV-AAAA-0001`
+- Dépense publique : `NC-EXP-AAAA-0001`
+- Marché public : `NC-CONTRACT-AAAA-0001`
 - Publication officielle : `NC-GAZ-AAAA-0001`
 - Dossier international : `CASE-AAAA-0001`
 - Terminal : `CLIENT-<computerId>-<suffixe>`
