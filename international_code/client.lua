@@ -2976,6 +2976,7 @@ local function chooseAgendaObject(kind)
   elseif kind=="enforcement" then action="ENFORCEMENT_LIST";title="EXECUTION"
   elseif kind=="mission" then action="MISSION_LIST";title="MISSIONS"
   elseif kind=="incident" then action="INCIDENT_LIST";title="INCIDENTS"
+  elseif kind=="conflict" then action="CONFLICT_LIST";title="CONFLITS"
   else return nil,nil end
 
   local rows,err=rpc(action,{})
@@ -3003,6 +3004,7 @@ local function openAgendaObject(item)
   elseif item.kind=="enforcement" then enforcementDetails(item.ref)
   elseif item.kind=="mission" then missionDetails(item.ref)
   elseif item.kind=="incident" then incidentDetails(item.ref)
+  elseif item.kind=="conflict" then conflictDetails(item.ref)
   else
     textPage(item.id or "AGENDA",{
       {label=item.title or "Element",text=item.description or ""},
@@ -3059,6 +3061,7 @@ local function sessionAgendaScreen(sess)
         {text="Mesure d'execution / ENF",v="enforcement"},
         {text="Mission internationale / MISSION",v="mission"},
         {text="Incident international / INC",v="incident"},
+        {text="Conflit / crise / CONFLICT",v="conflict"},
         {text="Point libre",v="custom"}
       })
       if kindMenu then
