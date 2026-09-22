@@ -1709,6 +1709,7 @@ local function billDetails(id)
     end
     if allowed("legislature") and (bill.stage=="draft" or bill.stage=="debate") then
       actions[#actions+1]={text="Modifier le projet",id="edit"}
+      actions[#actions+1]={text=bill.stage=="draft" and "Ouvrir le debat" or "Revenir au brouillon",id="stage"}
       actions[#actions+1]={text="Ouvrir le vote",id="open"}
     end
     if allowed("legislature") and bill.stage=="voting" then
@@ -1755,6 +1756,11 @@ local function billDetails(id)
         proposedBody=proposedBody,threshold=threshold
       })
       message("PROPOSITION",r and "Projet mis a jour." or e,r and palette.ok or palette.bad)
+
+    elseif a.id=="stage" then
+      local nextStage=bill.stage=="draft" and "debate" or "draft"
+      local r,e=rpc("BILL_SET_STAGE",{id=bill.id,stage=nextStage})
+      message("ASSEMBLEE",r and ("Etape: "..r.stage) or e,r and palette.ok or palette.bad)
 
     elseif a.id=="open" then
       local r,e=rpc("BILL_OPEN_VOTE",{id=bill.id})
