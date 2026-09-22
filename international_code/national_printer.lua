@@ -304,4 +304,111 @@ function P.gazette(row)
   return printLines(row.id or "NC-GAZ",lines)
 end
 
+
+function P.organization(o)
+  if not o then return false,"Organisation introuvable." end
+  local lines={}
+  append(lines,"ORGANISATION",o.id.." / "..(o.name or ""),25)
+  append(lines,"TYPE / STATUT",(o.kind or "-").." / "..(o.status or "-"),25)
+  append(lines,"ACTIVITE",o.activity or "",25)
+  append(lines,"SIEGE / ADRESSE",o.registeredAddress or "-",25)
+  local owners={}
+  for _,x in ipairs(o.owners or {}) do owners[#owners+1]=(x.citizenId or "?").." / "..(x.identity or "") end
+  append(lines,"TITULAIRES / PROPRIETAIRES",#owners>0 and table.concat(owners,"\n") or "Aucun enregistre",25)
+  append(lines,"IMMATRICULATION",(o.createdAt or "-").." / "..(o.createdBy or "-"),25)
+  append(lines,"SCEAU",o.registrationSeal or "-",25)
+  if #(o.history or {})>0 then
+    lines[#lines+1]="HISTORIQUE"
+    for _,h in ipairs(o.history or {}) do
+      for _,l in ipairs(common.wrap((h.at or "").." / "..(h.event or "").." / "..(h.by or "").." / "..(h.oldStatus or "").." -> "..(h.newStatus or ""),25)) do
+        lines[#lines+1]=l
+      end
+      if h.seal then for _,l in ipairs(common.wrap("Sceau: "..h.seal,25)) do lines[#lines+1]=l end end
+      lines[#lines+1]=""
+    end
+  end
+  return printLines(o.id or "NC-ORG",lines)
+end
+
+function P.license(l)
+  if not l then return false,"Licence introuvable." end
+  local lines={}
+  append(lines,"LICENCE NATIONALE",l.id.." / "..(l.title or ""),25)
+  append(lines,"TYPE / STATUT",(l.kind or "-").." / "..(l.status or "-"),25)
+  append(lines,"TITULAIRE",(l.holderId or "-").." / "..(l.holderName or ""),25)
+  append(lines,"AUTORITE",l.authority or "-",25)
+  append(lines,"BASE LEGALE",l.legalBasis or "-",25)
+  append(lines,"CONDITIONS",l.conditions or "-",25)
+  append(lines,"DELIVREE",(l.issuedAt or "-").." / "..(l.issuedBy or "-"),25)
+  append(lines,"EXPIRATION",l.expiresAt or "-",25)
+  append(lines,"SCEAU",l.seal or "-",25)
+  if #(l.history or {})>0 then
+    lines[#lines+1]="HISTORIQUE"
+    for _,h in ipairs(l.history or {}) do
+      for _,line in ipairs(common.wrap((h.at or "").." / "..(h.event or "").." / "..(h.old or "").." -> "..(h.new or "").." / "..(h.reason or ""),25)) do lines[#lines+1]=line end
+      if h.seal then for _,line in ipairs(common.wrap("Sceau: "..h.seal,25)) do lines[#lines+1]=line end end
+      lines[#lines+1]=""
+    end
+  end
+  return printLines(l.id or "NC-LIC",lines)
+end
+
+function P.fine(fine)
+  if not fine then return false,"Amende introuvable." end
+  local lines={}
+  append(lines,"AMENDE NATIONALE",fine.id or "",25)
+  append(lines,"CITOYEN",(fine.citizenId or "-").." / "..(fine.citizenIdentity or ""),25)
+  append(lines,"STATUT",fine.status or "-",25)
+  append(lines,"ARTICLE",(fine.articleDisplay or fine.articleRef or "-").." / v"..tostring(fine.articleVersion or "?"),25)
+  append(lines,"MOTIF",fine.reason or "",25)
+  append(lines,"PENALITE",tostring(fine.penaltyUnits or 0).." UP"..((fine.amountText and fine.amountText~="") and (" / "..fine.amountText) or ""),25)
+  append(lines,"EMISSION",(fine.issuedAt or "-").." / "..(fine.issuedBy or "-"),25)
+  if fine.contestReason then append(lines,"CONTESTATION",fine.contestReason,25) end
+  if fine.contestDecision then append(lines,"DECISION",fine.contestDecision.." / "..(fine.contestDecisionReason or ""),25) end
+  if fine.paidAt then append(lines,"PAIEMENT",(fine.paidAt or "").." / "..(fine.paymentRef or "-"),25) end
+  if fine.voidReason then append(lines,"ANNULATION",fine.voidReason,25) end
+  append(lines,"SCEAU",fine.seal or "-",25)
+  return printLines(fine.id or "NC-FINE",lines)
+end
+
+function P.citizenRecord(record)
+  if not record or not record.citizen then return false,"Dossier citoyen introuvable." end
+  local cit=record.citizen
+  local lines={}
+  append(lines,"DOSSIER CITOYEN",cit.id.." / "..(cit.displayName or cit.identity or ""),25)
+  append(lines,"IDENTITE",cit.identity or "",25)
+  append(lines,"STATUT",cit.status or "",25)
+  append(lines,"SCEAU CIVIL",cit.seal or "-",25)
+
+  lines[#lines+1]="LICENCES"
+  for _,l in ipairs(record.licenses or {}) do
+    for _,x in ipairs(common.wrap((l.id or "").." ["..(l.status or "").."] "..(l.title or l.kind or ""),25)) do lines[#lines+1]=x end
+  end
+  if #(record.licenses or {})==0 then lines[#lines+1]="Aucune" end
+  lines[#lines+1]=""
+
+  lines[#lines+1]="AMENDES"
+  for _,f in ipairs(record.fines or {}) do
+    for _,x in ipairs(common.wrap((f.id or "").." ["..(f.status or "").."] "..tostring(f.penaltyUnits or 0).." UP / "..(f.articleDisplay or f.articleRef or ""),25)) do lines[#lines+1]=x end
+  end
+  if #(record.fines or {})==0 then lines[#lines+1]="Aucune" end
+  lines[#lines+1]=""
+
+  lines[#lines+1]="ORGANISATIONS"
+  for _,o in ipairs(record.organizations or {}) do
+    for _,x in ipairs(common.wrap((o.id or "").." ["..(o.status or "").."] "..(o.name or ""),25)) do lines[#lines+1]=x end
+  end
+  if #(record.organizations or {})==0 then lines[#lines+1]="Aucune" end
+  lines[#lines+1]=""
+
+  lines[#lines+1]="DECISIONS JUDICIAIRES"
+  for _,j in ipairs(record.judgments or {}) do
+    for _,x in ipairs(common.wrap((j.caseId or "").." / "..(j.judgmentId or "").." / "..(j.verdict or ""),25)) do lines[#lines+1]=x end
+  end
+  if #(record.judgments or {})==0 then lines[#lines+1]="Aucune" end
+  lines[#lines+1]=""
+
+  return printLines(cit.id.." DOSSIER",lines)
+end
+
 return P
