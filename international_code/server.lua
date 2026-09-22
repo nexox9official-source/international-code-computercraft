@@ -4047,6 +4047,17 @@ local function cleanupBootstrapSources()
   return freed
 end
 
+function S.initializeState()
+  common.ensureLayout()
+  if fs.exists(common.STATE) then return true,"Base serveur deja presente." end
+  local initial=freshState()
+  local freed=cleanupBootstrapSources()
+  common.saveTableAtomic(common.STATE,initial)
+  initial=nil
+  if collectgarbage then pcall(collectgarbage,"collect") end
+  return true,"Base serveur initialisee / "..tostring(freed).." octets de sources liberes."
+end
+
 function S.setupServer()
   common.ensureLayout()
   term.setTextColor(colors.white)
@@ -4058,12 +4069,8 @@ function S.setupServer()
   }
   common.saveConfig(cfg)
   if not fs.exists(common.STATE) then
-    local initial=freshState()
-    local freed=cleanupBootstrapSources()
-    common.saveTableAtomic(common.STATE,initial)
-    initial=nil
-    if collectgarbage then pcall(collectgarbage,"collect") end
-    print("Sources d'initialisation nettoyees: "..tostring(freed).." octets liberes.")
+    local _,info=S.initializeState()
+    print(info)
   else
     cleanupBootstrapSources()
   end
