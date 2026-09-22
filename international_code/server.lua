@@ -25,7 +25,7 @@ local permissions = {
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
     CASE_REMOVE_ARTICLE=true, CASE_SET_STATUS=true,
-    CASE_ADD_HEARING=true, CASE_SET_HEARING_STATUS=true,
+    CASE_ADD_HEARING=true, CASE_SET_HEARING_STATUS=true, CASE_FILE_APPEAL=true,
     STATE_LIST=true, STATE_GET=true, BILL_LIST=true, BILL_GET=true,
     AUDIT_LIST=true
   },
@@ -35,7 +35,7 @@ local permissions = {
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
     CASE_REMOVE_ARTICLE=true, CASE_ADD_JUDGMENT=true, CASE_SET_STATUS=true, CASE_SET_VISIBILITY=true,
-    CASE_ADD_HEARING=true, CASE_SET_HEARING_STATUS=true,
+    CASE_ADD_HEARING=true, CASE_SET_HEARING_STATUS=true, CASE_FILE_APPEAL=true, CASE_DECIDE_APPEAL=true,
     CASE_ADD_ORDER=true, CASE_SET_ORDER_STATUS=true,
     STATE_LIST=true, STATE_GET=true, BILL_LIST=true, BILL_GET=true,
     AUDIT_LIST=true
@@ -197,6 +197,7 @@ local function loadState()
     c.visibility=c.visibility or "restricted"
     c.hearings=c.hearings or {}
     c.orders=c.orders or {}
+    c.appeals=c.appeals or {}
   end
 
   state.meta.version = common.VERSION
@@ -468,6 +469,7 @@ local function ensureCaseShape(c)
   c.timeline = c.timeline or {}
   c.hearings = c.hearings or {}
   c.orders = c.orders or {}
+  c.appeals = c.appeals or {}
   c.visibility = c.visibility or "restricted"
   return c
 end
@@ -483,6 +485,15 @@ local function caseEvent(c, actor, kind, title, details)
     details = details or ""
   }
   while #c.timeline > 500 do table.remove(c.timeline,1) end
+end
+
+local function officialSeal(prefix,parts)
+  local raw={}
+  for _,v in ipairs(parts or {}) do
+    if type(v)=="table" then raw[#raw+1]=textutils.serialize(v,{compact=true})
+    else raw[#raw+1]=tostring(v or "") end
+  end
+  return tostring(prefix or "UNS").."-"..string.upper(common.simpleChecksum(table.concat(raw,"|")))
 end
 
 local function handleAction(state, actor, action, p)
@@ -720,6 +731,7 @@ local function handleAction(state, actor, action, p)
     end
     bill.closedAt=common.now()
     bill.closedBy=actor.label
+    bill.resultSeal=officialSeal("UNS-VOTE",{bill.id,bill.votingRound,bill.result,tally,bill.eligibleStateIds,bill.votes,bill.closedAt})
     bill.updatedAt=common.now()
     mutate(state,actor,"BILL_CLOSE",bill.id,bill.result.." / yes="..tally.yes.." no="..tally.no.." abst="..tally.abstain)
     local out=common.deepcopy(bill); out.tally=tally; return out
@@ -763,6 +775,7 @@ local function handleAction(state, actor, action, p)
     bill.enactedRef=enactedRef
     bill.enactedAt=common.now()
     bill.enactedBy=actor.label
+    bill.enactmentSeal=officialSeal("UNS-PROM",{bill.id,enactedRef,bill.enactedAt,bill.enactedBy,bill.resultSeal})
     bill.updatedAt=common.now()
     mutate(state,actor,"BILL_ENACT",bill.id,enactedRef)
     local out=common.deepcopy(bill); out.tally=billTally(state,bill); return out
@@ -985,6 +998,7 @@ local function handleAction(state, actor, action, p)
       articleSnapshot=snapshot,
       final=p.final == true
     }
+    j.seal=officialSeal("CIU-JUG",{c.id,j.id,j.date,j.judge,j.verdict,j.reasoning,j.sanctions,j.articleSnapshot,j.final})
     if j.verdict == "" or j.reasoning == "" then return nil, "Decision et motifs obligatoires." end
     c.judgments[#c.judgments+1] = j
     if j.final then c.status = "judged" end
@@ -1036,6 +1050,7 @@ local function handleAction(state, actor, action, p)
       location=common.trim(p.location),notes=common.trim(p.notes),
       status="scheduled",createdAt=common.now(),createdBy=actor.label
     }
+    hearing.seal=officialSeal("CIU-AUD",{c.id,hearing.id,hearing.subject,hearing.scheduledFor,hearing.location,hearing.createdAt})
     c.hearings[#c.hearings+1]=hearing
     c.updatedAt=common.now()
     caseEvent(c,actor,"HEARING_CREATED","Audience "..hearing.id,hearing.subject.." / "..hearing.scheduledFor)
@@ -1076,6 +1091,7 @@ local function handleAction(state, actor, action, p)
       orderType=orderType,subject=subject,body=body,status="active",
       expiresAt=common.trim(p.expiresAt),createdAt=common.now(),createdBy=actor.label
     }
+    order.seal=officialSeal("CIU-ORD",{c.id,order.id,order.orderType,order.subject,order.body,order.createdBy,order.createdAt,order.expiresAt})
     c.orders[#c.orders+1]=order
     c.updatedAt=common.now()
     caseEvent(c,actor,"ORDER_CREATED","Ordonnance "..order.id.." / "..orderType,subject)
@@ -1099,6 +1115,52 @@ local function handleAction(state, actor, action, p)
     c.updatedAt=common.now()
     caseEvent(c,actor,"ORDER_STATUS","Ordonnance "..target.id.." -> "..p.status,target.subject)
     mutate(state,actor,"CASE_SET_ORDER_STATUS",c.id,target.id.."="..p.status)
+    return common.deepcopy(c)
+  end
+
+  if action == "CASE_FILE_APPEAL" then
+    local c=state.cases[common.trim(p.id):upper()]
+    if not c then return nil,"Dossier introuvable." end
+    ensureCaseShape(c)
+    local grounds=common.trim(p.grounds)
+    local request=common.trim(p.request)
+    if grounds=="" then return nil,"Motifs d'appel obligatoires." end
+    local appeal={
+      id=string.format("A-%03d",#c.appeals+1),
+      appellant=common.trim(p.appellant),grounds=grounds,request=request,
+      status="pending",filedAt=common.now(),filedBy=actor.label
+    }
+    appeal.seal=officialSeal("CIU-APP",{c.id,appeal.id,appeal.appellant,appeal.grounds,appeal.request,appeal.filedAt,appeal.filedBy})
+    c.appeals[#c.appeals+1]=appeal
+    c.status="appeal"
+    c.updatedAt=common.now()
+    caseEvent(c,actor,"APPEAL_FILED","Appel "..appeal.id,appeal.appellant.." / "..appeal.request)
+    mutate(state,actor,"CASE_FILE_APPEAL",c.id,appeal.id)
+    return common.deepcopy(c)
+  end
+
+  if action == "CASE_DECIDE_APPEAL" then
+    local c=state.cases[common.trim(p.id):upper()]
+    if not c then return nil,"Dossier introuvable." end
+    ensureCaseShape(c)
+    local target=nil
+    for _,a in ipairs(c.appeals) do if a.id==p.appealId then target=a break end end
+    if not target then return nil,"Appel introuvable." end
+    if target.status~="pending" then return nil,"Cet appel a deja ete tranche." end
+    local valid={upheld=true,modified=true,overturned=true,remanded=true,rejected=true}
+    if not valid[p.result] then return nil,"Resultat d'appel invalide." end
+    local reasoning=common.trim(p.reasoning)
+    if reasoning=="" then return nil,"Motivation de l'appel obligatoire." end
+    target.status="decided"
+    target.result=p.result
+    target.reasoning=reasoning
+    target.decidedAt=common.now()
+    target.decidedBy=actor.label
+    target.decisionSeal=officialSeal("CIU-APPDEC",{c.id,target.id,target.result,target.reasoning,target.decidedAt,target.decidedBy,target.seal})
+    c.updatedAt=common.now()
+    if p.result=="remanded" then c.status="hearing" else c.status="judged" end
+    caseEvent(c,actor,"APPEAL_DECIDED","Appel "..target.id.." -> "..target.result,target.reasoning:sub(1,120))
+    mutate(state,actor,"CASE_DECIDE_APPEAL",c.id,target.id.."="..target.result)
     return common.deepcopy(c)
   end
 
