@@ -815,6 +815,7 @@ local roleAllows={
   judgment={judge=true,admin=true},
   orderWrite={judge=true,admin=true},
   visibilityWrite={judge=true,admin=true},
+  appealDecide={judge=true,admin=true},
   legislature={writer=true,admin=true},
   delegateVote={delegate=true},
   institutionAdmin={admin=true},
@@ -1072,7 +1073,8 @@ local function judgmentDetails(c,j)
     {label="Decision",text=j.verdict or ""},
     {label="Motivation",text=j.reasoning or ""},
     {label="Sanctions / reparations",text=j.sanctions or ""},
-    {label="Articles figes au jour du jugement",text=table.concat(refs,"\n")}
+    {label="Articles figes au jour du jugement",text=table.concat(refs,"\n")},
+    {label="Sceau officiel",text=j.seal or "Ancienne decision sans sceau v0.4"}
   })
 end
 
@@ -1180,7 +1182,8 @@ local function hearingsScreen(c)
           {label="Lieu",text=h.location or ""},
           {label="Statut",text=h.status or ""},
           {label="Notes",text=h.notes or ""},
-          {label="Cree par",text=(h.createdBy or "").." / "..(h.createdAt or "")}
+          {label="Cree par",text=(h.createdBy or "").." / "..(h.createdAt or "")},
+          {label="Sceau officiel",text=h.seal or "-"}
         })
       elseif a and a.id=="print" then
         local ok,r=printer.hearingNotice(c,h)
@@ -1247,7 +1250,8 @@ local function ordersScreen(c)
           {label="Contenu",text=o.body or ""},
           {label="Statut",text=o.status or ""},
           {label="Expiration",text=o.expiresAt or ""},
-          {label="Emis par",text=(o.createdBy or "").." / "..(o.createdAt or "")}
+          {label="Emis par",text=(o.createdBy or "").." / "..(o.createdAt or "")},
+          {label="Sceau officiel",text=o.seal or "-"}
         })
       elseif a and a.id=="print" then
         local ok,r=printer.order(c,o)
@@ -1267,6 +1271,78 @@ local function ordersScreen(c)
   end
 end
 
+local function appealsScreen(c)
+  while true do
+    local items={}
+    if allowed("caseWrite") then items[#items+1]={text="[+] Deposer un appel",id="new"} end
+    for _,a in ipairs(c.appeals or {}) do
+      items[#items+1]={
+        text=(a.id or "?").."  "..(a.appellant or "").."  ["..(a.status or "?").."]"..
+          (a.result and (" -> "..a.result) or ""),
+        appeal=a
+      }
+    end
+
+    local p=menu("APPELS "..c.id,items,#(c.appeals or {}).." appel(s)")
+    if not p then return end
+
+    if p.id=="new" then
+      local appellant=prompt("Appelant / partie")
+      local grounds=multi("MOTIFS D'APPEL","")
+      local request=multi("DEMANDE A LA COUR D'APPEL","")
+      local r,e=rpc("CASE_FILE_APPEAL",{id=c.id,appellant=appellant,grounds=grounds,request=request})
+      message("APPEL",r and "Appel depose et dossier place en appel." or e,r and palette.ok or palette.bad)
+      if r then c=r end
+
+    elseif p.appeal then
+      local a=p.appeal
+      local actions={
+        {text="Lire l'appel",id="read"},
+        {text="Imprimer l'acte d'appel",id="print"}
+      }
+      if allowed("appealDecide") and a.status=="pending" then
+        actions[#actions+1]={text="Rendre la decision d'appel",id="decide"}
+      end
+
+      local action=menu(a.id.." - "..(a.appellant or ""),actions,a.status..(a.result and (" / "..a.result) or ""))
+      if action and action.id=="read" then
+        textPage(c.id.." / "..a.id,{
+          {label="Appelant",text=a.appellant or ""},
+          {label="Motifs",text=a.grounds or ""},
+          {label="Demande",text=a.request or ""},
+          {label="Depot",text=(a.filedAt or "").." / "..(a.filedBy or "")},
+          {label="Sceau du depot",text=a.seal or "-"},
+          {label="Statut / resultat",text=(a.status or "")..(a.result and (" / "..a.result) or "")},
+          {label="Motivation de la decision",text=a.reasoning or ""},
+          {label="Decision rendue par",text=(a.decidedBy or "").." / "..(a.decidedAt or "")},
+          {label="Sceau de decision",text=a.decisionSeal or "-"}
+        })
+
+      elseif action and action.id=="print" then
+        local ok,r=printer.appeal(c,a)
+        message("IMPRESSION",ok and ("Acte d'appel imprime: "..r.." page(s).") or r,ok and palette.ok or palette.bad)
+
+      elseif action and action.id=="decide" then
+        local result=menu("DECISION D'APPEL",{
+          {text="Confirmer la decision",v="upheld"},
+          {text="Modifier la decision",v="modified"},
+          {text="Annuler la decision",v="overturned"},
+          {text="Renvoyer l'affaire pour nouvelle audience",v="remanded"},
+          {text="Rejeter l'appel",v="rejected"}
+        })
+        if result then
+          local reasoning=multi("MOTIVATION DE LA DECISION D'APPEL","")
+          local r,e=rpc("CASE_DECIDE_APPEAL",{
+            id=c.id,appealId=a.id,result=result.v,reasoning=reasoning
+          })
+          message("APPEL",r and ("Decision d'appel: "..result.v) or e,r and palette.ok or palette.bad)
+          if r then c=r end
+        end
+      end
+    end
+  end
+end
+
 local function caseDetails(id)
   while true do
     local c,err=rpc("CASE_GET",{id=id})
@@ -1278,6 +1354,7 @@ local function caseDetails(id)
     c.timeline=c.timeline or {}
     c.hearings=c.hearings or {}
     c.orders=c.orders or {}
+    c.appeals=c.appeals or {}
     c.visibility=c.visibility or "restricted"
 
     local actions={
@@ -1285,6 +1362,7 @@ local function caseDetails(id)
       {text="Voir la chronologie du dossier",id="timeline"},
       {text="Audiences ("..#c.hearings..")",id="hearings"},
       {text="Ordonnances / mandats ("..#c.orders..")",id="orders"},
+      {text="Appels ("..#c.appeals..")",id="appeals"},
       {text="Consulter les jugements ("..#c.judgments..")",id="judgments"},
       {text="Imprimer le dossier complet",id="print"},
       {text="Imprimer la chronologie",id="printtimeline"}
@@ -1307,7 +1385,7 @@ local function caseDetails(id)
     local a=menu(
       c.id.." - "..c.title,
       actions,
-      "["..c.visibility.."] "..c.status.." | "..#c.facts.." faits | "..#c.evidence.." preuves | "..#c.hearings.." aud. | "..#c.judgments.." jug."
+      "["..c.visibility.."] "..c.status.." | "..#c.facts.." faits | "..#c.hearings.." aud. | "..#c.appeals.." appel(s) | "..#c.judgments.." jug."
     )
     if not a then return end
 
@@ -1324,6 +1402,11 @@ local function caseDetails(id)
         js[#js+1]="J"..i.." / "..(j.date or "").." / "..(j.judge or "?")..
           (j.final and " / FINAL" or "").."\nDecision: "..(j.verdict or "")
       end
+      local aps={}
+      for _,ap in ipairs(c.appeals) do
+        aps[#aps+1]=(ap.id or "?").." / "..(ap.appellant or "").." / "..(ap.status or "?")..
+          (ap.result and (" -> "..ap.result) or "")
+      end
       textPage(c.id,{
         {label="Affaire",text=c.title},
         {label="Statut",text=c.status.." / visibilite "..c.visibility},
@@ -1334,6 +1417,7 @@ local function caseDetails(id)
         {label="Articles cites",text=table.concat(c.citedArticles,"\n")},
         {label="Jugements",text=table.concat(js,"\n\n")},
         {label="Audiences / actes",text=tostring(#c.hearings).." audience(s) / "..tostring(#c.orders).." ordonnance(s)"},
+        {label="Appels",text=#aps>0 and table.concat(aps,"\n") or "Aucun appel."},
         {label="Derniere mise a jour",text=c.updatedAt or c.createdAt or ""}
       })
 
@@ -1345,6 +1429,9 @@ local function caseDetails(id)
 
     elseif a.id=="orders" then
       ordersScreen(c)
+
+    elseif a.id=="appeals" then
+      appealsScreen(c)
 
     elseif a.id=="judgments" then
       judgmentsScreen(c)
