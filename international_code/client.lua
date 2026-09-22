@@ -845,6 +845,8 @@ local roleAllows={
   legislature={writer=true,admin=true},
   resolutionWrite={writer=true,admin=true},
   resolutionVote={delegate=true},
+  sessionWrite={writer=true,admin=true},
+  sessionAttend={delegate=true},
   diplomacy={writer=true,admin=true},
   treatySign={delegate=true},
   delegateVote={delegate=true},
@@ -2919,6 +2921,331 @@ local function notificationCenter()
         elseif n.objectType=="enforcement" then enforcementDetails(n.objectId)
         else message("NOTIFICATION","Type d'element non navigable: "..tostring(n.objectType),palette.warn) end
       end
+    end
+  end
+end
+
+local function sessionTypeLabel(v)
+  local labels={
+    assembly="Assemblee des Etats",security_council="Conseil de paix et de securite",
+    diplomatic="Session diplomatique",emergency="Session extraordinaire / urgence",
+    committee="Commission / comite",other="Autre session"
+  }
+  return labels[v] or tostring(v or "")
+end
+
+local function chooseSessionType(current)
+  local p=menu("TYPE DE SESSION",{
+    {text="Assemblee des Etats",v="assembly"},
+    {text="Conseil de paix et de securite",v="security_council"},
+    {text="Session diplomatique",v="diplomatic"},
+    {text="Session extraordinaire / urgence",v="emergency"},
+    {text="Commission / comite",v="committee"},
+    {text="Autre",v="other"}
+  },"Actuel: "..sessionTypeLabel(current))
+  return p and p.v or current or "assembly"
+end
+
+local function chooseAgendaObject(kind)
+  if kind=="law" then
+    local law=referenceBrowser({mode="browse",pick=true,readonly=true})
+    return law and law.ref or nil, law and law.title or nil
+  end
+
+  local action=nil
+  local title=""
+  if kind=="bill" then action="BILL_LIST";title="PROPOSITIONS"
+  elseif kind=="resolution" then action="RESOLUTION_LIST";title="RESOLUTIONS"
+  elseif kind=="treaty" then action="TREATY_LIST";title="TRAITES"
+  elseif kind=="case" then action="CASE_LIST";title="DOSSIERS"
+  elseif kind=="enforcement" then action="ENFORCEMENT_LIST";title="EXECUTION"
+  else return nil,nil end
+
+  local rows,err=rpc(action,{})
+  if not rows then message("ORDRE DU JOUR",err,palette.bad);return nil,nil end
+  local items={}
+  for _,row in ipairs(rows) do
+    local ref=row.id or row.ref
+    local name=row.title or row.summary or row.targetName or ref
+    items[#items+1]={text=tostring(ref).."  "..tostring(name),row=row}
+  end
+  if #items==0 then message("ORDRE DU JOUR","Aucun element disponible.",palette.warn);return nil,nil end
+  local p=menu(title,items,"Selectionnez l'element a inscrire.")
+  if not p then return nil,nil end
+  local row=p.row
+  return row.id or row.ref, row.title or row.summary or row.targetName or row.id or row.ref
+end
+
+local function openAgendaObject(item)
+  if not item then return end
+  if item.kind=="law" then viewLaw(item.ref)
+  elseif item.kind=="bill" then billDetails(item.ref)
+  elseif item.kind=="resolution" then resolutionDetails(item.ref)
+  elseif item.kind=="treaty" then treatyDetails(item.ref)
+  elseif item.kind=="case" then caseDetails(item.ref)
+  elseif item.kind=="enforcement" then enforcementDetails(item.ref)
+  else
+    textPage(item.id or "AGENDA",{
+      {label=item.title or "Element",text=item.description or ""},
+      {label="Statut",text=item.status or ""},
+      {label="Notes",text=item.notes or ""},
+      {label="Issue",text=item.outcome or ""}
+    })
+  end
+end
+
+local function attendanceText(sess)
+  local rows={}
+  for stateId,row in pairs(sess.attendance or {}) do
+    rows[#rows+1]=(row.stateName or stateId).." / "..(row.checkedInAt or "").." / "..(row.by or "")
+  end
+  table.sort(rows)
+  return #rows>0 and table.concat(rows,"\n") or "Aucune presence enregistree."
+end
+
+local function agendaText(sess)
+  local rows={}
+  for _,item in ipairs(sess.agenda or {}) do
+    rows[#rows+1]=(item.id or "?").." ["..(item.status or "?").."] "..(item.title or "")..
+      ((item.ref and item.ref~="") and (" / "..item.ref) or "")..
+      ((item.outcome and item.outcome~="") and ("\nIssue: "..item.outcome) or "")
+  end
+  return #rows>0 and table.concat(rows,"\n\n") or "Ordre du jour vide."
+end
+
+local function sessionAgendaScreen(sess)
+  while true do
+    local items={}
+    if allowed("sessionWrite") and sess.status~="closed" and sess.status~="cancelled" then
+      items[#items+1]={text="[+] Ajouter un element",id="new"}
+    end
+    for _,item in ipairs(sess.agenda or {}) do
+      items[#items+1]={
+        text=(item.id or "?").."  ["..(item.status or "?").."] "..(item.title or "")..
+          ((item.ref and item.ref~="") and (" / "..item.ref) or ""),
+        item=item
+      }
+    end
+
+    local p=menu("ORDRE DU JOUR "..sess.id,items,#(sess.agenda or {}).." element(s)")
+    if not p then return sess end
+
+    if p.id=="new" then
+      local kindMenu=menu("TYPE D'ELEMENT",{
+        {text="Proposition de loi / BILL",v="bill"},
+        {text="Resolution / RES",v="resolution"},
+        {text="Traite / TREATY",v="treaty"},
+        {text="Dossier judiciaire / CASE",v="case"},
+        {text="Article du Code",v="law"},
+        {text="Mesure d'execution / ENF",v="enforcement"},
+        {text="Point libre",v="custom"}
+      })
+      if kindMenu then
+        local ref,title="",""
+        if kindMenu.v=="custom" then
+          title=prompt("Titre du point")
+        else
+          ref,title=chooseAgendaObject(kindMenu.v)
+        end
+        if title and title~="" then
+          local description=prompt("Description courte (optionnel)")
+          local out,e=rpc("SESSION_ADD_AGENDA",{
+            id=sess.id,kind=kindMenu.v,ref=ref or "",title=title,description=description
+          })
+          message("ORDRE DU JOUR",out and "Element ajoute." or e,out and palette.ok or palette.bad)
+          if out then sess=out end
+        end
+      end
+
+    elseif p.item then
+      local item=p.item
+      local actions={{text="Ouvrir / consulter l'element",id="open"}}
+      if allowed("sessionWrite") and sess.status=="open" then
+        actions[#actions+1]={text="Mettre a jour le statut / issue",id="status"}
+      end
+      if allowed("sessionWrite") and sess.status=="scheduled" then
+        actions[#actions+1]={text="Retirer de l'ordre du jour",id="remove"}
+      end
+      local a=menu(item.id.." - "..item.title,actions,
+        (item.kind or "").." / "..(item.ref or "").." / "..(item.status or ""))
+      if a and a.id=="open" then
+        openAgendaObject(item)
+      elseif a and a.id=="remove" then
+        local out,e=rpc("SESSION_REMOVE_AGENDA",{id=sess.id,itemId=item.id})
+        message("ORDRE DU JOUR",out and "Element retire." or e,out and palette.ok or palette.bad)
+        if out then sess=out end
+      elseif a and a.id=="status" then
+        local st=menu("STATUT DU POINT",{
+          {text="En attente",v="pending"},
+          {text="En discussion",v="discussing"},
+          {text="Discute",v="discussed"},
+          {text="Vote / traite",v="voted"},
+          {text="Reporte",v="postponed"},
+          {text="Retire",v="withdrawn"}
+        },"Actuel: "..(item.status or "pending"))
+        if st then
+          local notes=multi("NOTES SUR LE POINT",item.notes or "")
+          local outcome=multi("ISSUE / DECISION / SUITE",item.outcome or "")
+          local out,e=rpc("SESSION_SET_ITEM_STATUS",{
+            id=sess.id,itemId=item.id,status=st.v,notes=notes,outcome=outcome
+          })
+          message("ORDRE DU JOUR",out and ("Point: "..st.v) or e,out and palette.ok or palette.bad)
+          if out then sess=out end
+        end
+      end
+    end
+  end
+end
+
+local function sessionDetails(id)
+  while true do
+    local sess,err=rpc("SESSION_GET",{id=id})
+    if not sess then message("SESSION",err,palette.bad);return end
+    sess.agenda=sess.agenda or {}
+    sess.attendance=sess.attendance or {}
+
+    local actions={
+      {text="Lire la fiche / ordre du jour",id="read"},
+      {text="Ordre du jour ("..#sess.agenda..")",id="agenda"},
+      {text="Presences des Etats",id="attendance"},
+      {text="Imprimer la session / proces-verbal",id="print"}
+    }
+
+    if allowed("sessionAttend") and sess.status=="open" then
+      actions[#actions+1]={text="Enregistrer la presence de mon Etat",id="checkin"}
+    end
+
+    if allowed("sessionWrite") and sess.status=="scheduled" then
+      actions[#actions+1]={text="Modifier la convocation",id="edit"}
+      actions[#actions+1]={text="Ouvrir officiellement la session",id="open"}
+      actions[#actions+1]={text="Annuler la session",id="cancel"}
+    elseif allowed("sessionWrite") and sess.status=="open" then
+      actions[#actions+1]={text="Clore et rediger le proces-verbal final",id="close"}
+      actions[#actions+1]={text="Annuler exceptionnellement la session",id="cancel"}
+    end
+
+    local present=0
+    for _ in pairs(sess.attendance) do present=present+1 end
+    local a=menu(sess.id.." - "..sess.title,actions,
+      "["..sess.status.."] "..sessionTypeLabel(sess.sessionType).." | "..present.." Etat(s) present(s)")
+    if not a then return end
+
+    if a.id=="read" then
+      textPage(sess.id,{
+        {label="Session",text=sess.title or ""},
+        {label="Type / statut",text=sessionTypeLabel(sess.sessionType).." / "..(sess.status or "")},
+        {label="Date / lieu",text=(sess.scheduledFor or "-").." / "..(sess.location or "-")},
+        {label="Description",text=sess.description or ""},
+        {label="Ordre du jour",text=agendaText(sess)},
+        {label="Presences",text=attendanceText(sess)},
+        {label="Proces-verbal final",text=sess.minutes or "-"},
+        {label="Conclusions",text=sess.outcome or "-"},
+        {label="Sceau convocation",text=sess.noticeSeal or "-"},
+        {label="Sceau ouverture",text=sess.openSeal or "-"},
+        {label="Sceau du PV",text=sess.closeSeal or "-"},
+        {label="Annulation",text=(sess.cancelReason or "-")..(sess.cancelSeal and (" / "..sess.cancelSeal) or "")}
+      })
+
+    elseif a.id=="agenda" then
+      sessionAgendaScreen(sess)
+
+    elseif a.id=="attendance" then
+      textPage("PRESENCES "..sess.id,{{label="Etats enregistres",text=attendanceText(sess)}})
+
+    elseif a.id=="print" then
+      local ok,pages=printer.session(sess)
+      message("IMPRESSION",ok and ("Session imprimee: "..pages.." page(s).") or pages,ok and palette.ok or palette.bad)
+
+    elseif a.id=="checkin" then
+      local out,e=rpc("SESSION_CHECKIN",{id=sess.id})
+      message("PRESENCE",out and "Presence de votre Etat enregistree." or e,out and palette.ok or palette.bad)
+
+    elseif a.id=="edit" then
+      local title=prompt("Titre",sess.title)
+      local typ=chooseSessionType(sess.sessionType)
+      local scheduledFor=prompt("Date / heure",sess.scheduledFor or "")
+      local location=prompt("Lieu / salle",sess.location or "")
+      local description=multi("DESCRIPTION / OBJET",sess.description or "")
+      local out,e=rpc("SESSION_EDIT",{
+        id=sess.id,title=title,sessionType=typ,scheduledFor=scheduledFor,
+        location=location,description=description
+      })
+      message("SESSION",out and "Convocation mise a jour." or e,out and palette.ok or palette.bad)
+
+    elseif a.id=="open" then
+      local confirm=menu("OUVRIR LA SESSION",{
+        {text="Ouvrir officiellement maintenant",id="yes"},
+        {text="Annuler",id="no"}
+      },"L'ordre du jour courant sera inclus dans le sceau d'ouverture.")
+      if confirm and confirm.id=="yes" then
+        local out,e=rpc("SESSION_OPEN",{id=sess.id})
+        message("SESSION",out and ("Session ouverte / sceau "..tostring(out.openSeal)) or e,out and palette.ok or palette.bad)
+      end
+
+    elseif a.id=="close" then
+      local minutes=multi("PROCES-VERBAL FINAL DE LA SESSION",sess.minutes or "")
+      local outcome=multi("CONCLUSIONS / DECISIONS / SUITES",sess.outcome or "")
+      local out,e=rpc("SESSION_CLOSE",{id=sess.id,minutes=minutes,outcome=outcome})
+      message("SESSION",out and ("Session cloturee / sceau "..tostring(out.closeSeal)) or e,out and palette.ok or palette.bad)
+
+    elseif a.id=="cancel" then
+      local reason=multi("MOTIF D'ANNULATION","")
+      local out,e=rpc("SESSION_CANCEL",{id=sess.id,reason=reason})
+      message("SESSION",out and "Annulation enregistree et scellee." or e,out and palette.ok or palette.bad)
+    end
+  end
+end
+
+local function sessionsScreen(query,status)
+  query=query or ""
+  status=status or ""
+
+  while true do
+    local rows,err=rpc("SESSION_LIST",{query=query,status=status})
+    if not rows then message("SESSIONS",err,palette.bad);return end
+
+    local items={}
+    if allowed("sessionWrite") then items[#items+1]={text="[+] Convoquer une session",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer par statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
+    if query~="" or status~="" then items[#items+1]={text="[R] Reinitialiser les filtres",id="reset"} end
+
+    for _,sess in ipairs(rows) do
+      items[#items+1]={
+        text=sess.id.."  "..(sess.scheduledFor or "-").."  "..sess.title.."  ["..sess.status.."]",
+        session=sess
+      }
+    end
+
+    local p=menu("CALENDRIER / SESSIONS",items,#rows.." session(s)")
+    if not p then return end
+
+    if p.id=="new" then
+      local title=prompt("Titre de la session")
+      local typ=chooseSessionType("assembly")
+      local scheduledFor=prompt("Date / heure")
+      local location=prompt("Lieu / salle")
+      local description=multi("DESCRIPTION / OBJET","")
+      local out,e=rpc("SESSION_CREATE",{
+        title=title,sessionType=typ,scheduledFor=scheduledFor,location=location,description=description
+      })
+      message("SESSION",out and ("Convoquee: "..out.id) or e,out and palette.ok or palette.bad)
+
+    elseif p.id=="search" then
+      query=prompt("Recherche session",query)
+
+    elseif p.id=="status" then
+      local st=menu("STATUT SESSION",{
+        {text="Toutes",v=""},{text="Programmees",v="scheduled"},{text="Ouvertes",v="open"},
+        {text="Cloturees",v="closed"},{text="Annulees",v="cancelled"}
+      })
+      if st then status=st.v end
+
+    elseif p.id=="reset" then
+      query="";status=""
+
+    elseif p.session then
+      sessionDetails(p.session.id)
     end
   end
 end
