@@ -1047,6 +1047,13 @@ function N.handle(state,actor,action,p,ctx)
       function(x) return x.displayName or x.identity end,
       function(x) return x.id.." / "..(x.status or "") end,65)
 
+    local _,networkRows=network.handle(n,actor,"NC_NET_BULLETIN_LIST",{query=q},nil)
+    append(networkRows,10,
+      function() return "bulletin" end,
+      function(x) return x.id end,
+      function(x) return x.title end,
+      function(x) return (x.audience or "").." / "..(x.status or "") end,88)
+
     table.sort(out,function(a,b)
       if (a.rank or 0)~=(b.rank or 0) then return (a.rank or 0)>(b.rank or 0) end
       return tostring(a.title)<tostring(b.title)
