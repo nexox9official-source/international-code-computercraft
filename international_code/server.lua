@@ -2012,6 +2012,188 @@ local function handleAction(state, actor, action, p)
     return common.deepcopy(sess)
   end
 
+  if action == "MISSION_LIST" then return listMissions(state,p,actor) end
+
+  if action == "MISSION_GET" then
+    local m=state.missions[common.trim(p.id):upper()]
+    if not m then return nil,"Mission introuvable." end
+    if not canViewMission(actor,m) then return nil,"Acces refuse a cette mission." end
+    return common.deepcopy(m)
+  end
+
+  if action == "MISSION_CREATE" then
+    local title=common.trim(p.title)
+    local mandate=common.trim(p.mandate)
+    if title=="" or mandate=="" then return nil,"Titre et mandat obligatoires." end
+
+    local validTypes={
+      observer=true,peacekeeping=true,humanitarian=true,investigation=true,
+      inspection=true,monitoring=true,reconstruction=true,mediation=true,other=true
+    }
+    local missionType=validTypes[p.missionType] and p.missionType or "other"
+
+    local resolutionId=common.trim(p.resolutionId):upper()
+    local treatyId=common.trim(p.treatyId):upper()
+    local caseId=common.trim(p.caseId):upper()
+    if resolutionId~="" and not state.resolutions[resolutionId] then return nil,"Resolution source introuvable." end
+    if treatyId~="" and not state.treaties[treatyId] then return nil,"Traite source introuvable." end
+    if caseId~="" and not state.cases[caseId] then return nil,"Dossier source introuvable." end
+
+    local participants={}
+    local seen={}
+    for _,raw in ipairs(type(p.participatingStates)=="table" and p.participatingStates or {}) do
+      local id=common.trim(raw):upper()
+      if state.states[id] and not seen[id] then seen[id]=true;participants[#participants+1]=id end
+    end
+    table.sort(participants)
+
+    local leadStateId=common.trim(p.leadStateId):upper()
+    if leadStateId~="" then
+      if not state.states[leadStateId] then return nil,"Etat responsable introuvable." end
+      local found=false
+      for _,id in ipairs(participants) do if id==leadStateId then found=true break end end
+      if not found then participants[#participants+1]=leadStateId;table.sort(participants) end
+    end
+
+    local id=makeMissionId(state)
+    local m={
+      id=id,title=title,missionType=missionType,mandate=mandate,
+      area=common.trim(p.area),startAt=common.trim(p.startAt),endAt=common.trim(p.endAt),
+      resolutionId=resolutionId,treatyId=treatyId,caseId=caseId,
+      participatingStates=participants,leadStateId=leadStateId,
+      commander=common.trim(p.commander),status="planned",
+      visibility=p.visibility=="restricted" and "restricted" or "public",
+      reports={},createdAt=common.now(),createdBy=actor.label,updatedAt=common.now()
+    }
+    m.mandateSeal=officialSeal("UNS-MISSION-MANDATE",{
+      m.id,m.title,m.missionType,m.mandate,m.area,m.startAt,m.endAt,
+      m.resolutionId,m.treatyId,m.caseId,m.participatingStates,m.leadStateId,m.commander,m.createdAt
+    })
+    state.missions[id]=m
+
+    for _,stateId in ipairs(m.participatingStates) do
+      pushNotice(state,{
+        title="Mission internationale: "..m.id,
+        body=m.title.." / participation de votre Etat enregistree.",
+        severity="action",objectType="mission",objectId=m.id,targetStateId=stateId
+      })
+    end
+
+    mutate(state,actor,"MISSION_CREATE",id,m.title.." / "..m.missionType)
+    return common.deepcopy(m)
+  end
+
+  if action == "MISSION_EDIT" then
+    local m=state.missions[common.trim(p.id):upper()]
+    if not m then return nil,"Mission introuvable." end
+    if m.status~="planned" then return nil,"Seule une mission planifiee peut etre modifiee." end
+
+    local validTypes={
+      observer=true,peacekeeping=true,humanitarian=true,investigation=true,
+      inspection=true,monitoring=true,reconstruction=true,mediation=true,other=true
+    }
+    if p.title~=nil and common.trim(p.title)~="" then m.title=common.trim(p.title) end
+    if p.missionType~=nil and validTypes[p.missionType] then m.missionType=p.missionType end
+    if p.mandate~=nil and common.trim(p.mandate)~="" then m.mandate=common.trim(p.mandate) end
+    if p.area~=nil then m.area=common.trim(p.area) end
+    if p.startAt~=nil then m.startAt=common.trim(p.startAt) end
+    if p.endAt~=nil then m.endAt=common.trim(p.endAt) end
+    if p.commander~=nil then m.commander=common.trim(p.commander) end
+    if p.visibility~=nil then m.visibility=p.visibility=="restricted" and "restricted" or "public" end
+
+    if type(p.participatingStates)=="table" then
+      local participants={}
+      local seen={}
+      for _,raw in ipairs(p.participatingStates) do
+        local id=common.trim(raw):upper()
+        if state.states[id] and not seen[id] then seen[id]=true;participants[#participants+1]=id end
+      end
+      table.sort(participants)
+      m.participatingStates=participants
+    end
+
+    if p.leadStateId~=nil then
+      local lead=common.trim(p.leadStateId):upper()
+      if lead~="" and not state.states[lead] then return nil,"Etat responsable introuvable." end
+      m.leadStateId=lead
+      if lead~="" then
+        local found=false
+        for _,id in ipairs(m.participatingStates or {}) do if id==lead then found=true break end end
+        if not found then m.participatingStates[#m.participatingStates+1]=lead;table.sort(m.participatingStates) end
+      end
+    end
+
+    m.updatedAt=common.now()
+    m.updatedBy=actor.label
+    m.mandateSeal=officialSeal("UNS-MISSION-MANDATE",{
+      m.id,m.title,m.missionType,m.mandate,m.area,m.startAt,m.endAt,
+      m.resolutionId,m.treatyId,m.caseId,m.participatingStates,m.leadStateId,m.commander,m.updatedAt
+    })
+    mutate(state,actor,"MISSION_EDIT",m.id,m.title)
+    return common.deepcopy(m)
+  end
+
+  if action == "MISSION_SET_STATUS" then
+    local m=state.missions[common.trim(p.id):upper()]
+    if not m then return nil,"Mission introuvable." end
+    local allowed={planned=true,active=true,suspended=true,completed=true,cancelled=true}
+    if not allowed[p.status] then return nil,"Statut de mission invalide." end
+    if m.status==p.status then return common.deepcopy(m) end
+
+    local previous=m.status
+    local reason=common.trim(p.reason)
+    m.status=p.status
+    m.updatedAt=common.now()
+    m.updatedBy=actor.label
+    if p.status=="active" and not m.activatedAt then
+      m.activatedAt=common.now()
+      m.activationSeal=officialSeal("UNS-MISSION",{m.id,m.mandateSeal,m.activatedAt,actor.label})
+    elseif p.status=="completed" then
+      m.completedAt=common.now()
+      m.completionReason=reason
+      m.completionSeal=officialSeal("UNS-MISSION-END",{m.id,m.activationSeal,m.reports,m.completedAt,reason,actor.label})
+    elseif p.status=="cancelled" then
+      m.cancelledAt=common.now()
+      m.cancelReason=reason
+      m.cancellationSeal=officialSeal("UNS-MISSION-CANCEL",{m.id,m.mandateSeal,m.cancelledAt,reason,actor.label})
+    end
+
+    for _,stateId in ipairs(m.participatingStates or {}) do
+      pushNotice(state,{
+        title="Mission "..m.id.." : "..p.status,
+        body=m.title..(reason~="" and (" / "..reason) or ""),
+        severity=p.status=="cancelled" and "warning" or "info",
+        objectType="mission",objectId=m.id,targetStateId=stateId
+      })
+    end
+
+    mutate(state,actor,"MISSION_SET_STATUS",m.id,previous.." -> "..p.status..(reason~="" and (" / "..reason) or ""))
+    return common.deepcopy(m)
+  end
+
+  if action == "MISSION_ADD_REPORT" then
+    local m=state.missions[common.trim(p.id):upper()]
+    if not m then return nil,"Mission introuvable." end
+    if not canViewMission(actor,m) then return nil,"Acces refuse a cette mission." end
+    local body=common.trim(p.body)
+    if body=="" then return nil,"Rapport vide." end
+
+    local report={
+      id=string.format("REPORT-%03d",#(m.reports or {})+1),
+      title=common.trim(p.title),body=body,
+      classification=p.classification=="restricted" and "restricted" or "public",
+      at=common.now(),by=actor.label,role=actor.role
+    }
+    if report.title=="" then report.title="Rapport "..report.id end
+    report.seal=officialSeal("UNS-MISREP",{m.id,report.id,report.title,report.body,report.classification,report.at,report.by})
+    m.reports=m.reports or {}
+    m.reports[#m.reports+1]=report
+    m.updatedAt=common.now()
+
+    mutate(state,actor,"MISSION_ADD_REPORT",m.id,report.id.." / "..report.title)
+    return common.deepcopy(m)
+  end
+
   if action == "TREATY_LIST" then return listTreaties(state,p) end
 
   if action == "TREATY_GET" then
