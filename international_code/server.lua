@@ -2798,6 +2798,233 @@ local function handleAction(state, actor, action, p)
     return common.deepcopy(m)
   end
 
+  if action == "CONFLICT_LIST" then
+    return listConflicts(state,p,actor)
+  end
+
+  if action == "CONFLICT_GET" then
+    local conflict=state.conflicts[common.trim(p.id):upper()]
+    if not conflict then return nil,"Conflit introuvable." end
+    if not canViewConflict(actor,conflict) then return nil,"Acces refuse a ce conflit." end
+    return common.deepcopy(conflict)
+  end
+
+  if action == "CONFLICT_CREATE" then
+    local title=common.trim(p.title)
+    local summary=common.trim(p.summary)
+    if title=="" or summary=="" then return nil,"Titre et resume du conflit obligatoires." end
+
+    local validTypes={international=true,civil=true,border=true,occupation=true,insurgency=true,other=true}
+    local conflictType=validTypes[p.conflictType] and p.conflictType or "other"
+
+    local involved={}
+    local seen={}
+    for _,raw in ipairs(type(p.involvedStates)=="table" and p.involvedStates or {}) do
+      local stateId=common.trim(raw):upper()
+      if state.states[stateId] and not seen[stateId] then
+        seen[stateId]=true
+        involved[#involved+1]=stateId
+      end
+    end
+    table.sort(involved)
+    local partiesText=common.trim(p.partiesText)
+    if #involved==0 and partiesText=="" then return nil,"Renseignez au moins un Etat implique ou une partie non-etatique." end
+
+    local resolutionId=common.trim(p.resolutionId):upper()
+    local treatyId=common.trim(p.treatyId):upper()
+    local caseId=common.trim(p.caseId):upper()
+    if resolutionId~="" and not state.resolutions[resolutionId] then return nil,"Resolution liee introuvable." end
+    if treatyId~="" and not state.treaties[treatyId] then return nil,"Traite lie introuvable." end
+    if caseId~="" then
+      local case=state.cases[caseId]
+      if not case then return nil,"Dossier lie introuvable." end
+      if not canViewCase(actor,case) then return nil,"Acces refuse au dossier lie." end
+    end
+
+    local id=makeConflictId(state)
+    local conflict={
+      id=id,title=title,conflictType=conflictType,status="tension",
+      summary=summary,partiesText=partiesText,
+      involvedStates=involved,startAt=common.trim(p.startAt),endAt="",
+      resolutionId=resolutionId,treatyId=treatyId,caseId=caseId,
+      ceasefireTreatyId="",visibility=p.visibility=="restricted" and "restricted" or "public",
+      zones={},statusHistory={},
+      createdAt=common.now(),createdBy=actor.label,updatedAt=common.now()
+    }
+    conflict.seal=officialSeal("UNS-CONFLICT",{
+      conflict.id,conflict.title,conflict.conflictType,conflict.summary,conflict.partiesText,
+      conflict.involvedStates,conflict.startAt,conflict.resolutionId,conflict.treatyId,
+      conflict.caseId,conflict.visibility,conflict.createdAt,conflict.createdBy
+    })
+    state.conflicts[id]=conflict
+
+    for _,stateId in ipairs(involved) do
+      pushNotice(state,{
+        title="Conflit enregistre: "..id,
+        body=title.." / statut initial TENSION.",
+        severity="warning",objectType="conflict",objectId=id,targetStateId=stateId
+      })
+    end
+
+    mutate(state,actor,"CONFLICT_CREATE",id,title.." / "..conflictType)
+    return common.deepcopy(conflict)
+  end
+
+  if action == "CONFLICT_EDIT" then
+    local conflict=state.conflicts[common.trim(p.id):upper()]
+    if not conflict then return nil,"Conflit introuvable." end
+    if conflict.status=="ended" then return nil,"Un conflit termine ne peut plus etre modifie." end
+
+    local validTypes={international=true,civil=true,border=true,occupation=true,insurgency=true,other=true}
+    if p.title~=nil and common.trim(p.title)~="" then conflict.title=common.trim(p.title) end
+    if p.summary~=nil and common.trim(p.summary)~="" then conflict.summary=common.trim(p.summary) end
+    if p.partiesText~=nil then conflict.partiesText=common.trim(p.partiesText) end
+    if p.startAt~=nil then conflict.startAt=common.trim(p.startAt) end
+    if p.conflictType~=nil and validTypes[p.conflictType] then conflict.conflictType=p.conflictType end
+    if p.visibility~=nil then conflict.visibility=p.visibility=="restricted" and "restricted" or "public" end
+
+    if type(p.involvedStates)=="table" then
+      local involved={}
+      local seen={}
+      for _,raw in ipairs(p.involvedStates) do
+        local stateId=common.trim(raw):upper()
+        if state.states[stateId] and not seen[stateId] then seen[stateId]=true;involved[#involved+1]=stateId end
+      end
+      table.sort(involved)
+      conflict.involvedStates=involved
+    end
+
+    if p.resolutionId~=nil then
+      local id=common.trim(p.resolutionId):upper()
+      if id~="" and not state.resolutions[id] then return nil,"Resolution liee introuvable." end
+      conflict.resolutionId=id
+    end
+    if p.treatyId~=nil then
+      local id=common.trim(p.treatyId):upper()
+      if id~="" and not state.treaties[id] then return nil,"Traite lie introuvable." end
+      conflict.treatyId=id
+    end
+    if p.caseId~=nil then
+      local id=common.trim(p.caseId):upper()
+      if id~="" then
+        local case=state.cases[id]
+        if not case then return nil,"Dossier lie introuvable." end
+        if not canViewCase(actor,case) then return nil,"Acces refuse au dossier lie." end
+      end
+      conflict.caseId=id
+    end
+
+    conflict.updatedAt=common.now()
+    conflict.updatedBy=actor.label
+    mutate(state,actor,"CONFLICT_EDIT",conflict.id,conflict.title)
+    return common.deepcopy(conflict)
+  end
+
+  if action == "CONFLICT_SET_STATUS" then
+    local conflict=state.conflicts[common.trim(p.id):upper()]
+    if not conflict then return nil,"Conflit introuvable." end
+    local allowed={tension=true,active=true,ceasefire=true,peace_process=true,ended=true}
+    if not allowed[p.status] then return nil,"Statut de conflit invalide." end
+    if conflict.status==p.status then return common.deepcopy(conflict) end
+
+    local transitions={
+      tension={active=true,ceasefire=true,peace_process=true,ended=true},
+      active={ceasefire=true,peace_process=true,ended=true},
+      ceasefire={active=true,peace_process=true,ended=true},
+      peace_process={active=true,ceasefire=true,ended=true},
+      ended={}
+    }
+    if not (transitions[conflict.status] and transitions[conflict.status][p.status]) then
+      return nil,"Transition de conflit interdite: "..tostring(conflict.status).." -> "..tostring(p.status)
+    end
+
+    local ceasefireTreatyId=common.trim(p.ceasefireTreatyId):upper()
+    if p.status=="ceasefire" and ceasefireTreatyId~="" then
+      local treaty=state.treaties[ceasefireTreatyId]
+      if not treaty then return nil,"Traite de cessez-le-feu introuvable." end
+      conflict.ceasefireTreatyId=ceasefireTreatyId
+    end
+
+    local previous=conflict.status
+    local reason=common.trim(p.reason)
+    local row={
+      from=previous,to=p.status,reason=reason,
+      ceasefireTreatyId=ceasefireTreatyId,
+      at=common.now(),by=actor.label
+    }
+    row.seal=officialSeal("UNS-CFSTAT",{conflict.id,row.from,row.to,row.reason,row.ceasefireTreatyId,row.at,row.by,conflict.seal})
+    conflict.statusHistory=conflict.statusHistory or {}
+    conflict.statusHistory[#conflict.statusHistory+1]=row
+    conflict.status=p.status
+    conflict.updatedAt=common.now()
+    conflict.updatedBy=actor.label
+    if p.status=="active" and not conflict.activatedAt then conflict.activatedAt=common.now() end
+    if p.status=="ended" then conflict.endAt=common.now() end
+
+    for _,stateId in ipairs(conflict.involvedStates or {}) do
+      pushNotice(state,{
+        title="Conflit "..conflict.id.." : "..p.status,
+        body=conflict.title..(reason~="" and (" / "..reason) or ""),
+        severity=p.status=="active" and "critical" or (p.status=="ended" and "success" or "warning"),
+        objectType="conflict",objectId=conflict.id,targetStateId=stateId
+      })
+    end
+
+    mutate(state,actor,"CONFLICT_SET_STATUS",conflict.id,previous.." -> "..p.status..(reason~="" and (" / "..reason) or ""))
+    return common.deepcopy(conflict)
+  end
+
+  if action == "CONFLICT_ADD_ZONE" then
+    local conflict=state.conflicts[common.trim(p.id):upper()]
+    if not conflict then return nil,"Conflit introuvable." end
+    if conflict.status=="ended" then return nil,"Conflit termine." end
+    local name=common.trim(p.name)
+    if name=="" then return nil,"Nom de zone obligatoire." end
+    conflict.zones=conflict.zones or {}
+    local zone={
+      id=string.format("ZONE-%03d",#conflict.zones+1),
+      name=name,description=common.trim(p.description),status="active",
+      position=conflictZonePosition(p,nil),history={},
+      createdAt=common.now(),createdBy=actor.label,version=1
+    }
+    zone.seal=officialSeal("UNS-CFZONE",{conflict.id,zone.id,zone.name,zone.description,zone.status,zone.position,zone.version,zone.createdAt})
+    conflict.zones[#conflict.zones+1]=zone
+    conflict.updatedAt=common.now()
+    mutate(state,actor,"CONFLICT_ADD_ZONE",conflict.id,zone.id.." / "..zone.name)
+    return common.deepcopy(conflict)
+  end
+
+  if action == "CONFLICT_UPDATE_ZONE" then
+    local conflict=state.conflicts[common.trim(p.id):upper()]
+    if not conflict then return nil,"Conflit introuvable." end
+    local zone=nil
+    for _,z in ipairs(conflict.zones or {}) do if z.id==p.zoneId then zone=z break end end
+    if not zone then return nil,"Zone introuvable." end
+
+    local allowed={active=true,contested=true,demilitarized=true,humanitarian=true,closed=true}
+    if p.status~=nil and not allowed[p.status] then return nil,"Statut de zone invalide." end
+
+    zone.history=zone.history or {}
+    zone.history[#zone.history+1]={
+      version=zone.version,name=zone.name,description=zone.description,status=zone.status,
+      position=common.deepcopy(zone.position),seal=zone.seal,
+      archivedAt=common.now(),archivedBy=actor.label
+    }
+    if p.name~=nil and common.trim(p.name)~="" then zone.name=common.trim(p.name) end
+    if p.description~=nil then zone.description=common.trim(p.description) end
+    if p.status~=nil then zone.status=p.status end
+    if p.dimension~=nil or p.x~=nil or p.y~=nil or p.z~=nil or p.radius~=nil then
+      zone.position=conflictZonePosition(p,zone.position)
+    end
+    zone.version=(zone.version or 1)+1
+    zone.updatedAt=common.now()
+    zone.updatedBy=actor.label
+    zone.seal=officialSeal("UNS-CFZONE",{conflict.id,zone.id,zone.name,zone.description,zone.status,zone.position,zone.version,zone.updatedAt})
+    conflict.updatedAt=common.now()
+    mutate(state,actor,"CONFLICT_UPDATE_ZONE",conflict.id,zone.id.." / v"..zone.version.." / "..zone.status)
+    return common.deepcopy(conflict)
+  end
+
   if action == "TREATY_LIST" then return listTreaties(state,p) end
 
   if action == "TREATY_GET" then
