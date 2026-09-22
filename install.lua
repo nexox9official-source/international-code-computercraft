@@ -2,6 +2,12 @@ local REPO="https://raw.githubusercontent.com/nexox9official-source/internationa
 local args={...}
 local requested=args[1]
 
+local function runFile(path,...)
+  if shell and shell.run then return shell.run(path,...) end
+  if os and os.run then return os.run({},path,...) end
+  error("Impossible d'executer "..tostring(path).." : API shell/os.run indisponible.",0)
+end
+
 local BASE={"international_code/common.lua"}
 local CLIENT={
   "ic.lua","international_code/common.lua","international_code/launcher.lua",
@@ -192,10 +198,14 @@ local function installStartup()
   if not fs.exists("/startup") then fs.makeDir("/startup") end
   local s=assert(fs.open("/startup/90_uns_international_code.lua","w"))
   s.write([[
+local function run(path,...)
+  if shell and shell.run then return shell.run(path,...) end
+  if os and os.run then return os.run({},path,...) end
+end
 if fs.exists("/ic.lua") and fs.exists("/international_code/common.lua") then
   local ok,common=pcall(dofile,"/international_code/common.lua")
   local cfg=ok and common.loadConfig() or nil
-  if cfg and cfg.role=="server" then shell.run("ic","server") else shell.run("ic") end
+  if cfg and cfg.role=="server" then run("/ic.lua","server") else run("/ic.lua") end
 end
 ]])
   s.close()
@@ -251,7 +261,7 @@ local function installClient(role,openNorthCoalition)
   if openNorthCoalition then
     pcall(function() dofile("/international_code/national_client.lua").run() end)
   else
-    shell.run("ic")
+    runFile("/ic.lua")
   end
 end
 
@@ -269,7 +279,7 @@ local function installFreshServer()
   drawHeader("SERVEUR","Phase 2/2 - modules permanents")
   downloadSet(SERVER_RUNTIME)
   installStartup()
-  shell.run("ic")
+  runFile("/ic.lua")
 end
 
 local function updateExisting(cfg)
