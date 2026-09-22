@@ -7,7 +7,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** avec deux espaces juridi
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. Les données nationales de North Coalition sont isolées logiquement des registres internationaux et soumises à leur propre contrôle d'accès.
 
-## Ce que fait la v0.19
+## Ce que fait la v0.20
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
@@ -23,7 +23,7 @@ Le projet ne contient aucune référence au nom du serveur Minecraft. Les donné
 - impression multi-pages des articles et dossiers via une **Printer ComputerCraft** ;
 - interface terminal claire, navigable au clavier et à la souris.
 
-## Intranet national North Coalition v0.19
+## Intranet national North Coalition v0.20
 
 La v0.19 fournit un deuxième espace complet, **interne à North Coalition**, sans transformer les 400 lois nationales en articles UNS.
 
@@ -32,6 +32,30 @@ Depuis un terminal autorisé :
 ```text
 ic nc
 ```
+
+La v0.20 presente maintenant un **portail national** organise par domaine au lieu d'une liste technique unique :
+
+```text
+Portail national North Coalition
+  -> Mon espace
+  -> Droit / Code / Journal officiel
+  -> Institutions / Gouvernement / elections
+  -> Services publics / Guichet / registres
+  -> Justice / securite
+  -> Economie / finances / organisations
+  -> Reseau interne (fonctions habilitees)
+  -> Retour a l'Union des Nations Souveraines
+```
+
+Une recherche transversale est disponible depuis le portail ou directement avec :
+
+```text
+ic nc-search permis
+ic nc-search NC-ART-075
+ic nc-search MIN-INT
+```
+
+Elle recherche dans les registres autorises sans contourner les niveaux de confidentialite.
 
 Pour un grand Monitor institutionnel interne :
 
