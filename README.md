@@ -4,7 +4,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** destiné au Code interna
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. `North Coalition` est conservé uniquement comme État proposant dans le corpus juridique initial.
 
-## Ce que fait la v0.8
+## Ce que fait la v0.9
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
@@ -76,7 +76,7 @@ wget run https://raw.githubusercontent.com/nexox9official-source/international-c
 wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua admin
 ```
 
-## Navigation v0.8
+## Navigation v0.9
 
 Le Code n'affiche plus simplement une liste brute de 500 articles. Le terminal propose maintenant :
 
@@ -297,6 +297,53 @@ ic session SESSION-2026-0001
 
 Le Monitor affiche le statut, la salle, le nombre d'États présents et l'avancement de l'ordre du jour en temps réel.
 
+## Missions internationales v0.9
+
+Le système sait maintenant gérer des **missions internationales** sous forme de dossiers permanents `MISSION-AAAA-XXXX`.
+
+Types prévus :
+
+- mission d'observation ;
+- maintien de la paix ;
+- mission humanitaire ;
+- mission d'enquête ;
+- inspection internationale ;
+- surveillance / monitoring ;
+- reconstruction ;
+- médiation ;
+- autre mandat spécial.
+
+Une mission peut être fondée sur une `RES-...`, un `TREATY-...` ou un `CASE-...`. Elle conserve son mandat, sa zone, sa période prévue, les États participants, l'État responsable éventuel et le responsable/commandement déclaré.
+
+Cycle :
+
+```text
+planned -> active -> completed
+             |
+             +-> suspended -> active
+             +-> cancelled
+```
+
+Le mandat reçoit un sceau `UNS-MISSION-MANDATE-...`. L'activation, la clôture ou l'annulation sont également scellées.
+
+Les États participants reçoivent automatiquement une notification. Les terminaux autorisés peuvent ensuite ajouter des rapports de mission, chacun avec :
+
+- titre ;
+- texte ;
+- date et auteur ;
+- classification publique ou restreinte ;
+- sceau `UNS-MISREP-...`.
+
+Les missions restreintes restent accessibles aux institutions concernées et aux délégations participantes. Une mission publique peut être affichée sur le registre Monitor.
+
+Pour suivre une mission en direct :
+
+```text
+ic mission MISSION-2026-0001
+```
+
+Le Monitor affiche le statut, le type, la zone, les dates, les États participants, le commandement et le dernier rapport.
+
 ## Traités et diplomatie v0.5
 
 Le système gère maintenant les accords internationaux sous forme de documents officiels `TREATY-AAAA-XXXX`.
@@ -440,6 +487,7 @@ ic display CASE-2026-0001
 ic assembly BILL-2026-0001
 ic resolution RES-2026-0001
 ic session SESSION-2026-0001
+ic mission MISSION-2026-0001
 ic treaty TREATY-2026-0001
 ic verify CIU-JUG-XXXXXXXX
 ic inbox
