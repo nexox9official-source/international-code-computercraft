@@ -6,6 +6,10 @@ local files={
   "international_code/client.lua",
   "international_code/printer.lua",
   "international_code/public.lua",
+  "international_code/national.lua",
+  "international_code/national_client.lua",
+  "international_code/national_printer.lua",
+  "international_code/national/corpus_v2.json",
   "international_code/seed/001.lua",
   "international_code/seed/002.lua",
   "international_code/seed/003.lua",
@@ -29,7 +33,7 @@ local function download(rel)
 end
 
 term.setBackgroundColor(colors.black);term.setTextColor(colors.white);term.clear();term.setCursorPos(1,1)
-print("UNS INTERNATIONAL CODE")
+print("UNS + NORTH COALITION LEGAL NETWORK")
 print("Installation ComputerCraft")
 print("")
 if not http then error("API HTTP indisponible.",0) end
