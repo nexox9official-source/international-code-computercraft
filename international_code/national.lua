@@ -1070,7 +1070,7 @@ function N.handle(state,actor,action,p,ctx)
       return nil,"L'autorite souveraine a deja fait l'objet d'une renonciation."
     end
     if common.trim(p.confirmation)~="JE RENONCE VOLONTAIREMENT A LA DIRECTION DE NORTH COALITION" then
-      return nil,"Confirmation exacte requise pour cette renonciation irreversible."
+      return nil,"Confirmation exacte requise pour cette renonciation volontaire."
     end
     local reason=common.trim(p.reason)
     local at=common.now()
