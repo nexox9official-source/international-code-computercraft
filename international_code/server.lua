@@ -32,7 +32,7 @@ local permissions = {
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
     CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
     CASE_REMOVE_ARTICLE=true, CASE_SET_STATUS=true,
-    CASE_ADD_HEARING=true, CASE_SET_HEARING_STATUS=true, CASE_FILE_APPEAL=true,
+    CASE_ADD_HEARING=true, CASE_SET_HEARING_STATUS=true, CASE_RECORD_HEARING=true, CASE_FILE_APPEAL=true,
     ENFORCEMENT_ADD_PROGRESS=true,
     STATE_LIST=true, STATE_GET=true, BILL_LIST=true, BILL_GET=true, TREATY_LIST=true, TREATY_GET=true,
     AUDIT_LIST=true
@@ -843,6 +843,14 @@ local function handleAction(state, actor, action, p)
             title=visible and h.subject or "Document judiciaire confidentiel",
             reference=h.id,status=h.status,issuedAt=h.createdAt,
             issuedBy=visible and h.createdBy or nil,confidential=not visible
+          }
+        end
+        if tostring(h.recordSeal or ""):upper()==seal then
+          return {
+            valid=true,kind="hearing_minutes",seal=seal,parentId=c.id,
+            title=visible and ("Proces-verbal "..(h.id or "")) or "Document judiciaire confidentiel",
+            reference=h.id,status=h.status,issuedAt=h.recordedAt,
+            issuedBy=visible and h.recordedBy or nil,confidential=not visible
           }
         end
       end
@@ -1779,6 +1787,38 @@ local function handleAction(state, actor, action, p)
       roles={clerk=true,judge=true,admin=true}
     })
     mutate(state,actor,"CASE_ADD_HEARING",c.id,hearing.id.." "..hearing.subject)
+    return common.deepcopy(c)
+  end
+
+  if action == "CASE_RECORD_HEARING" then
+    local c=state.cases[common.trim(p.id):upper()]
+    if not c then return nil,"Dossier introuvable." end
+    ensureCaseShape(c)
+    local target=nil
+    for _,h in ipairs(c.hearings) do if h.id==p.hearingId then target=h break end end
+    if not target then return nil,"Audience introuvable." end
+
+    local minutes=common.trim(p.minutes)
+    if minutes=="" then return nil,"Proces-verbal / compte rendu obligatoire." end
+    target.participants=common.trim(p.participants)
+    target.minutes=minutes
+    target.outcome=common.trim(p.outcome)
+    target.recordedAt=common.now()
+    target.recordedBy=actor.label
+    target.status="held"
+    target.recordSeal=officialSeal("CIU-PV",{
+      c.id,target.id,target.subject,target.scheduledFor,target.location,
+      target.participants,target.minutes,target.outcome,target.recordedAt,target.recordedBy,target.seal
+    })
+    c.updatedAt=common.now()
+    caseEvent(c,actor,"HEARING_RECORDED","Proces-verbal "..target.id,target.outcome~="" and target.outcome or target.subject)
+    pushNotice(state,{
+      title="Proces-verbal enregistre: "..c.id.." / "..target.id,
+      body=target.subject..(target.outcome~="" and (" / "..target.outcome) or ""),
+      severity="info",objectType="case",objectId=c.id,
+      roles={judge=true,clerk=true,admin=true}
+    })
+    mutate(state,actor,"CASE_RECORD_HEARING",c.id,target.id.." / "..target.recordSeal)
     return common.deepcopy(c)
   end
 
