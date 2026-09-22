@@ -59,7 +59,7 @@ local function drawOffline(t,msg)
   fillLine(t,6," "..tostring(msg or ""),colors.lightGray)
 end
 
-local function drawOverview(t,dash,states,bills,cases)
+local function drawOverview(t,dash,states,bills,cases,missions,incidents,enforcements)
   t.setBackgroundColor(colors.black);t.clear()
   header(t,"REGISTRE PUBLIC","Union des Nations Souveraines")
   local y=4
@@ -68,10 +68,12 @@ local function drawOverview(t,dash,states,bills,cases)
   fillLine(t,y," DOSSIERS PUBLICS "..tostring(dash.openCases or #cases),colors.white);y=y+1
   fillLine(t,y," SCRUTINS OUVERTS "..tostring((dash.votingBills or #bills)+(dash.votingResolutions or 0)),colors.yellow);y=y+1
   fillLine(t,y," SESSIONS LIVE    "..tostring(dash.openSessions or 0).." / "..tostring(dash.scheduledSessions or 0).." prevues",colors.cyan);y=y+1
-  fillLine(t,y," MISSIONS ACTIVES "..tostring(dash.activeMissions or 0),colors.cyan);y=y+1
-  fillLine(t,y," INCIDENTS ACTIFS "..tostring(dash.activeIncidents or 0)..
-    ((dash.criticalIncidents or 0)>0 and (" / "..tostring(dash.criticalIncidents).." CRIT") or ""), (dash.criticalIncidents or 0)>0 and colors.red or colors.orange);y=y+1
-  fillLine(t,y," EXECUTIONS ACT.  "..tostring(dash.activeEnforcements or 0),colors.orange);y=y+2
+  fillLine(t,y," MISSIONS ACTIVES "..tostring(#(missions or {})),colors.cyan);y=y+1
+  local publicCritical=0
+  for _,incident in ipairs(incidents or {}) do if incident.severity=="critical" then publicCritical=publicCritical+1 end end
+  fillLine(t,y," INCIDENTS ACTIFS "..tostring(#(incidents or {}))..
+    (publicCritical>0 and (" / "..tostring(publicCritical).." CRIT") or ""), publicCritical>0 and colors.red or colors.orange);y=y+1
+  fillLine(t,y," EXECUTIONS ACT.  "..tostring(#(enforcements or {})),colors.orange);y=y+2
   fillLine(t,y," Revision registre: "..tostring(dash.revision or "?"),colors.lightGray);y=y+1
   fillLine(t,y," Projet juridique: "..tostring(dash.codeStatus or "?"),colors.lightGray)
   local _,h=t.getSize()
@@ -298,7 +300,7 @@ function P.run()
       local treaties=rpc(cfg,"TREATY_LIST",{stage="in_force"},4) or {}
       local enforcements=rpc(cfg,"ENFORCEMENT_LIST",{visibility="public"},4) or {}
       local laws=rpc(cfg,"LAW_LIST",{status="active"},4) or {}
-      if page==1 then drawOverview(target,dash,states,bills,cases)
+      if page==1 then drawOverview(target,dash,states,bills,cases,missions,incidents,enforcements)
       elseif page==2 then drawStates(target,states)
       elseif page==3 then drawBills(target,bills)
       elseif page==4 then drawResolutions(target,resolutions)
@@ -654,6 +656,10 @@ function P.missionDisplay(missionId)
       fillLine(target,y," Statut: "..tostring(m.status),statusColor);y=y+1
       fillLine(target,y," Type: "..tostring(m.missionType or "?"),colors.cyan);y=y+1
       fillLine(target,y," Zone: "..tostring(m.area or "-"),colors.white);y=y+1
+      local pos=m.position or {}
+      if pos.x and pos.z then
+        fillLine(target,y," Pos: "..tostring(pos.dimension or "minecraft:overworld").." X"..tostring(pos.x).." Y"..tostring(pos.y or "?").." Z"..tostring(pos.z),colors.lightGray);y=y+1
+      end
       fillLine(target,y," Periode: "..tostring(m.startAt or "-").." -> "..tostring(m.endAt or "-"),colors.lightGray);y=y+2
       fillLine(target,y," Etats participants: "..tostring(#(m.participatingStates or {})),colors.cyan);y=y+1
       if m.leadStateId and m.leadStateId~="" then fillLine(target,y," Responsable: "..m.leadStateId,colors.white);y=y+1 end
