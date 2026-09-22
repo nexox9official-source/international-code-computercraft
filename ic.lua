@@ -25,6 +25,7 @@ local function help()
   print("ic session <SESSION-ID>    Tableau LIVE d'une session")
   print("ic mission <MISSION-ID>    Tableau LIVE d'une mission")
   print("ic incident <INC-ID>       Tableau LIVE d'un incident")
+  print("ic conflict <CONFLICT-ID>  Tableau LIVE d'un conflit / zones")
   print("ic situation [dimension]   Centre de situation + carte Minecraft")
   print("ic treaty <TREATY-ID>      Tableau LIVE des signatures d'un traite")
   print("ic verify <SCEAU>          Verifier l'authenticite d'un document")
@@ -69,6 +70,10 @@ end
 if cmd=="incident" then
   if not args[2] then error("Usage: ic incident INC-AAAA-0001",0) end
   dofile(ROOT.."/public.lua").incidentDisplay(args[2]);return
+end
+if cmd=="conflict" then
+  if not args[2] then error("Usage: ic conflict CONFLICT-AAAA-0001",0) end
+  dofile(ROOT.."/public.lua").conflictDisplay(args[2]);return
 end
 if cmd=="situation" then
   dofile(ROOT.."/public.lua").situationDisplay(args[2] or "minecraft:overworld");return
