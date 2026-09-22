@@ -507,7 +507,17 @@ local function sessionAgendaReference(state,kind,ref)
   return nil
 end
 
-local function listMissions(state,payload)
+local function canViewMission(actor,m)
+  if not actor or not m then return false end
+  if actor.role=="admin" or actor.role=="writer" or actor.role=="judge" or actor.role=="clerk" then return true end
+  if actor.stateId then
+    if m.leadStateId==actor.stateId then return true end
+    for _,id in ipairs(m.participatingStates or {}) do if id==actor.stateId then return true end end
+  end
+  return (m.visibility or "public")=="public"
+end
+
+local function listMissions(state,payload,actor)
   payload=payload or {}
   local q=common.trim(payload.query)
   local status=common.trim(payload.status)
@@ -523,7 +533,7 @@ local function listMissions(state,payload)
       if m.leadStateId==stateId then stateHit=true end
       for _,id in ipairs(m.participatingStates or {}) do if id==stateId then stateHit=true break end end
     end
-    if hit and statusHit and typeHit and stateHit then out[#out+1]=common.deepcopy(m) end
+    if hit and statusHit and typeHit and stateHit and canViewMission(actor,m) then out[#out+1]=common.deepcopy(m) end
   end
   table.sort(out,function(a,b) return tostring(a.id)>tostring(b.id) end)
   return out
