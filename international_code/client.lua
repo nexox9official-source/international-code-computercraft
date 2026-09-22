@@ -738,11 +738,11 @@ lawBasketBrowser=function(initial)
           selected[law.ref]=nil
         else
           local allow=true
-          if law.status and law.status~="active" then
-            local confirm=menu("ARTICLE NON ACTIF",{
+          if law.status=="repealed" or law.status=="suspended" then
+            local confirm=menu("ARTICLE NON APPLICABLE",{
               {text="Ajouter quand meme",id="yes"},
               {text="Annuler",id="no"}
-            },law.ref.." est actuellement ["..law.status.."].")
+            },law.ref.." est actuellement ["..law.status.."]. Les brouillons restent selectionnables sans avertissement.")
             allow=confirm and confirm.id=="yes"
           end
           if allow then addLaw(law) end
