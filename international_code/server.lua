@@ -507,6 +507,35 @@ local function sessionAgendaReference(state,kind,ref)
   return nil
 end
 
+local function listMissions(state,payload)
+  payload=payload or {}
+  local q=common.trim(payload.query)
+  local status=common.trim(payload.status)
+  local missionType=common.trim(payload.missionType)
+  local stateId=common.trim(payload.stateId):upper()
+  local out={}
+  for _,m in pairs(state.missions or {}) do
+    local hit=(q=="" or common.contains(m.id,q) or common.contains(m.title,q) or common.contains(m.mandate,q) or common.contains(m.area,q))
+    local statusHit=(status=="" or m.status==status)
+    local typeHit=(missionType=="" or m.missionType==missionType)
+    local stateHit=stateId==""
+    if not stateHit then
+      if m.leadStateId==stateId then stateHit=true end
+      for _,id in ipairs(m.participatingStates or {}) do if id==stateId then stateHit=true break end end
+    end
+    if hit and statusHit and typeHit and stateHit then out[#out+1]=common.deepcopy(m) end
+  end
+  table.sort(out,function(a,b) return tostring(a.id)>tostring(b.id) end)
+  return out
+end
+
+local function makeMissionId(state)
+  local year=os.date and os.date("%Y") or "0000"
+  local n=(state.missionCounters[year] or 0)+1
+  state.missionCounters[year]=n
+  return string.format("MISSION-%s-%04d",year,n)
+end
+
 local function listTreaties(state,payload)
   payload=payload or {}
   local q=common.trim(payload.query)
