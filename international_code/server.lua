@@ -403,6 +403,29 @@ local function listBills(state,payload)
   return out
 end
 
+local function listResolutions(state,payload)
+  payload=payload or {}
+  local q=common.trim(payload.query)
+  local stage=common.trim(payload.stage)
+  local resolutionType=common.trim(payload.resolutionType)
+  local targetStateId=common.trim(payload.targetStateId):upper()
+  local out={}
+  for _,r in pairs(state.resolutions or {}) do
+    local hit=(q=="" or common.contains(r.id,q) or common.contains(r.title,q) or common.contains(r.summary,q) or common.contains(r.body,q) or common.contains(r.resolutionType,q))
+    local stageHit=(stage=="" or r.stage==stage)
+    local typeHit=(resolutionType=="" or r.resolutionType==resolutionType)
+    local targetHit=(targetStateId=="" or r.targetStateId==targetStateId)
+    if hit and stageHit and typeHit and targetHit then
+      local copy=common.deepcopy(r)
+      copy.votes=nil
+      copy.voteHistory=nil
+      out[#out+1]=copy
+    end
+  end
+  table.sort(out,function(a,b) return tostring(a.id)>tostring(b.id) end)
+  return out
+end
+
 local function listTreaties(state,payload)
   payload=payload or {}
   local q=common.trim(payload.query)
@@ -510,6 +533,13 @@ local function billTally(state,bill)
     participation=participation,quorumRequired=quorumRequired,quorumMet=quorumMet,
     threshold=threshold,adopted=adopted
   }
+end
+
+local function makeResolutionId(state)
+  local year=os.date and os.date("%Y") or "0000"
+  local n=(state.resolutionCounters[year] or 0)+1
+  state.resolutionCounters[year]=n
+  return string.format("RES-%s-%04d",year,n)
 end
 
 local function makeBillId(state)
