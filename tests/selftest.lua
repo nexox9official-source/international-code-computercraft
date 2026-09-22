@@ -23,7 +23,7 @@ end
 assert(total==500,"expected 500 seed articles, got "..total)
 for n=1,500 do assert(seen[n],"missing article "..n) end
 
-assert(common.VERSION=="0.12.1","unexpected application version: "..tostring(common.VERSION))
+assert(common.VERSION=="0.13.0","unexpected application version: "..tostring(common.VERSION))
 
 local function readSource(path)
   local h=assert(io.open(path,"r"))
@@ -63,10 +63,18 @@ assert(national:find('NC_ELECTION_VOTE',1,true),"national minister elections mis
 assert(national:find('NC_BILL_ENACT',1,true),"national legislation workflow missing")
 assert(national:find('NC_DECREE_PUBLISH',1,true),"national decrees missing")
 assert(national:find('NC_NOTICE_LIST',1,true),"national notifications missing")
+assert(national:find('NC_CASE_CREATE',1,true),"national case creation missing")
+assert(national:find('NC_CASE_ADD_EVIDENCE',1,true),"national evidence workflow missing")
+assert(national:find('NC_CASE_ADD_JUDGMENT',1,true),"national judgments missing")
+assert(national:find('NC_CASE_FILE_APPEAL',1,true),"national appeals missing")
+assert(national:find('NC_CASE_ADD_ORDER',1,true),"national judicial orders missing")
 assert(nationalClient:find('CODE NATIONAL / CATEGORIES / RECHERCHE',1,true),"national categorized code UI missing")
 assert(nationalClient:find('NOTIFICATIONS NATIONALES',1,true),"national notification center missing")
+assert(nationalClient:find('JUSTICE / DOSSIERS NATIONAUX',1,true),"national justice UI missing")
 assert(nationalPrinter:find('function P.law',1,true),"national law printing missing")
-assert(nationalPublic:find('function P.run',1,true),"national live monitor missing")
+assert(nationalPrinter:find('function P.caseFile',1,true),"national case printing missing")
+assert(nationalPrinter:find('function P.judgment',1,true),"national judgment printing missing")
+assert(nationalPublic:find('JUSTICE NATIONALE',1,true),"national justice monitor missing")
 
 local ncCount=0
 for _ in nationalCorpus:gmatch('"id"%s*:%s*"NC%-ART%-%d%d%d"') do ncCount=ncCount+1 end
@@ -74,4 +82,4 @@ assert(ncCount==400,"expected 400 North Coalition articles, got "..ncCount)
 assert(nationalCorpus:find('"founding_phase_account": "NexoFr_"',1,true),"NexoFr_ founding account missing")
 assert(not nationalCorpus:find("Astralium",1,true),"forbidden server name leaked into national corpus")
 
-print("Self-test OK: 500 UNS articles + 400 NC articles + v0.12.1 national intranet")
+print("Self-test OK: 500 UNS articles + 400 NC articles + v0.13 national government/justice intranet")
