@@ -2818,6 +2818,13 @@ function C.verify(seal)
   verifySealScreen(seal)
 end
 
+function C.notifications()
+  cfg=common.loadConfig()
+  if not cfg or cfg.role=="server" then error("Terminal client appaire requis.",0) end
+  common.openModems()
+  notificationCenter()
+end
+
 function C.doctor()
   cfg=common.loadConfig()
   common.openModems()
