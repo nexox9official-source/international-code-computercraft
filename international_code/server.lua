@@ -2311,12 +2311,13 @@ local function serverUI(state, lastEvent)
   term.setCursorPos(2,4)
   term.write("Revision  : " .. tostring(state.meta.revision))
 
-  local lc,cc,cl,sc,bv,tr,enf=0,0,0,0,0,0,0
+  local lc,cc,cl,sc,bv,rv,tr,enf=0,0,0,0,0,0,0,0
   for _ in pairs(state.laws) do lc=lc+1 end
   for _ in pairs(state.cases) do cc=cc+1 end
   for _ in pairs(state.clients) do cl=cl+1 end
   for _,st in pairs(state.states or {}) do if st.status=="member" then sc=sc+1 end end
   for _,bill in pairs(state.bills or {}) do if bill.stage=="voting" then bv=bv+1 end end
+  for _,res in pairs(state.resolutions or {}) do if res.stage=="voting" then rv=rv+1 end end
   for _,t in pairs(state.treaties or {}) do if t.stage=="in_force" then tr=tr+1 end end
   for _,e in pairs(state.enforcements or {}) do
     if e.status=="ordered" or e.status=="active" or e.status=="partial" or e.status=="breached" then enf=enf+1 end
@@ -2325,7 +2326,7 @@ local function serverUI(state, lastEvent)
   term.setCursorPos(2,5)
   term.write("Articles: "..lc.." Dossiers: "..cc.." Clients: "..cl)
   term.setCursorPos(2,6)
-  term.write("Etats: "..sc.." Votes: "..bv.." Traites: "..tr)
+  term.write("Etats: "..sc.." Scrutins: "..(bv+rv).." Traites: "..tr)
   term.setCursorPos(2,7)
   term.write("Execution: "..enf.." Notifications: "..tostring(#(state.notices or {})))
   term.setTextColor(colors.cyan)
