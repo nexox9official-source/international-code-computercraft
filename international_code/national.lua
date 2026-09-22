@@ -878,6 +878,104 @@ function N.handle(state,actor,action,p,ctx)
   local access,accessErr=requireAccess(state,actor)
   if not access then return nil,accessErr end
 
+  if action=="NC_VERIFY_SEAL" then
+    local wanted=common.trim(p.seal):upper()
+    if wanted=="" then return {valid=false,seal=wanted} end
+    local function result(kind,objectId,title,issuedAt,issuedBy,confidential)
+      return {
+        valid=true,kind=kind,seal=wanted,objectId=objectId,title=title,
+        issuedAt=issuedAt,issuedBy=issuedBy,confidential=confidential==true
+      }
+    end
+
+    if tostring(n.meta.foundingSeal or ""):upper()==wanted then
+      return result("founding","NORTH-COALITION","Cloture de la phase fondatrice",n.meta.foundingClosedAt,n.meta.foundingClosedBy,false)
+    end
+
+    for _,cit in pairs(n.citizens or {}) do
+      if tostring(cit.seal or ""):upper()==wanted then
+        return result("citizen",cit.id,cit.displayName or cit.identity,cit.createdAt,cit.createdBy,false)
+      end
+      for _,h in ipairs(cit.history or {}) do
+        if tostring(h.seal or ""):upper()==wanted then
+          return result("citizen_history",cit.id,(cit.displayName or cit.identity).." / modification registre civil",h.at,h.by,false)
+        end
+      end
+    end
+
+    for _,m in pairs(n.ministries or {}) do
+      if tostring(m.appointmentSeal or ""):upper()==wanted then
+        return result("ministry_appointment",m.code,m.name.." / "..tostring(m.holderIdentity or ""),m.appointedAt,m.holderIdentity,false)
+      end
+      for _,h in ipairs(m.history or {}) do
+        if tostring(h.seal or ""):upper()==wanted then
+          return result("ministry_history",m.code,m.name.." / "..tostring(h.event or ""),h.at,h.by or h.identity,false)
+        end
+      end
+    end
+
+    for _,e in pairs(n.elections or {}) do
+      if tostring(e.openSeal or ""):upper()==wanted then return result("election_open",e.id,e.title,e.openedAt,e.openedBy,false) end
+      if tostring(e.resultSeal or ""):upper()==wanted then return result("election_result",e.id,e.title,e.closedAt,e.closedBy,false) end
+      if tostring(e.appointmentSeal or ""):upper()==wanted then return result("election_appointment",e.id,e.title,e.closedAt,e.winnerIdentity,false) end
+    end
+
+    for _,b in pairs(n.bills or {}) do
+      if tostring(b.openSeal or ""):upper()==wanted then return result("bill_vote_open",b.id,b.title,b.openedAt,b.openedBy,false) end
+      if tostring(b.resultSeal or ""):upper()==wanted then return result("bill_result",b.id,b.title,b.closedAt,b.closedBy,false) end
+      if tostring(b.enactmentSeal or ""):upper()==wanted then return result("law_enactment",b.id,b.title,b.enactedAt,b.enactedBy,false) end
+    end
+
+    for _,d in pairs(n.decrees or {}) do
+      if tostring(d.seal or ""):upper()==wanted then return result("decree",d.id,d.title,d.publishedAt,d.publishedBy,false) end
+      if tostring(d.repealSeal or ""):upper()==wanted then return result("decree_repeal",d.id,d.title,d.repealedAt,d.repealedBy,false) end
+    end
+
+    for _,sess in pairs(n.sessions or {}) do
+      if canViewNationalSession(state,actor,sess) then
+        if tostring(sess.convocationSeal or ""):upper()==wanted then return result("session_convocation",sess.id,sess.title,sess.createdAt,sess.createdBy,false) end
+        if tostring(sess.openSeal or ""):upper()==wanted then return result("session_open",sess.id,sess.title,sess.openedAt,sess.openedBy,false) end
+        if tostring(sess.closeSeal or ""):upper()==wanted then return result("session_close",sess.id,sess.title,sess.closedAt,sess.closedBy,false) end
+        if tostring(sess.cancelSeal or ""):upper()==wanted then return result("session_cancel",sess.id,sess.title,sess.cancelledAt,sess.cancelledBy,false) end
+      else
+        for _,sealValue in ipairs({sess.convocationSeal,sess.openSeal,sess.closeSeal,sess.cancelSeal}) do
+          if tostring(sealValue or ""):upper()==wanted then
+            return result("session_confidential",sess.id,"Session nationale restreinte",nil,nil,true)
+          end
+        end
+      end
+    end
+
+    for _,case in pairs(n.cases or {}) do
+      ensureNationalCaseShape(case)
+      local visible=canViewNationalCase(state,actor,case)
+      local function caseResult(kind,title,at,by)
+        if visible then return result(kind,case.id,title,at,by,false) end
+        return result(kind,case.id,"Dossier judiciaire national confidentiel",nil,nil,true)
+      end
+      if tostring(case.seal or ""):upper()==wanted then return caseResult("case",case.title,case.createdAt,case.createdBy) end
+      for _,x in ipairs(case.facts or {}) do if tostring(x.seal or ""):upper()==wanted then return caseResult("case_fact",(x.id or "").." / fait",x.at,x.by) end end
+      for _,x in ipairs(case.evidence or {}) do if tostring(x.seal or ""):upper()==wanted then return caseResult("case_evidence",(x.id or "").." / "..(x.label or "preuve"),x.at,x.by) end end
+      for _,x in ipairs(case.hearings or {}) do
+        if tostring(x.seal or ""):upper()==wanted then return caseResult("hearing",x.id or "Audience",x.createdAt,x.createdBy) end
+        if tostring(x.recordSeal or ""):upper()==wanted then return caseResult("hearing_record",(x.id or "Audience").." / PV",x.recordedAt,x.recordedBy) end
+      end
+      for _,x in ipairs(case.orders or {}) do
+        if tostring(x.seal or ""):upper()==wanted then return caseResult("judicial_order",(x.id or "").." / "..(x.orderType or ""),x.issuedAt,x.issuedBy) end
+        if tostring(x.statusSeal or ""):upper()==wanted then return caseResult("judicial_order_status",(x.id or "").." / statut",x.updatedAt,x.updatedBy) end
+      end
+      for _,x in ipairs(case.judgments or {}) do
+        if tostring(x.seal or ""):upper()==wanted then return caseResult("judgment",(x.id or "").." / "..(x.verdict or ""),x.date,x.judge) end
+      end
+      for _,x in ipairs(case.appeals or {}) do
+        if tostring(x.seal or ""):upper()==wanted then return caseResult("appeal",x.id or "Appel",x.filedAt,x.filedBy) end
+        if tostring(x.decisionSeal or ""):upper()==wanted then return caseResult("appeal_decision",(x.id or "Appel").." / "..(x.result or ""),x.decidedAt,x.decidedBy) end
+      end
+    end
+
+    return {valid=false,seal=wanted}
+  end
+
   if action=="NC_NOTICE_LIST" then
     return listNationalNotices(ctx,state,actor,p)
   end
