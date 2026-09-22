@@ -3357,6 +3357,7 @@ missionDetails=function(id)
     if m.resolutionId and m.resolutionId~="" then actions[#actions+1]={text="Ouvrir la resolution source",id="resolution"} end
     if m.treatyId and m.treatyId~="" then actions[#actions+1]={text="Ouvrir le traite source",id="treaty"} end
     if m.caseId and m.caseId~="" then actions[#actions+1]={text="Ouvrir le dossier source",id="case"} end
+    if m.conflictId and m.conflictId~="" then actions[#actions+1]={text="Ouvrir le conflit lie",id="conflict"} end
 
     if allowed("missionReport") and (m.status=="active" or m.status=="suspended") then
       actions[#actions+1]={text="Ajouter un rapport de mission",id="report"}
@@ -3379,7 +3380,7 @@ missionDetails=function(id)
         {label="Zone / periode",text=(m.area or "-").." / "..(m.startAt or "-").." -> "..(m.endAt or "-")},
         {label="Coordonnees Minecraft",text=positionText(m.position)},
         {label="Mandat",text=m.mandate or ""},
-        {label="Sources",text="Resolution: "..(m.resolutionId or "-").."\nTraite: "..(m.treatyId or "-").."\nDossier: "..(m.caseId or "-")},
+        {label="Sources",text="Resolution: "..(m.resolutionId or "-").."\nTraite: "..(m.treatyId or "-").."\nDossier: "..(m.caseId or "-").."\nConflit: "..(m.conflictId or "-")},
         {label="Etat responsable",text=m.leadStateId or "-"},
         {label="Responsable / commandement",text=m.commander or "-"},
         {label="Etats participants",text=#m.participatingStates>0 and table.concat(m.participatingStates,"\n") or "Aucun"},
@@ -3402,6 +3403,8 @@ missionDetails=function(id)
       treatyDetails(m.treatyId)
     elseif a.id=="case" then
       caseDetails(m.caseId)
+    elseif a.id=="conflict" then
+      conflictDetails(m.conflictId)
 
     elseif a.id=="report" then
       local title=prompt("Titre du rapport")
@@ -3421,6 +3424,7 @@ missionDetails=function(id)
     elseif a.id=="edit" then
       local title=prompt("Titre",m.title)
       local typ=chooseMissionType(m.missionType)
+      local conflictId=prompt("Conflit lie CONFLICT-... (optionnel)",m.conflictId or "")
       local area=prompt("Zone / territoire",m.area or "")
       local pos=askPosition(m.position)
       local startAt=prompt("Debut",m.startAt or "")
@@ -3433,7 +3437,7 @@ missionDetails=function(id)
         {text="Publique",v="public"},{text="Restreinte",v="restricted"}
       },"Actuel: "..(m.visibility or "public"))
       local out,e=rpc("MISSION_EDIT",{
-        id=m.id,title=title,missionType=typ,area=area,
+        id=m.id,title=title,missionType=typ,conflictId=conflictId,area=area,
         dimension=pos.dimension,x=pos.x,y=pos.y,z=pos.z,radius=pos.radius,
         startAt=startAt,endAt=endAt,commander=commander,participatingStates=participants,leadStateId=lead,
         mandate=mandate,visibility=visibility and visibility.v or m.visibility
@@ -3486,6 +3490,7 @@ local function missionsScreen(query,status)
       local resolutionId=prompt("Resolution source RES-... (optionnel)")
       local treatyId=prompt("Traite source TREATY-... (optionnel)")
       local caseId=prompt("Dossier source CASE-... (optionnel)")
+      local conflictId=prompt("Conflit source CONFLICT-... (optionnel)")
       local area=prompt("Zone / territoire")
       local pos=askPosition({})
       local startAt=prompt("Debut prevu")
@@ -3498,7 +3503,7 @@ local function missionsScreen(query,status)
         {text="Publique",v="public"},{text="Restreinte",v="restricted"}
       })
       local out,e=rpc("MISSION_CREATE",{
-        title=title,missionType=typ,resolutionId=resolutionId,treatyId=treatyId,caseId=caseId,
+        title=title,missionType=typ,resolutionId=resolutionId,treatyId=treatyId,caseId=caseId,conflictId=conflictId,
         area=area,dimension=pos.dimension,x=pos.x,y=pos.y,z=pos.z,radius=pos.radius,
         startAt=startAt,endAt=endAt,commander=commander,
         participatingStates=participants,leadStateId=lead,mandate=mandate,
@@ -3604,6 +3609,7 @@ incidentDetails=function(id)
     if incident.treatyId and incident.treatyId~="" then actions[#actions+1]={text="Ouvrir le traite lie",id="treaty"} end
     if incident.caseId and incident.caseId~="" then actions[#actions+1]={text="Ouvrir le dossier judiciaire",id="case"} end
     if incident.enforcementId and incident.enforcementId~="" then actions[#actions+1]={text="Ouvrir la mesure d'execution",id="enforcement"} end
+    if incident.conflictId and incident.conflictId~="" then actions[#actions+1]={text="Ouvrir le conflit lie",id="conflict"} end
 
     if allowed("incidentReport") and incident.status~="closed" then
       actions[#actions+1]={text="Ajouter un SITREP / rapport terrain",id="report"}
@@ -3630,7 +3636,8 @@ incidentDetails=function(id)
           "\nResolution: "..(incident.resolutionId or "-")..
           "\nTraite: "..(incident.treatyId or "-")..
           "\nDossier: "..(incident.caseId or "-")..
-          "\nExecution: "..(incident.enforcementId or "-")},
+          "\nExecution: "..(incident.enforcementId or "-")..
+          "\nConflit: "..(incident.conflictId or "-")},
         {label="Visibilite",text=incident.visibility or "public"},
         {label="Sceau initial",text=incident.seal or "-"},
         {label="Historique de statut",text=incidentStatusHistoryText(incident)}
@@ -3648,6 +3655,7 @@ incidentDetails=function(id)
     elseif a.id=="treaty" then treatyDetails(incident.treatyId)
     elseif a.id=="case" then caseDetails(incident.caseId)
     elseif a.id=="enforcement" then enforcementDetails(incident.enforcementId)
+    elseif a.id=="conflict" then conflictDetails(incident.conflictId)
 
     elseif a.id=="report" then
       local title=prompt("Titre du SITREP")
@@ -3735,6 +3743,7 @@ local function incidentsScreen(query,status,severity)
       local treatyId=prompt("Traite lie TREATY-... (optionnel)")
       local caseId=prompt("Dossier lie CASE-... (optionnel)")
       local enforcementId=prompt("Execution liee ENF-... (optionnel)")
+      local conflictId=prompt("Conflit lie CONFLICT-... (optionnel)")
       local visibility=menu("VISIBILITE",{
         {text="Publique",v="public"},{text="Restreinte",v="restricted"}
       })
@@ -3742,7 +3751,8 @@ local function incidentsScreen(query,status,severity)
         title=title,incidentType=typ,severity=severityChoice,summary=summary,details=details,
         area=area,dimension=pos.dimension,x=pos.x,y=pos.y,z=pos.z,radius=pos.radius,
         involvedStates=involved,missionId=missionId,resolutionId=resolutionId,treatyId=treatyId,
-        caseId=caseId,enforcementId=enforcementId,visibility=visibility and visibility.v or "public"
+        caseId=caseId,enforcementId=enforcementId,conflictId=conflictId,
+        visibility=visibility and visibility.v or "public"
       })
       message("INCIDENT",out and ("Declare: "..out.id) or e,out and palette.ok or palette.bad)
 
