@@ -1,8 +1,12 @@
 local common = dofile("/international_code/common.lua")
-local services = dofile("/international_code/national_services.lua")
-local finance = dofile("/international_code/national_finance.lua")
-local democracy = dofile("/international_code/national_democracy.lua")
-local network = dofile("/international_code/national_network.lua")
+local services,finance,democracy,network
+
+local function loadOperationalModules()
+  if not services then services=dofile("/international_code/national_services.lua") end
+  if not finance then finance=dofile("/international_code/national_finance.lua") end
+  if not democracy then democracy=dofile("/international_code/national_democracy.lua") end
+  if not network then network=dofile("/international_code/national_network.lua") end
+end
 
 local N = {}
 local CORPUS_PATH = "/international_code/national/corpus_v2.json"
@@ -168,11 +172,13 @@ local function lawSearchScore(law,q)
 end
 
 local function makeLaw(seed)
+  -- Les metadonnees de categorie repetitives sont derivees de n.categories
+  -- au moment de l'affichage. Cela economise plusieurs centaines de Ko
+  -- dans state.tbl sans retirer le texte ni les references juridiques.
   return {
     id=seed.id,
     number=seed.number,
     book=seed.book,
-    book_title=seed.book_title,
     title_group=seed.title_group,
     title=seed.title,
     text=seed.text,
@@ -181,21 +187,57 @@ local function makeLaw(seed)
     severity=seed.severity,
     effective_at=seed.effective_at,
     repealed_at=seed.repealed_at,
-    history=copy(seed.history or {}),
+    history={},
     category_code=seed.category_code,
-    category_name=seed.category_name,
-    legal_branch=seed.legal_branch,
     title_code=seed.title_code,
     chapter=seed.chapter,
     chapter_code=seed.chapter_code,
     article_kind=seed.article_kind,
-    responsible_authority=seed.responsible_authority,
     responsible_ministry=seed.responsible_ministry,
-    display_reference=seed.display_reference,
-    search_tags=copy(seed.search_tags or {}),
-    createdAt=common.now(),
-    updatedAt=common.now()
+    display_reference=seed.display_reference
   }
+end
+
+local function categoryFor(n,code)
+  for _,cat in ipairs(n.categories or {}) do
+    if cat.code==code then return cat end
+  end
+  return nil
+end
+
+local function lawView(n,law)
+  local out=copy(law)
+  local cat=categoryFor(n,law.category_code)
+  if cat then
+    out.category_name=out.category_name or cat.name
+    out.legal_branch=out.legal_branch or cat.legal_branch
+    out.book_title=out.book_title or cat.book_title
+    out.responsible_authority=out.responsible_authority or cat.responsible_authority
+  end
+  out.history=out.history or {}
+  out.search_tags=out.search_tags or {}
+  return out
+end
+
+local function compactLawInPlace(law)
+  if not law then return end
+  law.category_name=nil
+  law.legal_branch=nil
+  law.book_title=nil
+  law.responsible_authority=nil
+  law.search_tags=nil
+  -- Les deux traces de creation/ratification du corpus sont deja encodees
+  -- par status/version/effective_at. Les changements ulterieurs restent.
+  if type(law.history)=="table" and #law.history>0 then
+    local kept={}
+    for _,h in ipairs(law.history) do
+      local note=tostring(h.note or h.event or "")
+      local initial=(note=="Projet initial du Code national" or
+        note=="Ratification et adoption du Corpus national v2.0")
+      if not initial then kept[#kept+1]=h end
+    end
+    law.history=kept
+  end
 end
 
 local function makeMinistry(seed)
@@ -269,6 +311,7 @@ function N.newState()
 end
 
 function N.ensure(state)
+  loadOperationalModules()
   if not state.national then
     state.national=N.newState()
     democracy.ensure(state.national)
@@ -316,6 +359,12 @@ function N.ensure(state)
   democracy.ensure(n)
   network.ensure(n)
   n.nationalAudit=n.nationalAudit or {}
+
+  if n.meta.compactLawStorageV1~=true then
+    for _,law in pairs(n.laws or {}) do compactLawInPlace(law) end
+    n.meta.compactLawStorageV1=true
+    changed=true
+  end
 
   local corpus=loadCorpusMeta()
   if corpus then
@@ -499,7 +548,8 @@ local function listLaws(n,p)
   local chapterCode=common.trim(p.chapter_code):upper()
   local ministry=common.trim(p.ministry)
   local out={}
-  for _,law in pairs(n.laws) do
+  for _,storedLaw in pairs(n.laws) do
+    local law=lawView(n,storedLaw)
     local score=lawSearchScore(law,q)
     if (q=="" or score>=0) and
        (status=="" or law.status==status) and
@@ -1505,7 +1555,7 @@ function N.handle(state,actor,action,p,ctx)
   if action=="NC_LAW_GET" then
     local law=getLaw(n,p.ref or p.id)
     if not law then return nil,"Article national introuvable." end
-    return copy(law)
+    return lawView(n,law)
   end
 
   if action=="NC_CITIZEN_LIST" then
