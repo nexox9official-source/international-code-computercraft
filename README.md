@@ -7,7 +7,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** avec deux espaces juridi
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. Les données nationales de North Coalition sont isolées logiquement des registres internationaux et soumises à leur propre contrôle d'accès.
 
-## Ce que fait la v0.16
+## Ce que fait la v0.17
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
@@ -23,9 +23,9 @@ Le projet ne contient aucune référence au nom du serveur Minecraft. Les donné
 - impression multi-pages des articles et dossiers via une **Printer ComputerCraft** ;
 - interface terminal claire, navigable au clavier et à la souris.
 
-## Intranet national North Coalition v0.16
+## Intranet national North Coalition v0.17
 
-La v0.16 fournit un deuxième espace complet, **interne à North Coalition**, sans transformer les 400 lois nationales en articles UNS.
+La v0.17 fournit un deuxième espace complet, **interne à North Coalition**, sans transformer les 400 lois nationales en articles UNS.
 
 Depuis un terminal autorisé :
 
@@ -216,6 +216,45 @@ Le système calcule également une synthèse par citoyen regroupant :
 - jugements définitifs dans lesquels cette identité est mise en cause.
 
 Le citoyen peut consulter son propre dossier. La police, le parquet et les juges disposent de l'accès institutionnel nécessaire à leurs fonctions.
+
+### Guichet citoyen v0.17
+
+Les citoyens actifs peuvent maintenant déposer eux-mêmes des demandes administratives via l'intranet.
+
+Les dossiers utilisent des identifiants :
+
+```text
+NC-REQ-AAAA-0001
+NC-REQ-AAAA-0002
+...
+```
+
+Trois familles sont prises en charge :
+
+- demande de licence/permis ;
+- demande d'immatriculation d'organisation ;
+- demande administrative libre adressée à la Présidence ou à un ministère.
+
+Le serveur détermine automatiquement le ministère compétent pour les licences. Une demande d'organisation est dirigée vers `MIN-ECO`.
+
+Cycle de traitement :
+
+```text
+submitted
+   -> in_review
+      -> approved
+      -> rejected
+   -> withdrawn
+```
+
+Le citoyen peut suivre uniquement ses propres demandes. Un ministre ne voit que les dossiers relevant de son portefeuille. La Présidence et l'administration technique de secours peuvent superviser l'ensemble.
+
+Une approbation peut produire directement l'acte administratif correspondant :
+
+- une demande de licence approuvée crée automatiquement un `NC-LIC-...` ;
+- une demande d'immatriculation approuvée crée automatiquement un `NC-ORG-...`.
+
+Le lien entre la demande et l'objet créé est conservé dans `resultObjectId`. Le dépôt, l'instruction et la décision sont historisés et scellés, et le citoyen reçoit des notifications à chaque étape.
 
 ### Journal officiel national
 
