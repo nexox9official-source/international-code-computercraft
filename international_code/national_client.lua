@@ -2785,11 +2785,11 @@ end
 local function portalLawHub(info,dash)
   while true do
     local items={
-      {text="CODE NATIONAL / 20 CATEGORIES / RECHERCHE",id="code"},
+      {text="CODE NATIONAL / CATEGORIES / RECHERCHE (20)",id="code"},
       {text="LEGISLATION / PROJETS DE LOI / VOTES",id="bills"},
       {text="DECRETS / REGLEMENTS",id="decrees"},
       {text="JOURNAL OFFICIEL / PUBLICATIONS",id="gazette"},
-      {text="VERIFIER UN SCEAU OFFICIEL NORTH COALITION",id="verify"}
+      {text="VERIFIER UN SCEAU NATIONAL / ACTE OFFICIEL",id="verify"}
     }
     local p=menu("DROIT ET PUBLICATIONS",items,
       tostring((dash and dash.activeLaws) or 0).." loi(s) en vigueur / "..
@@ -2807,7 +2807,7 @@ local function portalInstitutionsHub(info,dash)
   while true do
     local items={
       {text="GOUVERNEMENT / PRESIDENCE / MINISTERES",id="gov"},
-      {text="DEMOCRATIE NATIONALE / PRESIDENCE / CONSEIL",id="democracy"},
+      {text="ELECTIONS NATIONALES / PRESIDENCE / CONSEIL",id="democracy"},
       {text="SCRUTINS MINISTERIELS",id="elections"},
       {text="SESSIONS / CONSEIL / CABINET / ORDRE DU JOUR",id="sessions"},
       {text="JOURNAL OFFICIEL INSTITUTIONNEL",id="gazette"}
