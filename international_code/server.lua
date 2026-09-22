@@ -338,9 +338,11 @@ local function handleAction(state, actor, action, p)
     local law = state.laws[ref]
     if not law then return nil, "Article introuvable." end
     law.history = law.history or {}
+    local changeReason=common.trim(p.reason)
     law.history[#law.history+1] = {
       version=law.version, title=law.title, body=law.body, book=law.book,
-      section=law.section, status=law.status, archivedAt=common.now(), archivedBy=actor.label
+      section=law.section, status=law.status, archivedAt=common.now(), archivedBy=actor.label,
+      supersededByReason=changeReason
     }
     law.version = (law.version or 1) + 1
     if common.trim(p.title) ~= "" then law.title = common.trim(p.title) end
@@ -348,7 +350,9 @@ local function handleAction(state, actor, action, p)
     if p.book ~= nil then law.book = common.trim(p.book) end
     if p.section ~= nil then law.section = common.trim(p.section) end
     law.updatedAt = common.now()
-    mutate(state, actor, "LAW_AMEND", ref, "Version " .. law.version)
+    law.lastChangedBy=actor.label
+    law.lastChangeReason=changeReason
+    mutate(state, actor, "LAW_AMEND", ref, "Version " .. law.version .. (changeReason~="" and (" - "..changeReason) or ""))
     return common.deepcopy(law)
   end
 
