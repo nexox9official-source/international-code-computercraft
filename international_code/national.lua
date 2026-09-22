@@ -547,21 +547,25 @@ local function ministryScopeAllowed(state,actor,ministryCode)
   return nationalRole(state,actor)=="minister" and actor.ministryCode==ministryCode
 end
 
+local function technicalNationalAdmin(actor)
+  return actor and actor.role=="admin" and (not actor.nationalRole or actor.nationalRole=="admin")
+end
+
 local function nationalCaseInstitutionalRole(state,actor)
   local r=nationalRole(state,actor)
-  return actor and (actor.role=="admin" or r=="judge" or r=="prosecutor" or r=="police")
+  return actor and (technicalNationalAdmin(actor) or r=="judge" or r=="prosecutor" or r=="police")
 end
 
 local function nationalCaseJudicialRole(state,actor)
   local r=nationalRole(state,actor)
-  return actor and (actor.role=="admin" or r=="judge")
+  return actor and (technicalNationalAdmin(actor) or r=="judge")
 end
 
 local function canViewNationalCase(state,actor,case)
   if not actor or not case then return false end
   local r=nationalRole(state,actor)
   local visibility=case.visibility or "restricted"
-  if actor.role=="admin" or r=="judge" or r=="prosecutor" then return true end
+  if technicalNationalAdmin(actor) or r=="judge" or r=="prosecutor" then return true end
   if r=="police" then return visibility~="sealed" end
   local who=identity(actor)
   if who~="" and (who==case.complainant or who==case.accused) then return visibility~="sealed" end
@@ -1337,7 +1341,7 @@ function N.handle(state,actor,action,p,ctx)
     if not case then return nil,"Dossier introuvable." end
     ensureNationalCaseShape(case)
     local r=nationalRole(state,actor)
-    local allowedRole=(actor.role=="admin" or r=="judge" or r=="prosecutor" or (r=="police" and p.status=="investigation"))
+    local allowedRole=(technicalNationalAdmin(actor) or r=="judge" or r=="prosecutor" or (r=="police" and p.status=="investigation"))
     if not allowedRole then return nil,"Changement de statut non autorise." end
     local transitions={
       open={investigation=true,hearing=true,closed=true},
@@ -1473,7 +1477,7 @@ function N.handle(state,actor,action,p,ctx)
     if not case then return nil,"Dossier introuvable." end
     ensureNationalCaseShape(case)
     local who=identity(actor)
-    local institution=(actor.role=="admin" or nationalRole(state,actor)=="prosecutor" or nationalRole(state,actor)=="judge")
+    local institution=(technicalNationalAdmin(actor) or nationalRole(state,actor)=="prosecutor" or nationalRole(state,actor)=="judge")
     local party=(who~="" and (who==case.complainant or who==case.accused))
     if not institution and not party then return nil,"Vous n'etes pas habilite a former appel dans ce dossier." end
     if case.status~="judged" and case.status~="closed" then return nil,"L'appel exige une decision rendue." end
