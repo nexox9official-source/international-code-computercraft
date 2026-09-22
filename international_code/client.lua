@@ -757,6 +757,60 @@ local function allowed(group)
   return cfg and roleAllows[group] and roleAllows[group][cfg.role]
 end
 
+local function lawHistoryScreen(law)
+  local versions={}
+  versions[#versions+1]={
+    text="Version actuelle v"..tostring(law.version or 1).." ["..tostring(law.status or "?").."]",
+    current=true,
+    version=law.version,
+    title=law.title,
+    body=law.body,
+    book=law.book,
+    section=law.section,
+    status=law.status,
+    archivedAt=law.updatedAt or law.createdAt
+  }
+
+  for i=#(law.history or {}),1,-1 do
+    local h=law.history[i]
+    versions[#versions+1]={
+      text="Version archivee v"..tostring(h.version or "?").." ["..tostring(h.status or "?").."] "..tostring(h.archivedAt or ""),
+      history=h
+    }
+  end
+
+  while true do
+    local p=menu("HISTORIQUE "..law.ref,versions,#versions.." version(s) conservee(s)")
+    if not p then return end
+    local v=p.current and p or p.history
+    textPage(law.ref.." / v"..tostring(v.version or "?"),{
+      {label=v.title or law.title,text=v.body or "(texte non archive dans cette ancienne entree)"},
+      {label="Classement",text=(v.book or law.book or "").." / "..(v.section or law.section or "")},
+      {label="Statut",text=tostring(v.status or "?")},
+      {label="Archive / mise a jour",text=tostring(v.archivedAt or law.updatedAt or "")},
+      {label="Auteur archive",text=tostring(v.archivedBy or "-")}
+    })
+  end
+end
+
+local function sameBookScreen(law)
+  if not law.book or law.book=="" then
+    message("LIVRE","Cet article n'a pas de categorie.",palette.warn)
+    return
+  end
+  local laws,err=rpc("LAW_LIST",{book=law.book})
+  if not laws then message("LIVRE",err,palette.bad);return end
+  while true do
+    local picked=chooseLawFromList(law.book,laws,{manage=true})
+    if not picked then return end
+    if picked.ref~=law.ref then
+      return picked.ref
+    else
+      lawQuickView(picked)
+    end
+  end
+end
+
 local function viewLaw(ref)
   while true do
     local law,err=rpc("LAW_GET",{ref=ref})
@@ -764,6 +818,8 @@ local function viewLaw(ref)
 
     local actions={
       {text="Lire le texte",id="read"},
+      {text="Historique des versions",id="history"},
+      {text="Voir les articles du meme Livre",id="book"},
       {text="Imprimer l'article",id="print"}
     }
     if allowed("lawWrite") then
@@ -785,6 +841,13 @@ local function viewLaw(ref)
         {label="Classement",text=(law.book or "").." / "..(law.section or "")},
         {label="Statut",text=law.status.." / v"..law.version}
       })
+
+    elseif a.id=="history" then
+      lawHistoryScreen(law)
+
+    elseif a.id=="book" then
+      local nextRef=sameBookScreen(law)
+      if nextRef then ref=nextRef end
 
     elseif a.id=="print" then
       local ok,r=printer.law(law)
