@@ -2876,6 +2876,7 @@ enforcementsScreen=function(query,status,stateId,caseId)
 end
 
 local sessionDetails
+local missionDetails
 
 local function notificationCenter()
   while true do
@@ -2921,6 +2922,7 @@ local function notificationCenter()
         if n.objectType=="bill" then billDetails(n.objectId)
         elseif n.objectType=="resolution" then resolutionDetails(n.objectId)
         elseif n.objectType=="session" then sessionDetails(n.objectId)
+        elseif n.objectType=="mission" then missionDetails(n.objectId)
         elseif n.objectType=="treaty" then treatyDetails(n.objectId)
         elseif n.objectType=="case" then caseDetails(n.objectId)
         elseif n.objectType=="enforcement" then enforcementDetails(n.objectId)
@@ -3305,7 +3307,7 @@ local function missionReportText(m)
   return #rows>0 and table.concat(rows,"\n\n") or "Aucun rapport."
 end
 
-local function missionDetails(id)
+missionDetails=function(id)
   while true do
     local m,err=rpc("MISSION_GET",{id=id})
     if not m then message("MISSION",err,palette.bad);return end
@@ -3544,6 +3546,7 @@ local function helpScreen()
     {label="Assemblee",text="Les propositions BILL peuvent creer un article ou amender un texte existant. Les terminaux delegate rattaches a un Etat votent POUR, CONTRE ou ABSTENTION. Apres cloture, une proposition adoptee peut etre promulguee dans le Code."},
     {label="Resolutions",text="Les resolutions RES servent aux decisions institutionnelles qui ne modifient pas directement le Code: securite, sanctions, humanitaire, urgence, adhesion, cessez-le-feu ou mission d'observation. Elles disposent du meme quorum et vote par Etat, puis peuvent creer automatiquement une mesure ENF."},
     {label="Sessions",text="Les sessions SESSION gerent convocations, ordre du jour, presence par Etat, ouverture officielle, traitement des points et proces-verbal final. Les delegues peuvent enregistrer la presence de leur Etat pendant une session ouverte."},
+    {label="Missions",text="Les missions MISSION gerent observation, maintien de la paix, humanitaire, enquete, inspection, surveillance, reconstruction ou mediation. Elles peuvent etre liees a une resolution, un traite ou un dossier, avec Etats participants et rapports scelles."},
     {label="Etats membres",text="Le registre STATE conserve le statut, le gouvernement et le representant des pays. Un administrateur peut rattacher un terminal delegate a un Etat pour ses votes officiels."},
     {label="Traites",text="Les traites TREATY sont rediges puis figes avant signature. Chaque Etat partie signe depuis un terminal delegate rattache. Une fois toutes les signatures reunies, le traite peut entrer en vigueur avec un sceau officiel."},
     {label="Notifications",text="Le serveur cree des alertes pour les votes ouverts, signatures de traites, audiences, appels et mesures d'execution. Les delegues recoivent automatiquement les actions qui concernent leur Etat."},
@@ -3639,7 +3642,7 @@ function C.run()
   while true do
     local dash,err=rpc("DASHBOARD",{})
     local subtitle=dash and
-      ("Role "..cfg.role.." | "..tostring((dash.votingBills or 0)+(dash.votingResolutions or 0)).." scrutin(s) | "..tostring(dash.openSessions or 0).." session(s) LIVE | "..tostring(dash.activeTreaties or 0).." traites | "..tostring(dash.activeEnforcements or 0).." exec. | "..tostring(dash.unreadNotices or 0).." notif. | r"..dash.revision)
+      ("Role "..cfg.role.." | "..tostring((dash.votingBills or 0)+(dash.votingResolutions or 0)).." scrutin(s) | "..tostring(dash.openSessions or 0).." session LIVE | "..tostring(dash.activeMissions or 0).." mission(s) | "..tostring(dash.activeEnforcements or 0).." exec. | "..tostring(dash.unreadNotices or 0).." notif. | r"..dash.revision)
       or ("HORS LIGNE - "..tostring(err))
 
     local items={
@@ -3648,6 +3651,7 @@ function C.run()
       {text="ASSEMBLEE / PROPOSITIONS / VOTES",id="bills"},
       {text="RESOLUTIONS / CONSEIL / SECURITE",id="resolutions"},
       {text="CALENDRIER / SESSIONS / ORDRE DU JOUR",id="sessions"},
+      {text="MISSIONS INTERNATIONALES / OBSERVATEURS",id="missions"},
       {text="TRAITES / DIPLOMATIE",id="treaties"},
       {text="REGISTRE DES ETATS MEMBRES",id="states"},
       {text="DOSSIERS JUDICIAIRES",id="cases"},
@@ -3675,6 +3679,8 @@ function C.run()
       resolutionsScreen("","")
     elseif p.id=="sessions" then
       sessionsScreen("","")
+    elseif p.id=="missions" then
+      missionsScreen("","")
     elseif p.id=="treaties" then
       treatiesScreen("","","")
     elseif p.id=="states" then
@@ -3692,6 +3698,7 @@ function C.run()
         {text="Dans les propositions / votes",id="bill"},
         {text="Dans les resolutions",id="resolution"},
         {text="Dans les sessions / calendrier",id="session"},
+        {text="Dans les missions",id="mission"},
         {text="Dans les traites",id="treaty"},
         {text="Dans les Etats membres",id="state"},
         {text="Dans les dossiers",id="case"},
@@ -3701,6 +3708,7 @@ function C.run()
       elseif kind and kind.id=="bill" then billsScreen(q,"")
       elseif kind and kind.id=="resolution" then resolutionsScreen(q,"")
       elseif kind and kind.id=="session" then sessionsScreen(q,"")
+      elseif kind and kind.id=="mission" then missionsScreen(q,"")
       elseif kind and kind.id=="treaty" then treatiesScreen(q,"","")
       elseif kind and kind.id=="state" then statesScreen(q,"")
       elseif kind and kind.id=="enforcement" then enforcementsScreen(q,"","","")
