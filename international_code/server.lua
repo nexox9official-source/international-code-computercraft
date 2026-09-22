@@ -2195,6 +2195,17 @@ local function handleAction(state, actor, action, p)
     if not allowed[p.status] then return nil,"Statut de mission invalide." end
     if m.status==p.status then return common.deepcopy(m) end
 
+    local transitions={
+      planned={active=true,cancelled=true},
+      active={suspended=true,completed=true,cancelled=true},
+      suspended={active=true,completed=true,cancelled=true},
+      completed={},
+      cancelled={}
+    }
+    if not (transitions[m.status] and transitions[m.status][p.status]) then
+      return nil,"Transition de mission interdite: "..tostring(m.status).." -> "..tostring(p.status)
+    end
+
     local previous=m.status
     local reason=common.trim(p.reason)
     m.status=p.status
