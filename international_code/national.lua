@@ -2,6 +2,7 @@ local common = dofile("/international_code/common.lua")
 local services = dofile("/international_code/national_services.lua")
 local finance = dofile("/international_code/national_finance.lua")
 local democracy = dofile("/international_code/national_democracy.lua")
+local network = dofile("/international_code/national_network.lua")
 
 local N = {}
 local CORPUS_PATH = "/international_code/national/corpus_v2.json"
@@ -232,6 +233,7 @@ function N.ensure(state)
   services.ensure(n)
   finance.ensure(n)
   democracy.ensure(n)
+  network.ensure(n)
   n.nationalAudit=n.nationalAudit or {}
 
   local corpus=loadCorpus()
@@ -944,6 +946,31 @@ function N.handle(state,actor,action,p,ctx)
   local access,accessErr=requireAccess(state,actor)
   if not access then return nil,accessErr end
 
+  local netHandled,netData,netErr=network.handle(n,actor,action,p,{
+    mutate=function(netAction,objectId,details)
+      mutate(ctx,state,actor,netAction,objectId,details)
+    end,
+    notify=function(row)
+      if not ctx or not ctx.pushNotice then return end
+      local sent={}
+      for _,cl in pairs(state.clients or {}) do
+        if cl.clientId and not sent[cl.clientId] and network.visible(cl,row) then
+          sent[cl.clientId]=true
+          ctx.pushNotice(state,{
+            title="Bulletin interne North Coalition",
+            body=(row.id or "").." / "..(row.title or ""),
+            severity="info",objectType="nc_network_bulletin",objectId=row.id,
+            targetClientId=cl.clientId
+          })
+        end
+      end
+    end
+  })
+  if netHandled then
+    if netData~=nil then return netData end
+    return nil,netErr
+  end
+
   if action=="NC_PORTAL_SEARCH" then
     local q=common.trim(p.query)
     if q=="" then return {} end
@@ -1155,6 +1182,15 @@ function N.handle(state,actor,action,p,ctx)
     local fin=finance.findSeal(n,wanted)
     if fin then
       return result(fin.kind,fin.objectId,fin.title,fin.issuedAt,fin.issuedBy,false)
+    end
+
+    local net=network.findSeal(n,wanted)
+    if net then
+      local row=n.network and n.network.bulletins and n.network.bulletins[net.objectId]
+      if row and network.visible(actor,row) then
+        return result(net.kind,net.objectId,net.title,net.issuedAt,net.issuedBy,false)
+      end
+      return result(net.kind.."_confidential",net.objectId,"Bulletin interne restreint",nil,nil,true)
     end
 
     return {valid=false,seal=wanted}
