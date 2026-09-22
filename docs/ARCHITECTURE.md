@@ -1,4 +1,4 @@
-# Architecture v0.5
+# Architecture v0.7
 
 ## Topologie
 
@@ -62,9 +62,12 @@ Le serveur central contient désormais quatre ensembles principaux :
 
 - `laws` : articles versionnés du Code ;
 - `states` : États et statuts d'adhésion ;
-- `bills` : propositions, tours de scrutin et votes par État ;
+- `bills` : propositions législatives, ratifications, tours de scrutin et votes par État ;
+- `resolutions` : décisions institutionnelles, scrutins et éventuelle exécution automatique ;
 - `treaties` : projets de traités, versions, États parties, signatures et entrée en vigueur ;
-- `cases` : dossiers, preuves, audiences, ordonnances, appels et jugements.
+- `cases` : dossiers, preuves, audiences, procès-verbaux, ordonnances, appels et jugements ;
+- `enforcements` : sanctions, réparations et suivi de conformité ;
+- `notices` : notifications ciblées et état lu/non-lu par terminal.
 
 Les scrutins figent la liste des États éligibles au début de chaque tour. Une modification ultérieure du nombre de membres ne modifie donc pas rétroactivement le corps électoral de ce tour.
 
@@ -73,6 +76,31 @@ Les dossiers disposent de trois niveaux de visibilité. `public` est accessible 
 ## Sceaux applicatifs
 
 Les actes sensibles reçoivent un sceau calculé par le serveur à partir de leur contenu et de leurs métadonnées. Ces sceaux servent à détecter visuellement une incohérence RP et à identifier une version imprimée. Ils ne constituent pas une primitive cryptographique de sécurité.
+
+## Cycle de vie d'une résolution
+
+```text
+draft -> debate -> voting -> adopted -> executed
+                    |           |
+                    |           +----> ENF-... optionnel
+                    |
+                    +-> rejected
+                    +-> no_quorum -> nouveau tour
+```
+
+Une résolution ne modifie pas le Code à elle seule. Elle représente une décision institutionnelle de l'Union. Les modifications normatives restent dans le registre `bills`.
+
+Chaque tour de scrutin stocke son propre corps électoral. Le serveur calcule quorum et majorité, scelle le résultat, puis peut créer une entrée d'exécution distincte. Cette séparation permet de conserver trois niveaux historiques indépendants :
+
+1. la décision politique/institutionnelle ;
+2. son résultat de vote ;
+3. sa mise en œuvre concrète.
+
+## Procès-verbaux d'audience
+
+Une audience possède deux objets distincts : l'avis initial `CIU-AUD-...` et, après tenue de l'audience, le procès-verbal `CIU-PV-...`.
+
+Le procès-verbal conserve les participants, le compte rendu, l'issue, l'auteur et la date d'enregistrement. Il est appendé à la chronologie du dossier et peut être imprimé séparément.
 
 ## Cycle de vie d'un traité
 
@@ -115,11 +143,10 @@ Un changement de statut ne réécrit jamais l'état antérieur : une nouvelle en
 
 ## Évolution prévue
 
-- audiences et calendrier d'audience ;
-- mandats / ordonnances ;
-- système d'appel plus formel ;
-- signatures de juges et quorum ;
-- table de peines paramétrable ;
+- calendrier institutionnel global et ordre du jour des sessions ;
+- missions internationales et observateurs avec mandat, durée et rapports ;
+- table de peines / sanctions paramétrable ;
+- registre de pièces avec empreintes et chaîne de conservation renforcée ;
 - réplication vers un second serveur de secours ;
-- export papier spécialisé déjà disponible pour arrêt/jugement et chronologie ; à étendre aux mandats, procès-verbaux et actes d'accusation ;
-- écran mural Monitor pour le registre public.
+- export d'actes d'accusation et rapports institutionnels spécialisés ;
+- archivage périodique par année / session.
