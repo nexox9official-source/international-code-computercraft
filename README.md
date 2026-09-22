@@ -57,6 +57,26 @@ ic nc-search MIN-INT
 
 Elle recherche dans les registres autorises sans contourner les niveaux de confidentialite.
 
+### NorthNet : communications internes reglementees
+
+Le portail national contient aussi un registre de **bulletins officiels internes** :
+
+```text
+NC-NET-AAAA-XXXX
+```
+
+Un bulletin est d'abord un brouillon, puis il est publie et scelle. Une publication deja officielle n'est pas reecrite silencieusement : elle peut uniquement etre archivee.
+
+Les audiences disponibles sont :
+
+- tous les citoyens disposant d'un acces national ;
+- institutions et agents publics ;
+- un ministere determine ;
+- justice ;
+- justice et securite.
+
+Le serveur applique le controle d'audience lors de la liste, de la lecture, de la recherche, des notifications et de la verification des sceaux.
+
 Pour un grand Monitor institutionnel interne :
 
 ```text
