@@ -946,66 +946,187 @@ local function lawsScreen(query)
   end
 end
 
+local function caseTimelineScreen(c)
+  local sections={}
+  if not c.timeline or #c.timeline==0 then
+    sections[#sections+1]={label="Chronologie",text="Aucun evenement historique enregistre pour ce dossier ancien."}
+  else
+    for i,event in ipairs(c.timeline) do
+      sections[#sections+1]={
+        label=string.format("%02d. %s",i,event.title or event.kind or "Evenement"),
+        text=(event.at or "").." / "..(event.by or "?").." ["..(event.role or "?").."]"..
+          ((event.details and event.details~="") and ("\n"..event.details) or "")
+      }
+    end
+  end
+  textPage("CHRONOLOGIE "..c.id,sections)
+end
+
+local function judgmentDetails(c,j)
+  local refs={}
+  if j.articleSnapshot and #j.articleSnapshot>0 then
+    for _,a in ipairs(j.articleSnapshot) do
+      refs[#refs+1]=(a.ref or "?")..
+        (a.version and (" / v"..tostring(a.version)) or "")..
+        ((a.title and a.title~="") and (" / "..a.title) or "")
+    end
+  else
+    for _,ref in ipairs(j.citedArticles or {}) do refs[#refs+1]=ref end
+  end
+  textPage(c.id.." / JUGEMENT "..tostring(j.id or "?"),{
+    {label="Juge / date",text=(j.judge or "?").." / "..(j.date or "")},
+    {label="Nature",text=j.final and "Decision finale" or "Decision intermediaire"},
+    {label="Decision",text=j.verdict or ""},
+    {label="Motivation",text=j.reasoning or ""},
+    {label="Sanctions / reparations",text=j.sanctions or ""},
+    {label="Articles figes au jour du jugement",text=table.concat(refs,"\n")}
+  })
+end
+
+local function judgmentsScreen(c)
+  if not c.judgments or #c.judgments==0 then
+    message("JUGEMENTS","Aucun jugement dans ce dossier.",palette.warn)
+    return
+  end
+
+  while true do
+    local items={}
+    for i,j in ipairs(c.judgments) do
+      items[#items+1]={
+        text="J"..i.."  "..(j.date or "").."  "..(j.final and "[FINAL] " or "")..(j.verdict or ""):gsub("\n"," "),
+        judgment=j
+      }
+    end
+    local p=menu("JUGEMENTS "..c.id,items,#items.." decision(s) conservee(s)")
+    if not p then return end
+    local a=menu("JUGEMENT "..tostring(p.judgment.id or "?"),{
+      {text="Lire la decision complete",id="read"},
+      {text="Imprimer uniquement ce jugement",id="print"}
+    },"Les versions des articles citees sont figees dans le jugement.")
+    if a and a.id=="read" then
+      judgmentDetails(c,p.judgment)
+    elseif a and a.id=="print" then
+      local ok,r=printer.judgment(c,p.judgment)
+      message("IMPRESSION",ok and ("Jugement imprime: "..r.." page(s).") or r,ok and palette.ok or palette.bad)
+    end
+  end
+end
+
+local function manageCaseArticles(c)
+  local initial={}
+  for _,ref in ipairs(c.citedArticles or {}) do initial[#initial+1]=ref end
+  local picked=lawBasketBrowser(initial)
+  if not picked then return end
+
+  local old={}
+  for _,ref in ipairs(initial) do old[ref]=true end
+  local now={}
+  local add={}
+  for _,law in ipairs(picked) do
+    now[law.ref]=true
+    if not old[law.ref] then add[#add+1]=law.ref end
+  end
+  local remove={}
+  for _,ref in ipairs(initial) do
+    if not now[ref] then remove[#remove+1]=ref end
+  end
+
+  local errors={}
+  if #add>0 then
+    local _,e=rpc("CASE_ADD_ARTICLES",{id=c.id,refs=add})
+    if e then errors[#errors+1]=e end
+  end
+  for _,ref in ipairs(remove) do
+    local _,e=rpc("CASE_REMOVE_ARTICLE",{id=c.id,ref=ref})
+    if e then errors[#errors+1]=ref..": "..e end
+  end
+
+  if #errors>0 then
+    message("ARTICLES","Certaines modifications ont echoue:\n"..table.concat(errors," / "),palette.bad)
+  else
+    message("ARTICLES",#add.." ajoute(s), "..#remove.." retire(s).",palette.ok)
+  end
+end
+
 local function caseDetails(id)
   while true do
     local c,err=rpc("CASE_GET",{id=id})
     if not c then message("DOSSIER",err,palette.bad);return end
+    c.facts=c.facts or {}
+    c.evidence=c.evidence or {}
+    c.citedArticles=c.citedArticles or {}
+    c.judgments=c.judgments or {}
+    c.timeline=c.timeline or {}
 
     local actions={
       {text="Lire le dossier complet",id="read"},
-      {text="Imprimer le dossier",id="print"}
+      {text="Voir la chronologie du dossier",id="timeline"},
+      {text="Consulter les jugements ("..#c.judgments..")",id="judgments"},
+      {text="Imprimer le dossier complet",id="print"},
+      {text="Imprimer la chronologie",id="printtimeline"}
     }
 
     if allowed("caseWrite") then
       actions[#actions+1]={text="Ajouter un fait",id="fact"}
       actions[#actions+1]={text="Ajouter une preuve",id="evidence"}
-      actions[#actions+1]={text="Citer un article",id="article"}
+      actions[#actions+1]={text="Gerer les articles cites / panier juridique",id="articles"}
       actions[#actions+1]={text="Modifier le contexte",id="summary"}
       actions[#actions+1]={text="Changer le statut",id="status"}
     end
     if allowed("judgment") then
-      actions[#actions+1]={text="Rediger un jugement",id="judgment"}
+      actions[#actions+1]={text="Rediger un nouveau jugement",id="judgment"}
     end
 
     local a=menu(
       c.id.." - "..c.title,
       actions,
-      "Statut: "..c.status.." / "..#c.facts.." faits / "..#c.evidence.." preuves / "..#c.judgments.." jugement(s)"
+      "Statut "..c.status.." | "..#c.facts.." faits | "..#c.evidence.." preuves | "..#c.citedArticles.." articles | "..#c.judgments.." jug."
     )
     if not a then return end
 
     if a.id=="read" then
       local facts={}
-      for i,f in ipairs(c.facts) do facts[#facts+1]=i..". "..f.text end
+      for i,fact in ipairs(c.facts) do facts[#facts+1]=i..". "..fact.text.." ["..(fact.by or "?").."]" end
       local ev={}
       for i,e in ipairs(c.evidence) do
-        ev[#ev+1]=i..". "..e.label..": "..e.description.." ("..(e.source or "")..")"
+        ev[#ev+1]=i..". "..e.label..": "..e.description..
+          ((e.source and e.source~="") and (" / source: "..e.source) or "")
       end
       local js={}
       for i,j in ipairs(c.judgments) do
-        js[#js+1]="Jugement "..i.." / "..j.date.." / "..j.judge..
-          "\nDecision: "..j.verdict..
-          "\nMotifs: "..j.reasoning..
-          "\nSanctions: "..j.sanctions
+        js[#js+1]="J"..i.." / "..(j.date or "").." / "..(j.judge or "?")..
+          (j.final and " / FINAL" or "").."\nDecision: "..(j.verdict or "")
       end
       textPage(c.id,{
         {label="Affaire",text=c.title},
-        {label="Parties",text="Demandeur: "..c.complainant.."\nMis en cause: "..c.accused},
-        {label="Contexte",text=c.summary},
+        {label="Statut",text=c.status},
+        {label="Parties",text="Demandeur: "..(c.complainant or "-").."\nMis en cause: "..(c.accused or "-")},
+        {label="Contexte",text=c.summary or ""},
         {label="Faits",text=table.concat(facts,"\n")},
         {label="Preuves",text=table.concat(ev,"\n")},
-        {label="Articles cites",text=table.concat(c.citedArticles,", ")},
-        {label="Jugements",text=table.concat(js,"\n\n")}
+        {label="Articles cites",text=table.concat(c.citedArticles,"\n")},
+        {label="Jugements",text=table.concat(js,"\n\n")},
+        {label="Derniere mise a jour",text=c.updatedAt or c.createdAt or ""}
       })
+
+    elseif a.id=="timeline" then
+      caseTimelineScreen(c)
+
+    elseif a.id=="judgments" then
+      judgmentsScreen(c)
 
     elseif a.id=="print" then
       local ok,r=printer.caseFile(c)
       message("IMPRESSION",ok and ("Dossier imprime: "..r.." page(s).") or r,ok and palette.ok or palette.bad)
 
+    elseif a.id=="printtimeline" then
+      local ok,r=printer.timeline(c)
+      message("IMPRESSION",ok and ("Chronologie imprimee: "..r.." page(s).") or r,ok and palette.ok or palette.bad)
+
     elseif a.id=="fact" then
       local text=multi("NOUVEAU FAIT","")
       local r,e=rpc("CASE_ADD_FACT",{id=c.id,text=text})
-      message("FAIT",r and "Fait enregistre et horodate." or e,r and palette.ok or palette.bad)
+      message("FAIT",r and "Fait enregistre, horodate et ajoute a la chronologie." or e,r and palette.ok or palette.bad)
 
     elseif a.id=="evidence" then
       local label=prompt("Nom de la preuve")
@@ -1014,25 +1135,10 @@ local function caseDetails(id)
       local r,e=rpc("CASE_ADD_EVIDENCE",{
         id=c.id,label=label,source=source,description=description
       })
-      message("PREUVE",r and "Preuve ajoutee au dossier." or e,r and palette.ok or palette.bad)
+      message("PREUVE",r and "Preuve ajoutee au dossier et a la chronologie." or e,r and palette.ok or palette.bad)
 
-    elseif a.id=="article" then
-      local mode=menu("CITER UN ARTICLE",{
-        {text="Parcourir les categories",id="browse"},
-        {text="Rechercher par numero / titre / mot",id="search"},
-        {text="Saisir une reference manuellement",id="manual"}
-      },"Le dossier reste ouvert pendant la consultation du Code.")
-      local ref=nil
-      if mode and mode.id=="manual" then
-        ref=prompt("Reference article (ex: 145 ou UNS-ART-145)")
-      elseif mode then
-        local law=referenceBrowser({mode=mode.id,pick=true,readonly=true})
-        if law then ref=law.ref end
-      end
-      if ref and ref~="" then
-        local r,e=rpc("CASE_ADD_ARTICLE",{id=c.id,ref=ref})
-        message("ARTICLE CITE",r and ("Reference ajoutee: "..ref) or e,r and palette.ok or palette.bad)
-      end
+    elseif a.id=="articles" then
+      manageCaseArticles(c)
 
     elseif a.id=="summary" then
       local summary=multi("CONTEXTE / EXPOSE",c.summary)
@@ -1048,13 +1154,24 @@ local function caseDetails(id)
         {text="Appel",v="appeal"},
         {text="Clos",v="closed"},
         {text="Archive",v="archived"}
-      })
+      },"Le changement sera inscrit dans la chronologie.")
       if s then
         local r,e=rpc("CASE_SET_STATUS",{id=c.id,status=s.v})
         message("STATUT",r and ("Statut: "..r.status) or e,r and palette.ok or palette.bad)
       end
 
     elseif a.id=="judgment" then
+      if #c.citedArticles==0 then
+        local prepare=menu("ARTICLES DU JUGEMENT",{
+          {text="Constituer d'abord un panier d'articles",id="yes"},
+          {text="Continuer sans article cite",id="no"}
+        },"Le jugement figera les versions des articles cites.")
+        if prepare and prepare.id=="yes" then
+          manageCaseArticles(c)
+          c=rpc("CASE_GET",{id=id}) or c
+        end
+      end
+
       local verdict=multi("DISPOSITIF / DECISION","")
       local reasoning=multi("MOTIVATION","")
       local sanctions=multi("PEINES / SANCTIONS / REPARATIONS","")
@@ -1062,14 +1179,31 @@ local function caseDetails(id)
       local r,e=rpc("CASE_ADD_JUDGMENT",{
         id=c.id,verdict=verdict,reasoning=reasoning,sanctions=sanctions,final=final
       })
-      message("JUGEMENT",r and "Jugement enregistre dans l'historique." or e,r and palette.ok or palette.bad)
+      if r then
+        local latest=r.judgments and r.judgments[#r.judgments] or nil
+        local nextAction=menu("JUGEMENT ENREGISTRE",{
+          {text="Revenir au dossier",id="back"},
+          {text="Lire le jugement",id="read"},
+          {text="Imprimer le jugement maintenant",id="print"}
+        },"Decision archivee avec les versions des articles citees.")
+        if nextAction and nextAction.id=="read" and latest then
+          judgmentDetails(r,latest)
+        elseif nextAction and nextAction.id=="print" and latest then
+          local ok,pages=printer.judgment(r,latest)
+          message("IMPRESSION",ok and ("Jugement imprime: "..pages.." page(s).") or pages,ok and palette.ok or palette.bad)
+        end
+      else
+        message("JUGEMENT",e,palette.bad)
+      end
     end
   end
 end
 
-local function casesScreen(query)
+local function casesScreen(query,status)
+  query=query or ""
+  status=status or ""
   while true do
-    local cases,err=rpc("CASE_LIST",{query=query or ""})
+    local cases,err=rpc("CASE_LIST",{query=query,status=status})
     if not cases then message("DOSSIERS",err,palette.bad);return end
 
     local items={}
@@ -1077,6 +1211,10 @@ local function casesScreen(query)
       items[#items+1]={text="[+] Ouvrir un nouveau dossier",id="new"}
     end
     items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer par statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
+    if query~="" or status~="" then
+      items[#items+1]={text="[R] Reinitialiser les filtres",id="reset"}
+    end
 
     for _,c in ipairs(cases) do
       items[#items+1]={
@@ -1085,7 +1223,10 @@ local function casesScreen(query)
       }
     end
 
-    local p=menu("DOSSIERS JUDICIAIRES",items,#cases.." dossier(s)")
+    local filterText=""
+    if query~="" then filterText=filterText.." recherche='"..query.."'" end
+    if status~="" then filterText=filterText.." statut="..status end
+    local p=menu("DOSSIERS JUDICIAIRES",items,#cases.." dossier(s)"..filterText)
     if not p then return end
 
     if p.id=="new" then
@@ -1099,7 +1240,24 @@ local function casesScreen(query)
       message("DOSSIER",r and ("Dossier cree: "..r.id) or e,r and palette.ok or palette.bad)
 
     elseif p.id=="search" then
-      query=prompt("Recherche",query or "")
+      query=prompt("Recherche",query)
+
+    elseif p.id=="status" then
+      local s=menu("FILTRER LES DOSSIERS",{
+        {text="Tous les statuts",v=""},
+        {text="Ouverts",v="open"},
+        {text="En enquete",v="investigation"},
+        {text="En audience",v="hearing"},
+        {text="Juges",v="judged"},
+        {text="En appel",v="appeal"},
+        {text="Clos",v="closed"},
+        {text="Archives",v="archived"}
+      })
+      if s then status=s.v end
+
+    elseif p.id=="reset" then
+      query=""
+      status=""
 
     elseif p.case then
       caseDetails(p.case.id)
