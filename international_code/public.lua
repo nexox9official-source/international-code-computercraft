@@ -66,7 +66,7 @@ local function drawOverview(t,dash,states,bills,cases)
   fillLine(t,y," ETATS MEMBRES    "..tostring(dash.states or #states),colors.cyan);y=y+2
   fillLine(t,y," ARTICLES ACTIFS  "..tostring(dash.activeLaws or 0),colors.white);y=y+1
   fillLine(t,y," DOSSIERS PUBLICS "..tostring(dash.openCases or #cases),colors.white);y=y+1
-  fillLine(t,y," VOTES OUVERTS    "..tostring(dash.votingBills or #bills),colors.yellow);y=y+1
+  fillLine(t,y," SCRUTINS OUVERTS "..tostring((dash.votingBills or #bills)+(dash.votingResolutions or 0)),colors.yellow);y=y+1
   fillLine(t,y," EXECUTIONS ACT.  "..tostring(dash.activeEnforcements or 0),colors.orange);y=y+2
   fillLine(t,y," Revision registre: "..tostring(dash.revision or "?"),colors.lightGray);y=y+1
   fillLine(t,y," Projet juridique: "..tostring(dash.codeStatus or "?"),colors.lightGray)
@@ -126,6 +126,23 @@ local function drawCases(t,cases)
     end
   end
   fillLine(t,h," Cour internationale de l'Union",colors.gray)
+end
+
+local function drawResolutions(t,rows)
+  t.setBackgroundColor(colors.black);t.clear()
+  header(t,"RESOLUTIONS","Scrutins institutionnels ouverts")
+  local _,h=t.getSize()
+  local y=4
+  if #rows==0 then
+    fillLine(t,y," Aucune resolution au vote.",colors.lightGray)
+  else
+    for _,r in ipairs(rows) do
+      if y>=h then break end
+      fillLine(t,y," "..r.id.." ["..tostring(r.resolutionType or "?").."]",colors.yellow);y=y+1
+      if y<h then fillLine(t,y,"   "..tostring(r.title or ""),colors.white);y=y+1 end
+    end
+  end
+  fillLine(t,h," Conseil / resolutions de l'Union",colors.gray)
 end
 
 local function drawTreaties(t,treaties)
@@ -197,6 +214,7 @@ function P.run()
     else
       local states=rpc(cfg,"STATE_LIST",{status="member"},4) or {}
       local bills=rpc(cfg,"BILL_LIST",{stage="voting"},4) or {}
+      local resolutions=rpc(cfg,"RESOLUTION_LIST",{stage="voting"},4) or {}
       local cases=rpc(cfg,"CASE_LIST",{visibility="public"},4) or {}
       local treaties=rpc(cfg,"TREATY_LIST",{stage="in_force"},4) or {}
       local enforcements=rpc(cfg,"ENFORCEMENT_LIST",{visibility="public"},4) or {}
@@ -204,16 +222,17 @@ function P.run()
       if page==1 then drawOverview(target,dash,states,bills,cases)
       elseif page==2 then drawStates(target,states)
       elseif page==3 then drawBills(target,bills)
-      elseif page==4 then drawTreaties(target,treaties)
-      elseif page==5 then drawCases(target,cases)
-      elseif page==6 then drawEnforcements(target,enforcements)
+      elseif page==4 then drawResolutions(target,resolutions)
+      elseif page==5 then drawTreaties(target,treaties)
+      elseif page==6 then drawCases(target,cases)
+      elseif page==7 then drawEnforcements(target,enforcements)
       else drawLaws(target,laws) end
     end
 
     local timer=os.startTimer(8)
     while true do
       local ev,a=os.pullEvent()
-      if ev=="timer" and a==timer then page=page%7+1 break
+      if ev=="timer" and a==timer then page=page%8+1 break
       elseif ev=="key" and (a==keys.q or a==keys.escape) then
         term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
       elseif ev=="monitor_touch" then page=page%7+1 break end
@@ -419,6 +438,54 @@ function P.enforcementDisplay(enforcementId)
     end
 
     local timer=os.startTimer(5)
+    while true do
+      local ev,a=os.pullEvent()
+      if ev=="timer" and a==timer then break
+      elseif ev=="key" and (a==keys.q or a==keys.escape) then
+        term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
+      end
+    end
+  end
+end
+
+function P.resolutionDisplay(resolutionId)
+  local cfg=common.loadConfig()
+  if not cfg or cfg.role=="server" then error("Terminal client requis.",0) end
+  local monitor=findMonitor()
+  local old=term.current()
+  local target=monitor or old
+  if monitor and monitor.setTextScale then pcall(monitor.setTextScale,0.5) end
+  term.redirect(target)
+
+  while true do
+    target.setCursorBlink(false)
+    target.setBackgroundColor(colors.black);target.clear()
+    local r,err=rpc(cfg,"RESOLUTION_GET",{id=resolutionId},4)
+    if not r then
+      drawOffline(target,err)
+    else
+      local tally=r.tally or {}
+      header(target,"RESOLUTION / "..r.id,r.title or "")
+      local _,h=target.getSize()
+      local y=4
+      fillLine(target,y," Type: "..tostring(r.resolutionType or "?"),colors.cyan);y=y+1
+      fillLine(target,y," Etape: "..tostring(r.stage).." / Tour "..tostring(r.votingRound or 0),colors.lightGray);y=y+2
+      fillLine(target,y," POUR       "..tostring(tally.yes or 0),colors.lime);y=y+1
+      fillLine(target,y," CONTRE     "..tostring(tally.no or 0),colors.red);y=y+1
+      fillLine(target,y," ABSTENTION "..tostring(tally.abstain or 0),colors.yellow);y=y+2
+      fillLine(target,y," Participation "..tostring(tally.participation or 0).."/"..tostring(tally.eligible or 0),colors.white);y=y+1
+      fillLine(target,y," Quorum "..tostring(tally.quorumRequired or 0).." : "..(tally.quorumMet and "ATTEINT" or "NON ATTEINT"),
+        tally.quorumMet and colors.lime or colors.orange);y=y+2
+      if r.targetStateId and r.targetStateId~="" and y<h then
+        fillLine(target,y," Cible: "..r.targetStateId,colors.orange);y=y+1
+      end
+      if r.enforcementId and y<h then
+        fillLine(target,y," Execution: "..r.enforcementId,colors.cyan)
+      end
+      fillLine(target,h," LIVE / actualisation 3s / Q pour quitter",colors.gray)
+    end
+
+    local timer=os.startTimer(3)
     while true do
       local ev,a=os.pullEvent()
       if ev=="timer" and a==timer then break
