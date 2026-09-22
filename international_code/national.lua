@@ -179,6 +179,7 @@ function N.newState()
     bills={},billCounters={},
     elections={},electionCounters={},
     decrees={},decreeCounters={},
+    cases={},caseCounters={},
     nationalAudit={}
   }
 end
@@ -206,6 +207,8 @@ function N.ensure(state)
   n.electionCounters=n.electionCounters or {}
   n.decrees=n.decrees or {}
   n.decreeCounters=n.decreeCounters or {}
+  n.cases=n.cases or {}
+  n.caseCounters=n.caseCounters or {}
   n.nationalAudit=n.nationalAudit or {}
 
   local corpus=loadCorpus()
@@ -602,13 +605,17 @@ function N.handle(state,actor,action,p,ctx)
     for _,b in pairs(n.bills) do if b.stage=="voting" then votingBills=votingBills+1 end end
     local publishedDecrees=0
     for _,d in pairs(n.decrees) do if d.status=="published" then publishedDecrees=publishedDecrees+1 end end
+    local openCases=0
+    for _,case in pairs(n.cases or {}) do
+      if case.status~="closed" and case.status~="archived" then openCases=openCases+1 end
+    end
     local unreadNational=0
     for _,row in ipairs(listNationalNotices(ctx,state,actor,{unreadOnly=true})) do if not row.read then unreadNational=unreadNational+1 end end
     return {
       laws=total,activeLaws=active,draftLaws=draft,repealedLaws=repealed,
       categories=#(n.categories or {}),ministries=ministriesTotal,filledMinistries=filled,
       openElections=openElections,votingBills=votingBills,publishedDecrees=publishedDecrees,
-      unreadNotices=unreadNational,
+      openCases=openCases,unreadNotices=unreadNational,
       foundingMode=n.meta.foundingMode,presidentIdentity=n.meta.presidentIdentity,
       nationalRole=nationalRole(state,actor),nationalIdentity=identity(actor),ministryCode=actor.ministryCode
     }
@@ -657,7 +664,7 @@ function N.handle(state,actor,action,p,ctx)
     local target=state.clients[common.trim(p.clientId)]
     if not target then return nil,"Terminal introuvable." end
     local wanted=common.trim(p.nationalRole)
-    local valid={citizen=true,council=true,judge=true,police=true,civil_servant=true}
+    local valid={citizen=true,council=true,judge=true,prosecutor=true,police=true,civil_servant=true}
     if actor.role=="admin" then valid.president=true;valid.public=true end
     if wanted~="" and not valid[wanted] then
       if wanted=="minister" then return nil,"Un ministre doit etre installe par le registre ministeriel, pas par un changement manuel de role." end
