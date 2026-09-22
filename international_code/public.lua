@@ -67,6 +67,7 @@ local function drawOverview(t,dash,states,bills,cases)
   fillLine(t,y," ARTICLES ACTIFS  "..tostring(dash.activeLaws or 0),colors.white);y=y+1
   fillLine(t,y," DOSSIERS PUBLICS "..tostring(dash.openCases or #cases),colors.white);y=y+1
   fillLine(t,y," SCRUTINS OUVERTS "..tostring((dash.votingBills or #bills)+(dash.votingResolutions or 0)),colors.yellow);y=y+1
+  fillLine(t,y," SESSIONS LIVE    "..tostring(dash.openSessions or 0).." / "..tostring(dash.scheduledSessions or 0).." prevues",colors.cyan);y=y+1
   fillLine(t,y," EXECUTIONS ACT.  "..tostring(dash.activeEnforcements or 0),colors.orange);y=y+2
   fillLine(t,y," Revision registre: "..tostring(dash.revision or "?"),colors.lightGray);y=y+1
   fillLine(t,y," Projet juridique: "..tostring(dash.codeStatus or "?"),colors.lightGray)
@@ -145,6 +146,24 @@ local function drawResolutions(t,rows)
   fillLine(t,h," Conseil / resolutions de l'Union",colors.gray)
 end
 
+local function drawSessions(t,rows)
+  t.setBackgroundColor(colors.black);t.clear()
+  header(t,"CALENDRIER INSTITUTIONNEL","Sessions ouvertes et programmees")
+  local _,h=t.getSize()
+  local y=4
+  if #rows==0 then
+    fillLine(t,y," Aucune session active.",colors.lightGray)
+  else
+    for _,sess in ipairs(rows) do
+      if y>=h then break end
+      local fg=sess.status=="open" and colors.lime or colors.cyan
+      fillLine(t,y," "..sess.id.." ["..tostring(sess.status or "?").."]",fg);y=y+1
+      if y<h then fillLine(t,y,"   "..tostring(sess.scheduledFor or "-").." / "..tostring(sess.title or ""),colors.white);y=y+1 end
+    end
+  end
+  fillLine(t,h," Sessions de l'Union",colors.gray)
+end
+
 local function drawTreaties(t,treaties)
   t.setBackgroundColor(colors.black);t.clear()
   header(t,"TRAITES EN VIGUEUR","Registre diplomatique")
@@ -215,6 +234,11 @@ function P.run()
       local states=rpc(cfg,"STATE_LIST",{status="member"},4) or {}
       local bills=rpc(cfg,"BILL_LIST",{stage="voting"},4) or {}
       local resolutions=rpc(cfg,"RESOLUTION_LIST",{stage="voting"},4) or {}
+      local openSessions=rpc(cfg,"SESSION_LIST",{status="open"},4) or {}
+      local scheduledSessions=rpc(cfg,"SESSION_LIST",{status="scheduled"},4) or {}
+      local sessions={}
+      for _,row in ipairs(openSessions) do sessions[#sessions+1]=row end
+      for _,row in ipairs(scheduledSessions) do sessions[#sessions+1]=row end
       local cases=rpc(cfg,"CASE_LIST",{visibility="public"},4) or {}
       local treaties=rpc(cfg,"TREATY_LIST",{stage="in_force"},4) or {}
       local enforcements=rpc(cfg,"ENFORCEMENT_LIST",{visibility="public"},4) or {}
@@ -223,19 +247,20 @@ function P.run()
       elseif page==2 then drawStates(target,states)
       elseif page==3 then drawBills(target,bills)
       elseif page==4 then drawResolutions(target,resolutions)
-      elseif page==5 then drawTreaties(target,treaties)
-      elseif page==6 then drawCases(target,cases)
-      elseif page==7 then drawEnforcements(target,enforcements)
+      elseif page==5 then drawSessions(target,sessions)
+      elseif page==6 then drawTreaties(target,treaties)
+      elseif page==7 then drawCases(target,cases)
+      elseif page==8 then drawEnforcements(target,enforcements)
       else drawLaws(target,laws) end
     end
 
     local timer=os.startTimer(8)
     while true do
       local ev,a=os.pullEvent()
-      if ev=="timer" and a==timer then page=page%8+1 break
+      if ev=="timer" and a==timer then page=page%9+1 break
       elseif ev=="key" and (a==keys.q or a==keys.escape) then
         term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
-      elseif ev=="monitor_touch" then page=page%8+1 break end
+      elseif ev=="monitor_touch" then page=page%9+1 break end
     end
   end
 end
@@ -482,6 +507,58 @@ function P.resolutionDisplay(resolutionId)
       if r.enforcementId and y<h then
         fillLine(target,y," Execution: "..r.enforcementId,colors.cyan)
       end
+      fillLine(target,h," LIVE / actualisation 3s / Q pour quitter",colors.gray)
+    end
+
+    local timer=os.startTimer(3)
+    while true do
+      local ev,a=os.pullEvent()
+      if ev=="timer" and a==timer then break
+      elseif ev=="key" and (a==keys.q or a==keys.escape) then
+        term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
+      end
+    end
+  end
+end
+
+function P.sessionDisplay(sessionId)
+  local cfg=common.loadConfig()
+  if not cfg or cfg.role=="server" then error("Terminal client requis.",0) end
+  local monitor=findMonitor()
+  local old=term.current()
+  local target=monitor or old
+  if monitor and monitor.setTextScale then pcall(monitor.setTextScale,0.5) end
+  term.redirect(target)
+
+  while true do
+    target.setCursorBlink(false)
+    target.setBackgroundColor(colors.black);target.clear()
+    local sess,err=rpc(cfg,"SESSION_GET",{id=sessionId},4)
+    if not sess then
+      drawOffline(target,err)
+    else
+      header(target,"SESSION / "..sess.id,sess.title or "")
+      local _,h=target.getSize()
+      local y=4
+      local statusColor=sess.status=="open" and colors.lime or
+        (sess.status=="cancelled" and colors.red or colors.cyan)
+      fillLine(target,y," Statut: "..tostring(sess.status),statusColor);y=y+1
+      fillLine(target,y," Type: "..tostring(sess.sessionType or "?"),colors.lightGray);y=y+1
+      fillLine(target,y," Date: "..tostring(sess.scheduledFor or "-"),colors.white);y=y+1
+      fillLine(target,y," Lieu: "..tostring(sess.location or "-"),colors.white);y=y+2
+
+      local present=0
+      for _ in pairs(sess.attendance or {}) do present=present+1 end
+      fillLine(target,y," Etats presents: "..present,colors.cyan);y=y+2
+
+      for _,item in ipairs(sess.agenda or {}) do
+        if y>=h then break end
+        local fg=item.status=="voted" and colors.lime or
+          (item.status=="discussing" and colors.yellow or colors.lightGray)
+        fillLine(target,y," "..tostring(item.id or "?").." ["..tostring(item.status or "?").."] "..tostring(item.title or ""),fg)
+        y=y+1
+      end
+
       fillLine(target,h," LIVE / actualisation 3s / Q pour quitter",colors.gray)
     end
 
