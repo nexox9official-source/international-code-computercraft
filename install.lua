@@ -16,14 +16,11 @@ local CLIENT={
   "international_code/national_printer.lua","international_code/national_public.lua"
 }
 local SERVER_BOOT={
-  "international_code/common.lua","international_code/server.lua","international_code/national.lua",
-  "international_code/national/corpus_meta.json",
-  "international_code/national/articles_001_100.json",
-  "international_code/national/articles_101_200.json",
-  "international_code/national/articles_201_300.json",
-  "international_code/national/articles_301_400.json",
-  "international_code/seed/001.lua","international_code/seed/002.lua","international_code/seed/003.lua",
-  "international_code/seed/004.lua","international_code/seed/005.lua"
+  -- Bootstrap disque minimal: les 500 articles UNS et 400 articles NC
+  -- sont lus directement depuis GitHub en memoire, fragment par fragment.
+  "international_code/common.lua",
+  "international_code/server.lua",
+  "international_code/national.lua"
 }
 local SERVER_RUNTIME={
   "ic.lua","international_code/common.lua","international_code/launcher.lua",
@@ -171,19 +168,31 @@ local function download(rel,index,total)
   local h,err=http.get(REPO..rel)
   if not h then error("Telechargement impossible: "..rel.." / "..tostring(err),0) end
   ensure(dirOf(full(rel)))
-  local tmp=full(rel)..".download"
+
+  local target=full(rel)
+  local tmp=target..".download"
   if fs.exists(tmp) then fs.delete(tmp) end
-  local out=assert(fs.open(tmp,"wb"))
+
+  -- Sur un disque ComputerCraft serre, conserver l'ancienne version et
+  -- telecharger une seconde copie peut suffire a saturer le disque.
+  -- Les fichiers programme sont recreables: on remplace donc directement.
+  if fs.exists(target) and not fs.isDir(target) then fs.delete(target) end
+
+  local out=assert(fs.open(target,"wb"))
   local bytes=0
   while true do
     local chunk=h.read(8192)
     if not chunk then break end
-    out.write(chunk);bytes=bytes+#chunk
+    local ok,writeErr=pcall(out.write,chunk)
+    if not ok then
+      out.close();h.close()
+      if fs.exists(target) then fs.delete(target) end
+      error("Espace disque insuffisant pendant "..rel.." apres "..tostring(bytes).." octets: "..tostring(writeErr),0)
+    end
+    bytes=bytes+#chunk
   end
   h.close();out.close()
-  local target=full(rel)
-  if fs.exists(target) then fs.delete(target) end
-  fs.move(tmp,target)
+
   drawHeader("INSTALLATION",string.format("%d/%d - %s",index,total,rel))
   term.setCursorPos(2,4);term.setTextColor(colors.white);term.write(tostring(bytes).." octets")
   term.setCursorPos(2,5);term.setTextColor(colors.lightGray);term.write("Espace libre: "..tostring(freeSpace()))
