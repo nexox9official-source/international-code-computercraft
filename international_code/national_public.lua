@@ -123,21 +123,22 @@ local function bills(t,rows)
   fill(t,h," Conseil / referendum national",colors.gray)
 end
 
-local function decrees(t,rows)
+local function gazette(t,rows)
   t.setBackgroundColor(colors.black);t.clear()
-  header(t,"JOURNAL OFFICIEL","Decrets publies")
+  header(t,"JOURNAL OFFICIEL","Dernieres publications accessibles")
   local _,h=t.getSize()
   local y=4
   local shown=0
-  for _,d in ipairs(rows or {}) do
+  for _,row in ipairs(rows or {}) do
     if y>=h then break end
-    fill(t,y," "..d.id.." / "..(d.ministryCode~="" and d.ministryCode or "PRESIDENCE"),colors.cyan);y=y+1
-    if y<h then fill(t,y,"   "..tostring(d.title or ""),colors.white);y=y+1 end
+    fill(t,y," "..tostring(row.id).." / "..tostring(row.kind or "?"),colors.cyan);y=y+1
+    if y<h then fill(t,y,"   "..tostring(row.title or ""),colors.white);y=y+1 end
+    if y<h then fill(t,y,"   "..tostring(row.publishedAt or ""),colors.lightGray);y=y+1 end
     shown=shown+1
-    if shown>=math.max(1,math.floor((h-5)/2)) then break end
+    if shown>=math.max(1,math.floor((h-5)/3)) then break end
   end
-  if shown==0 then fill(t,y," Aucun decret publie.",colors.lightGray) end
-  fill(t,h," Registre des actes reglementaires",colors.gray)
+  if shown==0 then fill(t,y," Aucune publication officielle visible.",colors.lightGray) end
+  fill(t,h," NC-GAZ / actes officiels scelles",colors.gray)
 end
 
 local function sessions(t,rows)
@@ -213,7 +214,7 @@ function P.run()
       local ministries=rpc(cfg,"NC_MINISTRY_LIST",{},4) or {}
       local electionsOpen=rpc(cfg,"NC_ELECTION_LIST",{stage="open"},4) or {}
       local billsVoting=rpc(cfg,"NC_BILL_LIST",{stage="voting"},4) or {}
-      local decreesPublished=rpc(cfg,"NC_DECREE_LIST",{status="published"},4) or {}
+      local gazetteRows=rpc(cfg,"NC_GAZETTE_LIST",{},4) or {}
       local visibleSessions=rpc(cfg,"NC_SESSION_LIST",{},4) or {}
       local visibleCases=rpc(cfg,"NC_CASE_LIST",{},4) or {}
       local cats=rpc(cfg,"NC_CATEGORY_LIST",{},4) or {}
@@ -222,7 +223,7 @@ function P.run()
       elseif page==2 then government(target,info,ministries)
       elseif page==3 then elections(target,electionsOpen)
       elseif page==4 then bills(target,billsVoting)
-      elseif page==5 then decrees(target,decreesPublished)
+      elseif page==5 then gazette(target,gazetteRows)
       elseif page==6 then sessions(target,visibleSessions)
       elseif page==7 then cases(target,visibleCases)
       else categories(target,cats) end
