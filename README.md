@@ -7,7 +7,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** avec deux espaces juridi
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. Les données nationales de North Coalition sont isolées logiquement des registres internationaux et soumises à leur propre contrôle d'accès.
 
-## Ce que fait la v0.18
+## Ce que fait la v0.19
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
@@ -23,9 +23,9 @@ Le projet ne contient aucune référence au nom du serveur Minecraft. Les donné
 - impression multi-pages des articles et dossiers via une **Printer ComputerCraft** ;
 - interface terminal claire, navigable au clavier et à la souris.
 
-## Intranet national North Coalition v0.18
+## Intranet national North Coalition v0.19
 
-La v0.17 fournit un deuxième espace complet, **interne à North Coalition**, sans transformer les 400 lois nationales en articles UNS.
+La v0.19 fournit un deuxième espace complet, **interne à North Coalition**, sans transformer les 400 lois nationales en articles UNS.
 
 Depuis un terminal autorisé :
 
@@ -39,7 +39,7 @@ Pour un grand Monitor institutionnel interne :
 ic nc-display
 ```
 
-Le Monitor tourne entre finances publiques, Gouvernement, scrutins, législation, Journal officiel, sessions nationales, justice et catégories du Code.
+Le Monitor tourne entre finances publiques, Gouvernement, élections nationales, scrutins ministériels, législation, Journal officiel, sessions nationales, justice et catégories du Code.
 
 Le premier terminal administrateur peut enregistrer la Présidence fondatrice sous l'identité officielle **NexoFr_**. Ensuite, l'accès national est attribué terminal par terminal.
 
@@ -79,6 +79,51 @@ L'intranet ne se contente pas du rôle international du terminal. Il possède se
 - citoyen.
 
 Les terminaux étrangers ou non enregistrés ne peuvent pas ouvrir le registre national. L'administration internationale garde un accès de secours, mais **un terminal administrateur non enregistré n'est pas compté comme électeur national ni comme candidat à un ministère**.
+
+### Élections nationales et mandats v0.19
+
+North Coalition possède désormais un registre électoral séparé des scrutins ministériels :
+
+```text
+NC-GE-AAAA-XXXX        élection nationale
+NC-MANDATE-AAAA-XXXX   mandat issu d'une élection
+```
+
+Deux offices sont actuellement gérés :
+
+- **Présidence de la Coalition** ;
+- **Conseil de la Coalition** avec un nombre de sièges configurable (5 par défaut).
+
+Le corps électoral utilise exclusivement les identifiants permanents `NC-CIT-...`. Une personne disposant de plusieurs terminaux ne peut donc jamais voter plusieurs fois.
+
+Le cycle présidentiel est réglementé :
+
+```text
+draft
+  -> candidacy
+  -> voting
+      -> elected
+      -> runoff_ready -> runoff_voting -> elected
+      -> failed
+```
+
+Au premier tour présidentiel, un candidat doit obtenir **plus de 50 % des suffrages valides**. À défaut, les deux premiers passent au second tour. Le quorum de participation est fixé à 50 % des citoyens inscrits au moment de l'ouverture du vote.
+
+Pour le Conseil, les candidats sont classés par nombre de voix. Les premiers obtiennent les sièges disponibles. Une égalité sur le dernier siège déclenche automatiquement un second tour limité aux candidats concernés.
+
+Les candidatures sont soumises à des incompatibilités : un ministre en exercice, un juge, un procureur, un policier ou un agent administratif doit d'abord quitter sa fonction avant de briguer un mandat politique. Un candidat doit également disposer d'au moins un terminal national rattaché.
+
+Lorsqu'un scrutin est conclu :
+
+- le mandat est créé et scellé ;
+- les habilitations des terminaux sont mises à jour automatiquement ;
+- l'ancien mandat est clôturé sans être supprimé ;
+- un Président élu remplace la Présidence précédente ;
+- un membre du Conseil élu reçoit automatiquement son habilitation ;
+- une publication est ajoutée au Journal officiel ;
+- les résultats restent vérifiables par sceau.
+
+La Présidence fondatrice de **NexoFr_** reste en fonction tant qu'aucune élection présidentielle conclue n'a régulièrement transféré le mandat.
 
 ### Registre civil et identités permanentes
 
