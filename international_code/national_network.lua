@@ -16,6 +16,7 @@ end
 
 local function role(actor)
   if not actor then return nil end
+  if actor.nationalRoot==true then return "admin" end
   if actor.role=="admin" and (not actor.nationalRole or actor.nationalRole=="admin") then return "admin" end
   return actor.nationalRole
 end
