@@ -272,6 +272,9 @@ local function clientMenu(cfg)
   end
 end
 
+L.diagnostic=diagnostic
+L.setup=setupWizard
+
 function L.run()
   while true do
     local cfg=common.loadConfig()
