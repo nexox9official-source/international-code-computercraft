@@ -849,6 +849,9 @@ local roleAllows={
   sessionAttend={delegate=true},
   missionWrite={writer=true,admin=true},
   missionReport={writer=true,clerk=true,judge=true,admin=true},
+  incidentCreate={writer=true,clerk=true,judge=true,delegate=true,admin=true},
+  incidentWrite={writer=true,admin=true},
+  incidentReport={writer=true,clerk=true,judge=true,delegate=true,admin=true},
   diplomacy={writer=true,admin=true},
   treatySign={delegate=true},
   delegateVote={delegate=true},
@@ -2877,6 +2880,7 @@ end
 
 local sessionDetails
 local missionDetails
+local incidentDetails
 
 local function notificationCenter()
   while true do
@@ -2923,6 +2927,7 @@ local function notificationCenter()
         elseif n.objectType=="resolution" then resolutionDetails(n.objectId)
         elseif n.objectType=="session" then sessionDetails(n.objectId)
         elseif n.objectType=="mission" then missionDetails(n.objectId)
+        elseif n.objectType=="incident" then incidentDetails(n.objectId)
         elseif n.objectType=="treaty" then treatyDetails(n.objectId)
         elseif n.objectType=="case" then caseDetails(n.objectId)
         elseif n.objectType=="enforcement" then enforcementDetails(n.objectId)
