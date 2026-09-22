@@ -37,6 +37,7 @@ end
 local function isSovereignAuthority(state,actor)
   if not actor then return false end
   local meta=state and state.national and state.national.meta or {}
+  if meta.sovereignAuthorityActive==false then return false end
   local expected=common.trim(meta.sovereignAuthorityIdentity or "NexoFr_")
   return expected~="" and common.normalizeSearch(identity(actor))==common.normalizeSearch(expected)
 end
@@ -176,6 +177,10 @@ function N.newState()
       sovereignAuthorityIdentity=((corpus.government_system or {}).sovereign_authority_account or "NexoFr_"),
       sovereignAuthorityTitle=((corpus.government_system or {}).sovereign_authority_title or "Dirigeant de North Coalition"),
       sovereignAuthorityPowers=copy((corpus.government_system or {}).sovereign_authority_powers or {}),
+      sovereignAuthorityActive=((corpus.government_system or {}).sovereign_authority_active~=false),
+      sovereignAuthorityTenure=((corpus.government_system or {}).sovereign_authority_tenure or "perpetual_until_voluntary_relinquishment"),
+      sovereignAuthorityRelinquishedAt=nil,
+      sovereignAuthorityRelinquishedSeal=nil,
       ratifiedAt=((corpus.ratification or {}).ratified_at),
       ratifiedBy=((corpus.ratification or {}).promulgated_by or "NexoFr_"),
       corpusRatificationApplied=(corpus.status=="ratified"),
@@ -225,6 +230,8 @@ function N.ensure(state)
   n.meta.sovereignAuthorityIdentity=n.meta.sovereignAuthorityIdentity or "NexoFr_"
   n.meta.sovereignAuthorityTitle=n.meta.sovereignAuthorityTitle or "Dirigeant de North Coalition"
   n.meta.sovereignAuthorityPowers=n.meta.sovereignAuthorityPowers or {}
+  if n.meta.sovereignAuthorityActive==nil then n.meta.sovereignAuthorityActive=true end
+  n.meta.sovereignAuthorityTenure=n.meta.sovereignAuthorityTenure or "perpetual_until_voluntary_relinquishment"
   if n.meta.foundingMode==nil then n.meta.foundingMode=true end
   n.meta.fallbackNoVoteHours=n.meta.fallbackNoVoteHours or 48
   n.laws=n.laws or {}
@@ -270,6 +277,10 @@ function N.ensure(state)
     n.meta.sovereignAuthorityIdentity=((corpus.government_system or {}).sovereign_authority_account or n.meta.sovereignAuthorityIdentity or "NexoFr_")
     n.meta.sovereignAuthorityTitle=((corpus.government_system or {}).sovereign_authority_title or n.meta.sovereignAuthorityTitle)
     n.meta.sovereignAuthorityPowers=copy((corpus.government_system or {}).sovereign_authority_powers or n.meta.sovereignAuthorityPowers or {})
+    n.meta.sovereignAuthorityTenure=((corpus.government_system or {}).sovereign_authority_tenure or n.meta.sovereignAuthorityTenure)
+    if n.meta.sovereignAuthorityActive==nil then
+      n.meta.sovereignAuthorityActive=((corpus.government_system or {}).sovereign_authority_active~=false)
+    end
     local maxN=tonumber(n.nextArticle or 1)-1
     for _,seed in ipairs(corpus.articles or {}) do
       if not n.laws[seed.id] then n.laws[seed.id]=makeLaw(seed) end
@@ -990,6 +1001,10 @@ function N.handle(state,actor,action,p,ctx)
       sovereignAuthorityIdentity=n.meta.sovereignAuthorityIdentity,
       sovereignAuthorityTitle=n.meta.sovereignAuthorityTitle,
       sovereignAuthorityPowers=copy(n.meta.sovereignAuthorityPowers or {}),
+      sovereignAuthorityActive=n.meta.sovereignAuthorityActive~=false,
+      sovereignAuthorityTenure=n.meta.sovereignAuthorityTenure,
+      sovereignAuthorityRelinquishedAt=n.meta.sovereignAuthorityRelinquishedAt,
+      sovereignAuthorityRelinquishedSeal=n.meta.sovereignAuthorityRelinquishedSeal,
       ratifiedAt=n.meta.ratifiedAt,ratifiedBy=n.meta.ratifiedBy
     }
   end
@@ -1014,6 +1029,52 @@ function N.handle(state,actor,action,p,ctx)
     return {
       nationalRole=actor.nationalRole,nationalIdentity=actor.nationalIdentity,
       presidentClientId=n.meta.presidentClientId,foundingMode=n.meta.foundingMode
+    }
+  end
+
+  if action=="NC_SOVEREIGN_RELINQUISH" then
+    if not actor or actor.nationalRoot~=true or not isSovereignAuthority(state,actor) then
+      return nil,"Seul NexoFr_ peut renoncer a la direction souveraine de North Coalition."
+    end
+    if n.meta.sovereignAuthorityActive==false then
+      return nil,"L'autorite souveraine a deja fait l'objet d'une renonciation."
+    end
+    if common.trim(p.confirmation)~="JE RENONCE VOLONTAIREMENT A LA DIRECTION DE NORTH COALITION" then
+      return nil,"Confirmation exacte requise pour cette renonciation irreversible."
+    end
+    local reason=common.trim(p.reason)
+    local at=common.now()
+    local relinquishSeal=seal("NC-SOV-RELINQUISH",{
+      n.meta.sovereignAuthorityIdentity,at,reason,actor.clientId,actor.citizenId
+    })
+    n.meta.sovereignAuthorityActive=false
+    n.meta.sovereignAuthorityRelinquishedAt=at
+    n.meta.sovereignAuthorityRelinquishedBy=identity(actor)
+    n.meta.sovereignAuthorityRelinquishedReason=reason
+    n.meta.sovereignAuthorityRelinquishedSeal=relinquishSeal
+    n.meta.presidentIdentity=nil
+    n.meta.presidentClientId=nil
+    n.meta.presidentCitizenId=nil
+    n.meta.foundingMode=false
+    for _,cl in pairs(state.clients or {}) do
+      if common.normalizeSearch(identity(cl))==common.normalizeSearch(n.meta.sovereignAuthorityIdentity or "NexoFr_") then
+        cl.nationalRoot=false
+        if cl.nationalRole=="president" then cl.nationalRole="citizen" end
+      end
+    end
+    local gaz=publishGazette(n,actor,"sovereign_relinquishment","SOVEREIGN-AUTHORITY",
+      "Renonciation volontaire du dirigeant",
+      "NexoFr_ a volontairement renonce a la direction souveraine de North Coalition. Une succession peut desormais etre organisee.",
+      relinquishSeal,"public")
+    noticeAll(ctx,state,n,"Renonciation souveraine enregistree",
+      "La direction de North Coalition est desormais vacante a la suite de la renonciation volontaire de NexoFr_.",
+      "warning","nc_government","SOVEREIGN-AUTHORITY")
+    mutate(ctx,state,actor,"NC_SOVEREIGN_RELINQUISH","SOVEREIGN-AUTHORITY",
+      relinquishSeal.." / "..(gaz and gaz.id or ""))
+    actor.nationalRoot=false
+    return {
+      active=false,relinquishedAt=at,relinquishedBy=identity(actor),
+      seal=relinquishSeal,gazetteId=gaz and gaz.id or nil
     }
   end
 
@@ -1336,6 +1397,8 @@ function N.handle(state,actor,action,p,ctx)
       nationalRole=nationalRole(state,actor),nationalIdentity=identity(actor),ministryCode=actor.ministryCode,
       sovereignAuthority=actor and actor.nationalRoot==true or false,
       sovereignAuthorityIdentity=n.meta.sovereignAuthorityIdentity,
+      sovereignAuthorityActive=n.meta.sovereignAuthorityActive~=false,
+      sovereignAuthorityTenure=n.meta.sovereignAuthorityTenure,
       ratifiedAt=n.meta.ratifiedAt
     }
   end
