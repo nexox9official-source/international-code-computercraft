@@ -471,6 +471,14 @@ function P.mission(m)
   appendWrapped(lines,"TYPE",m.missionType or "-",25)
   appendWrapped(lines,"STATUT",m.status or "-",25)
   appendWrapped(lines,"ZONE",m.area or "-",25)
+  if m.position then
+    appendWrapped(lines,"COORDONNEES",
+      (m.position.dimension or "minecraft:overworld")..
+      " / X "..tostring(m.position.x or "?")..
+      " Y "..tostring(m.position.y or "?")..
+      " Z "..tostring(m.position.z or "?")..
+      (m.position.radius and (" / rayon "..tostring(m.position.radius)) or ""),25)
+  end
   appendWrapped(lines,"PERIODE",(m.startAt or "-").." -> "..(m.endAt or "-"),25)
   appendWrapped(lines,"MANDAT",m.mandate or "",25)
   appendWrapped(lines,"RESOLUTION",m.resolutionId or "-",25)
@@ -488,6 +496,12 @@ function P.mission(m)
     for _,r in ipairs(m.reports) do
       for _,l in ipairs(common.wrap((r.id or "?").." ["..(r.classification or "public").."] "..(r.title or ""),25)) do lines[#lines+1]=l end
       for _,l in ipairs(common.wrap((r.at or "").." / "..(r.by or "?"),25)) do lines[#lines+1]=l end
+      if r.incidentId and r.incidentId~="" then
+        for _,l in ipairs(common.wrap("Incident: "..r.incidentId,25)) do lines[#lines+1]=l end
+      end
+      if r.position and r.position.x and r.position.z then
+        for _,l in ipairs(common.wrap("Pos: "..(r.position.dimension or "minecraft:overworld").." X"..tostring(r.position.x).." Y"..tostring(r.position.y or "?").." Z"..tostring(r.position.z),25)) do lines[#lines+1]=l end
+      end
       if r.classification~="restricted" then
         for _,l in ipairs(common.wrap(r.body or "",25)) do lines[#lines+1]=l end
       else
@@ -503,6 +517,68 @@ function P.mission(m)
   if m.cancelReason and m.cancelReason~="" then appendWrapped(lines,"ANNULATION",m.cancelReason,25) end
   if m.cancellationSeal then appendWrapped(lines,"SCEAU D'ANNULATION",m.cancellationSeal,25) end
   return printLines(m.id or "MISSION",lines)
+end
+
+
+function P.incident(incident)
+  if not incident then return false,"Incident introuvable." end
+  local lines={}
+  appendWrapped(lines,"INCIDENT INTERNATIONAL",incident.id or "-",25)
+  appendWrapped(lines,"TITRE",incident.title or "-",25)
+  appendWrapped(lines,"TYPE",incident.incidentType or "-",25)
+  appendWrapped(lines,"GRAVITE",incident.severity or "-",25)
+  appendWrapped(lines,"STATUT",incident.status or "-",25)
+  appendWrapped(lines,"RESUME",incident.summary or "",25)
+  appendWrapped(lines,"DETAILS",incident.details or "",25)
+  appendWrapped(lines,"ZONE",incident.area or "-",25)
+  if incident.position then
+    appendWrapped(lines,"COORDONNEES",
+      (incident.position.dimension or "minecraft:overworld")..
+      " / X "..tostring(incident.position.x or "?")..
+      " Y "..tostring(incident.position.y or "?")..
+      " Z "..tostring(incident.position.z or "?")..
+      (incident.position.radius and (" / rayon "..tostring(incident.position.radius)) or ""),25)
+  end
+  appendWrapped(lines,"ETATS IMPLIQUES",table.concat(incident.involvedStates or {},"\n"),25)
+  appendWrapped(lines,"ETAT DECLARANT",incident.reportingStateId or "-",25)
+  appendWrapped(lines,"MISSION",incident.missionId or "-",25)
+  appendWrapped(lines,"RESOLUTION",incident.resolutionId or "-",25)
+  appendWrapped(lines,"TRAITE",incident.treatyId or "-",25)
+  appendWrapped(lines,"DOSSIER",incident.caseId or "-",25)
+  appendWrapped(lines,"EXECUTION",incident.enforcementId or "-",25)
+  appendWrapped(lines,"VISIBILITE",incident.visibility or "public",25)
+  appendWrapped(lines,"SCEAU INITIAL",incident.seal or "-",25)
+
+  if incident.reports and #incident.reports>0 then
+    lines[#lines+1]="SITREP / RAPPORTS TERRAIN"
+    for _,r in ipairs(incident.reports) do
+      for _,l in ipairs(common.wrap((r.id or "?").." ["..(r.classification or "public").."] "..(r.title or ""),25)) do lines[#lines+1]=l end
+      for _,l in ipairs(common.wrap((r.at or "").." / "..(r.by or "?"),25)) do lines[#lines+1]=l end
+      if r.position and r.position.x and r.position.z then
+        for _,l in ipairs(common.wrap("Pos: "..(r.position.dimension or "minecraft:overworld").." X"..tostring(r.position.x).." Y"..tostring(r.position.y or "?").." Z"..tostring(r.position.z),25)) do lines[#lines+1]=l end
+      end
+      if r.classification~="restricted" then
+        for _,l in ipairs(common.wrap(r.body or "",25)) do lines[#lines+1]=l end
+      else
+        lines[#lines+1]="[CONTENU RESTREINT]"
+      end
+      for _,l in ipairs(common.wrap("Sceau: "..(r.seal or "-"),25)) do lines[#lines+1]=l end
+      lines[#lines+1]=""
+    end
+  end
+
+  if incident.statusHistory and #incident.statusHistory>0 then
+    lines[#lines+1]="HISTORIQUE DE STATUT"
+    for _,r in ipairs(incident.statusHistory) do
+      for _,l in ipairs(common.wrap((r.at or "").." "..(r.from or "?").." -> "..(r.to or "?"),25)) do lines[#lines+1]=l end
+      if r.reason and r.reason~="" then
+        for _,l in ipairs(common.wrap(r.reason,25)) do lines[#lines+1]=l end
+      end
+      for _,l in ipairs(common.wrap("Sceau: "..(r.seal or "-"),25)) do lines[#lines+1]=l end
+      lines[#lines+1]=""
+    end
+  end
+  return printLines(incident.id or "INCIDENT",lines)
 end
 
 return P
