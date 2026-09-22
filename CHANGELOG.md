@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.23.0
+
+### Installation faible mémoire
+- l'installateur télécharge désormais les fichiers par blocs de 8 Ko au lieu d'utiliser `readAll()` ;
+- le corpus North Coalition de plus de 700 Ko est remplacé côté ComputerCraft par quatre fragments de 100 articles ;
+- le serveur charge les fragments un par un et libère leur mémoire entre chaque bloc ;
+- l'ancien `corpus_v2.json` reste uniquement comme source de référence dans le dépôt et comme fallback de compatibilité ;
+- l'installation utilise des fichiers temporaires puis un remplacement atomique pour éviter de laisser un fichier incomplet après une coupure.
+
+### Centre de contrôle graphique
+- lancer simplement `ic` ouvre désormais une interface principale navigable au clavier et à la souris ;
+- premier démarrage : boutons Serveur central, PC NexoFr_, PC international/national, Diagnostic ;
+- poste serveur : lancement du serveur, appairage, backup, diagnostic et mise à jour depuis l'interface ;
+- poste client : accès UNS, North Coalition, notifications, diagnostic, réappairage et mise à jour ;
+- les anciennes commandes restent disponibles pour compatibilité et dépannage.
+
+### Diagnostic
+- une configuration absente est affichée comme **A CONFIGURER** au lieu d'être présentée comme une panne ;
+- le diagnostic ne charge plus les corpus juridiques complets en mémoire ;
+- vérification légère des cinq fragments UNS, des cinq éléments du corpus North Coalition, du modem, du programme, de la configuration et de l'espace disque.
+
 ## 0.22.0
 
 ### Direction permanente de North Coalition
