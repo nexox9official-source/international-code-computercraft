@@ -14,13 +14,13 @@ local permissions = {
   clerk = {
     PING=true, DASHBOARD=true, SERVER_INFO=true, LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
-    CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true,
+    CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
     CASE_REMOVE_ARTICLE=true, CASE_SET_STATUS=true, AUDIT_LIST=true
   },
   judge = {
     PING=true, DASHBOARD=true, SERVER_INFO=true, LAW_LIST=true, LAW_GET=true, LAW_BOOKS=true,
     CASE_LIST=true, CASE_GET=true, CASE_CREATE=true, CASE_UPDATE_SUMMARY=true,
-    CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true,
+    CASE_ADD_FACT=true, CASE_ADD_EVIDENCE=true, CASE_ADD_ARTICLE=true, CASE_ADD_ARTICLES=true,
     CASE_REMOVE_ARTICLE=true, CASE_ADD_JUDGMENT=true, CASE_SET_STATUS=true,
     AUDIT_LIST=true
   },
@@ -220,9 +220,12 @@ end
 local function listCases(state, payload)
   payload = payload or {}
   local q = common.trim(payload.query)
+  local status = common.trim(payload.status)
   local items = {}
   for _, c in pairs(state.cases) do
-    if q == "" or common.contains(c.id, q) or common.contains(c.title, q) or common.contains(c.accused, q) or common.contains(c.complainant, q) then
+    local hit = (q == "" or common.contains(c.id, q) or common.contains(c.title, q) or common.contains(c.accused, q) or common.contains(c.complainant, q))
+    local statusHit = (status == "" or c.status == status)
+    if hit and statusHit then
       items[#items+1] = { id=c.id, title=c.title, status=c.status, accused=c.accused, complainant=c.complainant, updatedAt=c.updatedAt }
     end
   end
@@ -244,6 +247,28 @@ local function makeCaseId(state)
   return string.format("CASE-%s-%04d", year, n)
 end
 
+local function ensureCaseShape(c)
+  c.facts = c.facts or {}
+  c.evidence = c.evidence or {}
+  c.citedArticles = c.citedArticles or {}
+  c.judgments = c.judgments or {}
+  c.timeline = c.timeline or {}
+  return c
+end
+
+local function caseEvent(c, actor, kind, title, details)
+  ensureCaseShape(c)
+  c.timeline[#c.timeline+1] = {
+    at = common.now(),
+    by = actor.label or actor.clientId or "server",
+    role = actor.role or "server",
+    kind = kind,
+    title = title or kind,
+    details = details or ""
+  }
+  while #c.timeline > 500 do table.remove(c.timeline,1) end
+end
+
 local function handleAction(state, actor, action, p)
   p = p or {}
   if action == "PING" then return { pong=true, time=common.now(), revision=state.meta.revision } end
@@ -251,10 +276,13 @@ local function handleAction(state, actor, action, p)
     return { meta=state.meta, clientsCount=(function() local n=0 for _ in pairs(state.clients) do n=n+1 end return n end)() }
   end
   if action == "DASHBOARD" then
-    local lc, cc = 0, 0
-    for _ in pairs(state.laws) do lc=lc+1 end
-    for _ in pairs(state.cases) do cc=cc+1 end
-    return { laws=lc, cases=cc, revision=state.meta.revision, codeStatus=state.meta.codeStatus }
+    local lc, cc, openCases, activeLaws = 0, 0, 0, 0
+    for _,law in pairs(state.laws) do lc=lc+1 if law.status=="active" then activeLaws=activeLaws+1 end end
+    for _,c in pairs(state.cases) do
+      cc=cc+1
+      if c.status~="closed" and c.status~="archived" then openCases=openCases+1 end
+    end
+    return { laws=lc, activeLaws=activeLaws, cases=cc, openCases=openCases, revision=state.meta.revision, codeStatus=state.meta.codeStatus }
   end
   if action == "LAW_BOOKS" then return listBooks(state) end
   if action == "LAW_LIST" then return listLaws(state, p) end
@@ -331,16 +359,21 @@ local function handleAction(state, actor, action, p)
   end
 
   if action == "CASE_LIST" then return listCases(state, p) end
-  if action == "CASE_GET" then return common.deepcopy(state.cases[common.trim(p.id):upper()]) end
+  if action == "CASE_GET" then
+    local c=state.cases[common.trim(p.id):upper()]
+    if c then ensureCaseShape(c) end
+    return common.deepcopy(c)
+  end
 
   if action == "CASE_CREATE" then
     local id = makeCaseId(state)
     local c = {
       id=id, title=common.trim(p.title), complainant=common.trim(p.complainant), accused=common.trim(p.accused),
-      summary=common.trim(p.summary), status="open", facts={}, evidence={}, citedArticles={}, judgments={},
+      summary=common.trim(p.summary), status="open", facts={}, evidence={}, citedArticles={}, judgments={}, timeline={},
       createdAt=common.now(), updatedAt=common.now(), createdBy=actor.label
     }
     if c.title == "" then return nil, "Titre obligatoire." end
+    caseEvent(c,actor,"CASE_CREATED","Dossier ouvert",c.title)
     state.cases[id] = c
     mutate(state, actor, "CASE_CREATE", id, c.title)
     return common.deepcopy(c)
@@ -349,8 +382,10 @@ local function handleAction(state, actor, action, p)
   if action == "CASE_UPDATE_SUMMARY" then
     local c = state.cases[common.trim(p.id):upper()]
     if not c then return nil, "Dossier introuvable." end
+    ensureCaseShape(c)
     c.summary = common.trim(p.summary)
     c.updatedAt = common.now()
+    caseEvent(c,actor,"SUMMARY_UPDATED","Contexte mis a jour","")
     mutate(state, actor, "CASE_UPDATE_SUMMARY", c.id, "Contexte modifie")
     return common.deepcopy(c)
   end
@@ -358,10 +393,12 @@ local function handleAction(state, actor, action, p)
   if action == "CASE_ADD_FACT" then
     local c = state.cases[common.trim(p.id):upper()]
     if not c then return nil, "Dossier introuvable." end
+    ensureCaseShape(c)
     local fact = { id=#c.facts+1, text=common.trim(p.text), at=common.now(), by=actor.label }
     if fact.text == "" then return nil, "Fait vide." end
     c.facts[#c.facts+1] = fact
     c.updatedAt=common.now()
+    caseEvent(c,actor,"FACT_ADDED","Fait #"..fact.id,fact.text:sub(1,120))
     mutate(state, actor, "CASE_ADD_FACT", c.id, fact.text:sub(1,80))
     return common.deepcopy(c)
   end
@@ -369,6 +406,7 @@ local function handleAction(state, actor, action, p)
   if action == "CASE_ADD_EVIDENCE" then
     local c = state.cases[common.trim(p.id):upper()]
     if not c then return nil, "Dossier introuvable." end
+    ensureCaseShape(c)
     local e = {
       id=#c.evidence+1, label=common.trim(p.label), description=common.trim(p.description),
       source=common.trim(p.source), at=common.now(), by=actor.label
@@ -376,6 +414,7 @@ local function handleAction(state, actor, action, p)
     if e.label == "" then e.label = "Preuve " .. e.id end
     c.evidence[#c.evidence+1] = e
     c.updatedAt=common.now()
+    caseEvent(c,actor,"EVIDENCE_ADDED","Preuve #"..e.id.." - "..e.label,e.source)
     mutate(state, actor, "CASE_ADD_EVIDENCE", c.id, e.label)
     return common.deepcopy(c)
   end
@@ -383,6 +422,7 @@ local function handleAction(state, actor, action, p)
   if action == "CASE_ADD_ARTICLE" then
     local c = state.cases[common.trim(p.id):upper()]
     if not c then return nil, "Dossier introuvable." end
+    ensureCaseShape(c)
     local ref = normalizeArticleRef(p.ref)
     if not state.laws[ref] then return nil, "Article introuvable." end
     for _, x in ipairs(c.citedArticles) do
@@ -390,18 +430,45 @@ local function handleAction(state, actor, action, p)
     end
     c.citedArticles[#c.citedArticles+1] = ref
     c.updatedAt=common.now()
+    caseEvent(c,actor,"ARTICLE_CITED","Article cite",ref)
     mutate(state, actor, "CASE_ADD_ARTICLE", c.id, ref)
+    return common.deepcopy(c)
+  end
+
+  if action == "CASE_ADD_ARTICLES" then
+    local c = state.cases[common.trim(p.id):upper()]
+    if not c then return nil, "Dossier introuvable." end
+    ensureCaseShape(c)
+    local refs = type(p.refs)=="table" and p.refs or {}
+    local added = {}
+    local existing = {}
+    for _,x in ipairs(c.citedArticles) do existing[x]=true end
+    for _,raw in ipairs(refs) do
+      local ref=normalizeArticleRef(raw)
+      if state.laws[ref] and not existing[ref] then
+        c.citedArticles[#c.citedArticles+1]=ref
+        existing[ref]=true
+        added[#added+1]=ref
+      end
+    end
+    if #added==0 then return common.deepcopy(c) end
+    c.updatedAt=common.now()
+    caseEvent(c,actor,"ARTICLES_CITED","Selection d'articles ajoutee",table.concat(added,", "))
+    mutate(state,actor,"CASE_ADD_ARTICLES",c.id,table.concat(added,", "))
     return common.deepcopy(c)
   end
 
   if action == "CASE_REMOVE_ARTICLE" then
     local c = state.cases[common.trim(p.id):upper()]
     if not c then return nil, "Dossier introuvable." end
+    ensureCaseShape(c)
     local ref = normalizeArticleRef(p.ref)
+    local removed=false
     for i=#c.citedArticles,1,-1 do
-      if c.citedArticles[i] == ref then table.remove(c.citedArticles,i) end
+      if c.citedArticles[i] == ref then table.remove(c.citedArticles,i) removed=true end
     end
     c.updatedAt=common.now()
+    if removed then caseEvent(c,actor,"ARTICLE_REMOVED","Article retire",ref) end
     mutate(state, actor, "CASE_REMOVE_ARTICLE", c.id, ref)
     return common.deepcopy(c)
   end
@@ -409,16 +476,29 @@ local function handleAction(state, actor, action, p)
   if action == "CASE_ADD_JUDGMENT" then
     local c = state.cases[common.trim(p.id):upper()]
     if not c then return nil, "Dossier introuvable." end
+    ensureCaseShape(c)
+    local snapshot={}
+    for _,ref in ipairs(c.citedArticles) do
+      local law=state.laws[ref]
+      snapshot[#snapshot+1]={
+        ref=ref,
+        title=law and law.title or "",
+        version=law and law.version or nil,
+        status=law and law.status or nil
+      }
+    end
     local j = {
       id=#c.judgments+1, date=common.now(), judge=actor.label,
       verdict=common.trim(p.verdict), reasoning=common.trim(p.reasoning),
       sanctions=common.trim(p.sanctions), citedArticles=common.deepcopy(c.citedArticles),
+      articleSnapshot=snapshot,
       final=p.final == true
     }
     if j.verdict == "" or j.reasoning == "" then return nil, "Decision et motifs obligatoires." end
     c.judgments[#c.judgments+1] = j
     if j.final then c.status = "judged" end
     c.updatedAt=common.now()
+    caseEvent(c,actor,"JUDGMENT_ADDED","Jugement #"..j.id,(j.final and "FINAL - " or "")..j.verdict:sub(1,120))
     mutate(state, actor, "CASE_ADD_JUDGMENT", c.id, j.verdict:sub(1,80))
     return common.deepcopy(c)
   end
@@ -428,8 +508,11 @@ local function handleAction(state, actor, action, p)
     if not c then return nil, "Dossier introuvable." end
     local allowed={open=true,investigation=true,hearing=true,judged=true,appeal=true,closed=true,archived=true}
     if not allowed[p.status] then return nil, "Statut invalide." end
+    ensureCaseShape(c)
+    local previous=c.status
     c.status=p.status
     c.updatedAt=common.now()
+    caseEvent(c,actor,"STATUS_CHANGED","Statut: "..tostring(previous).." -> "..tostring(p.status),"")
     mutate(state, actor, "CASE_SET_STATUS", c.id, p.status)
     return common.deepcopy(c)
   end
