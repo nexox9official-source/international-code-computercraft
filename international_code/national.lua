@@ -178,6 +178,7 @@ function N.newState()
     decrees={},decreeCounters={},
     cases={},caseCounters={},
     sessions={},sessionCounters={},
+    gazette={},gazetteCounters={},
     citizens={},nextCitizen=1,
     nationalAudit={}
   }
@@ -210,6 +211,8 @@ function N.ensure(state)
   n.caseCounters=n.caseCounters or {}
   n.sessions=n.sessions or {}
   n.sessionCounters=n.sessionCounters or {}
+  n.gazette=n.gazette or {}
+  n.gazetteCounters=n.gazetteCounters or {}
   n.citizens=n.citizens or {}
   local maxCitizen=0
   for id in pairs(n.citizens) do
@@ -369,6 +372,48 @@ local function nextId(counterTable,prefix)
   local v=(counterTable[y] or 0)+1
   counterTable[y]=v
   return string.format("%s-%s-%04d",prefix,y,v)
+end
+
+local function gazetteVisibilityAllowed(state,actor,entry)
+  if not actor or not entry then return false end
+  if technicalNationalAdmin and technicalNationalAdmin(actor) then return true end
+  local r=nationalRole(state,actor)
+  local visibility=entry.visibility or "internal"
+  if visibility=="public" or visibility=="internal" then return hasAccess(state,actor) end
+  if visibility=="judicial" then return r=="judge" or r=="prosecutor" end
+  if visibility=="restricted" then return r=="president" or r=="council" end
+  return false
+end
+
+local function publishGazette(n,actor,kind,objectId,title,summary,sourceSeal,visibility)
+  local id=nextId(n.gazetteCounters,"NC-GAZ")
+  local row={
+    id=id,kind=kind,objectId=objectId,title=title,summary=summary or "",
+    sourceSeal=sourceSeal or "",visibility=visibility or "internal",
+    publishedAt=common.now(),publishedBy=identity(actor)
+  }
+  row.seal=seal("NC-GAZ",{row.id,row.kind,row.objectId,row.title,row.summary,row.sourceSeal,row.visibility,row.publishedAt,row.publishedBy})
+  n.gazette[id]=row
+  return row
+end
+
+local function listGazette(n,p,state,actor)
+  p=p or {}
+  local q=common.trim(p.query)
+  local kind=common.trim(p.kind)
+  local visibility=common.trim(p.visibility)
+  local out={}
+  for _,row in pairs(n.gazette or {}) do
+    local hit=(q=="" or common.contains(row.id,q) or common.contains(row.objectId,q) or
+      common.contains(row.title,q) or common.contains(row.summary,q) or common.contains(row.kind,q))
+    if hit and (kind=="" or row.kind==kind) and
+       (visibility=="" or row.visibility==visibility) and
+       gazetteVisibilityAllowed(state,actor,row) then
+      out[#out+1]=copy(row)
+    end
+  end
+  table.sort(out,function(a,b) return tostring(a.id)>tostring(b.id) end)
+  return out
 end
 
 local function nextCitizenId(n)
