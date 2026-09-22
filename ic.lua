@@ -9,6 +9,7 @@ local function help()
   print("")
   print("ic                         Ouvrir le bureau international")
   print("ic nc                      Ouvrir l'intranet national North Coalition")
+  print("ic nc-elections            Elections Presidence / Conseil")
   print("ic nc-display              Tableau national LIVE sur Monitor")
   print("ic nc-verify <SCEAU>       Verifier un sceau officiel North Coalition")
   print("ic server                  Lancer le serveur de stockage")
@@ -48,6 +49,7 @@ if cmd=="setup" then
 end
 if cmd=="server" then dofile(ROOT.."/server.lua").run();return end
 if cmd=="nc" or cmd=="national" then dofile(ROOT.."/national_client.lua").run();return end
+if cmd=="nc-elections" then dofile(ROOT.."/national_democracy_client.lua").run();return end
 if cmd=="nc-display" then dofile(ROOT.."/national_public.lua").run();return end
 if cmd=="nc-verify" then dofile(ROOT.."/national_client.lua").verify(args[2] or "");return end
 if cmd=="pair" then dofile(ROOT.."/server.lua").manualPair(args[2] or "viewer");return end
