@@ -1140,6 +1140,132 @@ local function manageCaseArticles(c)
   end
 end
 
+local function hearingsScreen(c)
+  while true do
+    local items={}
+    if allowed("caseWrite") then items[#items+1]={text="[+] Programmer une audience",id="new"} end
+    for _,h in ipairs(c.hearings or {}) do
+      items[#items+1]={
+        text=(h.id or "?").."  "..(h.scheduledFor or "-").."  "..(h.subject or "").."  ["..(h.status or "?").."]",
+        hearing=h
+      }
+    end
+    local p=menu("AUDIENCES "..c.id,items,#(c.hearings or {}).." audience(s)")
+    if not p then return end
+
+    if p.id=="new" then
+      local subject=prompt("Objet de l'audience")
+      local scheduledFor=prompt("Date / heure (texte libre)")
+      local location=prompt("Salle / lieu")
+      local notes=multi("NOTES D'AUDIENCE","")
+      local r,e=rpc("CASE_ADD_HEARING",{
+        id=c.id,subject=subject,scheduledFor=scheduledFor,location=location,notes=notes
+      })
+      message("AUDIENCE",r and "Audience enregistree." or e,r and palette.ok or palette.bad)
+      if r then c=r end
+
+    elseif p.hearing then
+      local h=p.hearing
+      local actions={
+        {text="Lire l'avis d'audience",id="read"},
+        {text="Imprimer l'avis",id="print"}
+      }
+      if allowed("caseWrite") then actions[#actions+1]={text="Changer le statut",id="status"} end
+      local a=menu(h.id.." - "..h.subject,actions,(h.scheduledFor or "").." / "..(h.status or ""))
+      if a and a.id=="read" then
+        textPage(c.id.." / "..h.id,{
+          {label="Objet",text=h.subject or ""},
+          {label="Date / heure",text=h.scheduledFor or ""},
+          {label="Lieu",text=h.location or ""},
+          {label="Statut",text=h.status or ""},
+          {label="Notes",text=h.notes or ""},
+          {label="Cree par",text=(h.createdBy or "").." / "..(h.createdAt or "")}
+        })
+      elseif a and a.id=="print" then
+        local ok,r=printer.hearingNotice(c,h)
+        message("IMPRESSION",ok and ("Avis imprime: "..r.." page(s).") or r,ok and palette.ok or palette.bad)
+      elseif a and a.id=="status" then
+        local st=menu("STATUT AUDIENCE",{
+          {text="Programmee",v="scheduled"},{text="Tenue",v="held"},
+          {text="Reportee",v="postponed"},{text="Annulee",v="cancelled"}
+        })
+        if st then
+          local r,e=rpc("CASE_SET_HEARING_STATUS",{id=c.id,hearingId=h.id,status=st.v})
+          message("AUDIENCE",r and ("Statut: "..st.v) or e,r and palette.ok or palette.bad)
+          if r then c=r end
+        end
+      end
+    end
+  end
+end
+
+local function ordersScreen(c)
+  while true do
+    local items={}
+    if allowed("orderWrite") then items[#items+1]={text="[+] Emettre une ordonnance / un mandat",id="new"} end
+    for _,o in ipairs(c.orders or {}) do
+      items[#items+1]={
+        text=(o.id or "?").."  "..(o.orderType or "order").."  "..(o.subject or "").."  ["..(o.status or "?").."]",
+        order=o
+      }
+    end
+    local p=menu("ORDONNANCES "..c.id,items,#(c.orders or {}).." acte(s)")
+    if not p then return end
+
+    if p.id=="new" then
+      local typ=menu("TYPE D'ACTE",{
+        {text="Ordonnance judiciaire",v="order"},
+        {text="Mandat",v="warrant"},
+        {text="Mesure provisoire",v="interim"},
+        {text="Convocation",v="summons"},
+        {text="Preservation de preuves",v="evidence_preservation"}
+      })
+      if typ then
+        local subject=prompt("Objet")
+        local expiresAt=prompt("Expiration / duree (optionnel)")
+        local body=multi("CONTENU DE L'ORDONNANCE","")
+        local r,e=rpc("CASE_ADD_ORDER",{
+          id=c.id,orderType=typ.v,subject=subject,expiresAt=expiresAt,body=body
+        })
+        message("ORDONNANCE",r and "Acte judiciaire enregistre." or e,r and palette.ok or palette.bad)
+        if r then c=r end
+      end
+
+    elseif p.order then
+      local o=p.order
+      local actions={
+        {text="Lire l'acte",id="read"},
+        {text="Imprimer l'acte",id="print"}
+      }
+      if allowed("orderWrite") then actions[#actions+1]={text="Changer le statut",id="status"} end
+      local a=menu(o.id.." - "..o.subject,actions,(o.orderType or "").." / "..(o.status or ""))
+      if a and a.id=="read" then
+        textPage(c.id.." / "..o.id,{
+          {label="Type",text=o.orderType or ""},
+          {label="Objet",text=o.subject or ""},
+          {label="Contenu",text=o.body or ""},
+          {label="Statut",text=o.status or ""},
+          {label="Expiration",text=o.expiresAt or ""},
+          {label="Emis par",text=(o.createdBy or "").." / "..(o.createdAt or "")}
+        })
+      elseif a and a.id=="print" then
+        local ok,r=printer.order(c,o)
+        message("IMPRESSION",ok and ("Acte imprime: "..r.." page(s).") or r,ok and palette.ok or palette.bad)
+      elseif a and a.id=="status" then
+        local st=menu("STATUT DE L'ACTE",{
+          {text="Actif",v="active"},{text="Execute",v="executed"},
+          {text="Revoque",v="revoked"},{text="Expire",v="expired"}
+        })
+        if st then
+          local r,e=rpc("CASE_SET_ORDER_STATUS",{id=c.id,orderId=o.id,status=st.v})
+          message("ORDONNANCE",r and ("Statut: "..st.v) or e,r and palette.ok or palette.bad)
+          if r then c=r end
+        end
+      end
+    end
+  end
+end
+
 local function caseDetails(id)
   while true do
     local c,err=rpc("CASE_GET",{id=id})
@@ -1149,10 +1275,15 @@ local function caseDetails(id)
     c.citedArticles=c.citedArticles or {}
     c.judgments=c.judgments or {}
     c.timeline=c.timeline or {}
+    c.hearings=c.hearings or {}
+    c.orders=c.orders or {}
+    c.visibility=c.visibility or "restricted"
 
     local actions={
       {text="Lire le dossier complet",id="read"},
       {text="Voir la chronologie du dossier",id="timeline"},
+      {text="Audiences ("..#c.hearings..")",id="hearings"},
+      {text="Ordonnances / mandats ("..#c.orders..")",id="orders"},
       {text="Consulter les jugements ("..#c.judgments..")",id="judgments"},
       {text="Imprimer le dossier complet",id="print"},
       {text="Imprimer la chronologie",id="printtimeline"}
@@ -1164,6 +1295,7 @@ local function caseDetails(id)
       actions[#actions+1]={text="Gerer les articles cites / panier juridique",id="articles"}
       actions[#actions+1]={text="Modifier le contexte",id="summary"}
       actions[#actions+1]={text="Changer le statut",id="status"}
+      actions[#actions+1]={text="Changer la visibilite",id="visibility"}
     end
     if allowed("judgment") then
       actions[#actions+1]={text="Rediger un nouveau jugement",id="judgment"}
@@ -1172,7 +1304,7 @@ local function caseDetails(id)
     local a=menu(
       c.id.." - "..c.title,
       actions,
-      "Statut "..c.status.." | "..#c.facts.." faits | "..#c.evidence.." preuves | "..#c.citedArticles.." articles | "..#c.judgments.." jug."
+      "["..c.visibility.."] "..c.status.." | "..#c.facts.." faits | "..#c.evidence.." preuves | "..#c.hearings.." aud. | "..#c.judgments.." jug."
     )
     if not a then return end
 
@@ -1191,18 +1323,25 @@ local function caseDetails(id)
       end
       textPage(c.id,{
         {label="Affaire",text=c.title},
-        {label="Statut",text=c.status},
+        {label="Statut",text=c.status.." / visibilite "..c.visibility},
         {label="Parties",text="Demandeur: "..(c.complainant or "-").."\nMis en cause: "..(c.accused or "-")},
         {label="Contexte",text=c.summary or ""},
         {label="Faits",text=table.concat(facts,"\n")},
         {label="Preuves",text=table.concat(ev,"\n")},
         {label="Articles cites",text=table.concat(c.citedArticles,"\n")},
         {label="Jugements",text=table.concat(js,"\n\n")},
+        {label="Audiences / actes",text=tostring(#c.hearings).." audience(s) / "..tostring(#c.orders).." ordonnance(s)"},
         {label="Derniere mise a jour",text=c.updatedAt or c.createdAt or ""}
       })
 
     elseif a.id=="timeline" then
       caseTimelineScreen(c)
+
+    elseif a.id=="hearings" then
+      hearingsScreen(c)
+
+    elseif a.id=="orders" then
+      ordersScreen(c)
 
     elseif a.id=="judgments" then
       judgmentsScreen(c)
@@ -1250,6 +1389,17 @@ local function caseDetails(id)
       if s then
         local r,e=rpc("CASE_SET_STATUS",{id=c.id,status=s.v})
         message("STATUT",r and ("Statut: "..r.status) or e,r and palette.ok or palette.bad)
+      end
+
+    elseif a.id=="visibility" then
+      local v=menu("VISIBILITE DU DOSSIER",{
+        {text="Public - visible aux lecteurs et affichages publics",v="public"},
+        {text="Restreint - greffe, juges et administration",v="restricted"},
+        {text="Scelle - reserve au circuit judiciaire",v="sealed"}
+      },"Actuel: "..c.visibility)
+      if v then
+        local r,e=rpc("CASE_SET_VISIBILITY",{id=c.id,visibility=v.v})
+        message("VISIBILITE",r and ("Dossier: "..r.visibility) or e,r and palette.ok or palette.bad)
       end
 
     elseif a.id=="judgment" then
@@ -1326,8 +1476,13 @@ local function casesScreen(query,status)
       local complainant=prompt("Demandeur / plaignant")
       local accused=prompt("Mis en cause")
       local summary=multi("CONTEXTE INITIAL","")
+      local visibilityChoice=menu("VISIBILITE INITIALE",{
+        {text="Restreint (recommande pendant l'enquete)",v="restricted"},
+        {text="Public",v="public"}
+      })
       local r,e=rpc("CASE_CREATE",{
-        title=title,complainant=complainant,accused=accused,summary=summary
+        title=title,complainant=complainant,accused=accused,summary=summary,
+        visibility=visibilityChoice and visibilityChoice.v or "restricted"
       })
       message("DOSSIER",r and ("Dossier cree: "..r.id) or e,r and palette.ok or palette.bad)
 
