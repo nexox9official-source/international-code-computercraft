@@ -578,6 +578,99 @@ local function makeMissionId(state)
   return string.format("MISSION-%s-%04d",year,n)
 end
 
+local function canViewIncident(actor,incident)
+  if not actor or not incident then return false end
+  if actor.role=="admin" or actor.role=="writer" or actor.role=="judge" or actor.role=="clerk" then return true end
+  if actor.stateId then
+    for _,id in ipairs(incident.involvedStates or {}) do
+      if id==actor.stateId then return true end
+    end
+    if incident.reportingStateId==actor.stateId then return true end
+  end
+  return (incident.visibility or "public")=="public"
+end
+
+local function incidentFullAccess(actor,incident)
+  if not actor or not incident then return false end
+  if actor.role=="admin" or actor.role=="writer" or actor.role=="judge" or actor.role=="clerk" then return true end
+  if actor.stateId then
+    if incident.reportingStateId==actor.stateId then return true end
+    for _,id in ipairs(incident.involvedStates or {}) do
+      if id==actor.stateId then return true end
+    end
+  end
+  return false
+end
+
+local function incidentForActor(actor,incident)
+  local copy=common.deepcopy(incident)
+  if not incidentFullAccess(actor,incident) then
+    local reports={}
+    for _,r in ipairs(copy.reports or {}) do
+      if r.classification~="restricted" then reports[#reports+1]=r end
+    end
+    copy.reports=reports
+    if copy.visibility=="restricted" then
+      copy.details=""
+    end
+  end
+  return copy
+end
+
+local function listIncidents(state,payload,actor)
+  payload=payload or {}
+  local q=common.trim(payload.query)
+  local status=common.trim(payload.status)
+  local incidentType=common.trim(payload.incidentType)
+  local severity=common.trim(payload.severity)
+  local stateId=common.trim(payload.stateId):upper()
+  local dimension=common.trim(payload.dimension)
+  local out={}
+  for _,incident in pairs(state.incidents or {}) do
+    local hit=(q=="" or common.contains(incident.id,q) or common.contains(incident.title,q) or
+      common.contains(incident.summary,q) or common.contains(incident.details,q) or common.contains(incident.area,q))
+    local statusHit=(status=="" or incident.status==status)
+    local typeHit=(incidentType=="" or incident.incidentType==incidentType)
+    local severityHit=(severity=="" or incident.severity==severity)
+    local dimensionHit=(dimension=="" or ((incident.position or {}).dimension or "")==dimension)
+    local stateHit=(stateId=="")
+    if not stateHit then
+      if incident.reportingStateId==stateId then stateHit=true end
+      for _,id in ipairs(incident.involvedStates or {}) do if id==stateId then stateHit=true break end end
+    end
+    if hit and statusHit and typeHit and severityHit and dimensionHit and stateHit and canViewIncident(actor,incident) then
+      out[#out+1]=incidentForActor(actor,incident)
+    end
+  end
+  table.sort(out,function(a,b)
+    local rank={critical=4,serious=3,minor=2,info=1}
+    local ra=rank[a.severity] or 0
+    local rb=rank[b.severity] or 0
+    if ra~=rb then return ra>rb end
+    return tostring(a.id)>tostring(b.id)
+  end)
+  return out
+end
+
+local function makeIncidentId(state)
+  local year=os.date and os.date("%Y") or "0000"
+  local n=(state.incidentCounters[year] or 0)+1
+  state.incidentCounters[year]=n
+  return string.format("INC-%s-%04d",year,n)
+end
+
+local function incidentPosition(payload,current)
+  current=current or {}
+  local dimension=payload.dimension~=nil and common.trim(payload.dimension) or (current.dimension or "minecraft:overworld")
+  if dimension=="" then dimension="minecraft:overworld" end
+  local x=payload.x~=nil and tonumber(payload.x) or current.x
+  local y=payload.y~=nil and tonumber(payload.y) or current.y
+  local z=payload.z~=nil and tonumber(payload.z) or current.z
+  local radius=payload.radius~=nil and tonumber(payload.radius) or current.radius
+  if radius and radius<0 then radius=0 end
+  return {dimension=dimension,x=x,y=y,z=z,radius=radius}
+end
+
 local function listTreaties(state,payload)
   payload=payload or {}
   local q=common.trim(payload.query)
