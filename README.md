@@ -4,7 +4,7 @@ Système distribué pour **CC:Tweaked / ComputerCraft** destiné au Code interna
 
 Le projet ne contient aucune référence au nom du serveur Minecraft. `North Coalition` est conservé uniquement comme État proposant dans le corpus juridique initial.
 
-## Ce que fait la v0.9
+## Ce que fait la v0.10
 
 - un PC désigné comme **serveur central de stockage** ;
 - des terminaux appairés avec des rôles (`writer`, `clerk`, `judge`, `delegate`, `viewer`, `admin`) ;
@@ -76,7 +76,7 @@ wget run https://raw.githubusercontent.com/nexox9official-source/international-c
 wget run https://raw.githubusercontent.com/nexox9official-source/international-code-computercraft/main/install.lua admin
 ```
 
-## Navigation v0.9
+## Navigation v0.10
 
 Le Code n'affiche plus simplement une liste brute de 500 articles. Le terminal propose maintenant :
 
@@ -297,6 +297,101 @@ ic session SESSION-2026-0001
 
 Le Monitor affiche le statut, la salle, le nombre d'États présents et l'avancement de l'ordre du jour en temps réel.
 
+## Centre de situation et incidents v0.10
+
+Le réseau possède maintenant un **centre de situation international** relié aux missions, aux décisions de l'Union, à la Cour et au registre d'exécution.
+
+Les incidents utilisent des identifiants permanents :
+
+```text
+INC-2026-0001
+INC-2026-0002
+...
+```
+
+Types prévus :
+
+- incident frontalier ;
+- violation de cessez-le-feu ;
+- incident diplomatique ;
+- incident humanitaire ;
+- affrontement armé RP ;
+- incident cyber ;
+- contamination / zone dangereuse ;
+- infrastructure critique ;
+- catastrophe naturelle ;
+- contrebande / trafic ;
+- autre incident.
+
+Chaque incident conserve sa gravité (`info`, `minor`, `serious`, `critical`), son statut, son résumé, les États impliqués, son État déclarant, sa visibilité et ses liens éventuels vers une mission, une résolution, un traité, un dossier judiciaire ou une mesure d'exécution.
+
+### Coordonnées Minecraft
+
+Une mission ou un incident peut maintenant stocker une position réelle du monde :
+
+```text
+dimension: minecraft:overworld
+X: 1240
+Y: 72
+Z: -830
+rayon: 250
+```
+
+Les rapports de mission et les rapports terrain peuvent également enregistrer leur propre position. Cela permet de suivre un événement qui se déplace sans réécrire sa position initiale.
+
+### SITREP terrain
+
+Un incident peut recevoir plusieurs rapports `SITREP-...`. Chaque rapport contient :
+
+- auteur et rôle ;
+- État d'origine éventuel ;
+- texte ;
+- classification publique ou restreinte ;
+- position Minecraft ;
+- date ;
+- sceau `UNS-SITREP-...`.
+
+Les changements de statut d'un incident sont aussi archivés et scellés. Une alerte critique publique génère une notification générale, tandis que les États directement concernés reçoivent toujours leur propre notification.
+
+### Grand Monitor de situation
+
+La commande :
+
+```text
+ic situation
+```
+
+ouvre un tableau de situation rotatif avec :
+
+1. synthèse internationale ;
+2. **carte X/Z dynamique** des incidents et missions ;
+3. incidents actifs ;
+4. missions actives ;
+5. sanctions / exécution ;
+6. résolutions et sessions en cours.
+
+Par défaut la carte utilise `minecraft:overworld`. Une autre dimension peut être choisie :
+
+```text
+ic situation minecraft:the_nether
+```
+
+Légende de la carte :
+
+```text
+I = incident
+M = mission
+* = plusieurs éléments au même emplacement
+```
+
+Un incident précis peut aussi être affiché en LIVE :
+
+```text
+ic incident INC-2026-0001
+```
+
+Les missions et incidents peuvent désormais être ajoutés directement à l'ordre du jour d'une `SESSION-...`.
+
 ## Missions internationales v0.9
 
 Le système sait maintenant gérer des **missions internationales** sous forme de dossiers permanents `MISSION-AAAA-XXXX`.
@@ -488,6 +583,9 @@ ic assembly BILL-2026-0001
 ic resolution RES-2026-0001
 ic session SESSION-2026-0001
 ic mission MISSION-2026-0001
+ic incident INC-2026-0001
+ic situation
+ic situation minecraft:the_nether
 ic treaty TREATY-2026-0001
 ic verify CIU-JUG-XXXXXXXX
 ic inbox
@@ -521,9 +619,9 @@ Le serveur doit être arrêté avant de mettre à jour son code. Relancez ensuit
 
 | Rôle | Droits principaux |
 |---|---|
-| `delegate` | consultation + vote officiel sur les lois/résolutions + signature des traités pour l'État rattaché |
+| `delegate` | consultation + votes/signatures + présence en session + déclaration/SITREP d'incidents impliquant son État |
 | `viewer` | lecture du Code, des États, propositions et dossiers publics |
-| `writer` | lois, propositions, ratifications, résolutions, traités, scrutins et promulgation + audit |
+| `writer` | lois, résolutions, sessions, missions, incidents, traités, scrutins, promulgation et suivi institutionnel + audit |
 | `clerk` | dossiers, faits, preuves, audiences, procès-verbaux, appels et suivi d'exécution + audit |
 | `judge` | greffe + jugements + ordonnances + appels + sanctions/exécution + audit |
 | `admin` | toutes les opérations |
