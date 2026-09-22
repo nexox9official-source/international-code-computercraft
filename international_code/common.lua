@@ -43,11 +43,63 @@ function M.loadTable(path, fallback)
   return fallback
 end
 
+local function pruneDirectory(path,keep)
+  if not fs.exists(path) or not fs.isDir(path) then return 0 end
+  local files=fs.list(path)
+  table.sort(files)
+  local freed=0
+  while #files>(keep or 0) do
+    local name=table.remove(files,1)
+    local full=path.."/"..name
+    if fs.exists(full) and not fs.isDir(full) then freed=freed+(fs.getSize(full) or 0) end
+    fs.delete(full)
+  end
+  return freed
+end
+
+function M.pruneBackups(keep)
+  M.ensureLayout()
+  return pruneDirectory(M.BACKUPS,keep or 2)
+end
+
 function M.saveTableAtomic(path, value)
-  local tmp = path .. ".tmp"
-  M.writeAll(tmp, textutils.serialize(value, { compact = false }))
-  if fs.exists(path) then fs.delete(path) end
-  fs.move(tmp, path)
+  local data=textutils.serialize(value,{compact=true})
+  local tmp=path..".tmp"
+  if fs.exists(tmp) then fs.delete(tmp) end
+
+  -- Les vieux backups sont la premiere source de saturation sur un serveur.
+  if path==M.STATE then M.pruneBackups(2) end
+
+  local needed=#data+4096
+  local free=fs.getFreeSpace("/")
+  local oldSize=(fs.exists(path) and not fs.isDir(path)) and (fs.getSize(path) or 0) or 0
+
+  -- Mode normal: on garde l'ancienne copie jusqu'a la fin de l'ecriture.
+  if type(free)=="number" and free>=needed then
+    local h=assert(fs.open(tmp,"w"))
+    h.write(data);h.close()
+    if fs.exists(path) then fs.delete(path) end
+    fs.move(tmp,path)
+    return true
+  end
+
+  -- Mode faible espace: impossible de garder deux copies completes.
+  -- On supprime l'ancienne uniquement apres avoir serialise la nouvelle en RAM.
+  -- Cela evite le crash "out of space" sur les disques ComputerCraft limites.
+  if path==M.STATE and fs.exists(path) then
+    if type(free)=="number" and (free+oldSize)<needed then
+      error("Espace disque insuffisant meme apres nettoyage. Libre="..tostring(free)..
+        " / etat="..tostring(oldSize).." / requis="..tostring(needed),0)
+    end
+    fs.delete(path)
+    local h=assert(fs.open(path,"w"))
+    h.write(data);h.close()
+    return true
+  end
+
+  local h=assert(fs.open(path,"w"))
+  h.write(data);h.close()
+  return true
 end
 
 function M.loadConfig()
