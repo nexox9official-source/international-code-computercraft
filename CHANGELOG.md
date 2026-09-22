@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.17.0
+
+### Guichet citoyen
+- registre `NC-REQ-AAAA-XXXX` ;
+- demandes de licence, d'immatriculation et demandes administratives libres ;
+- dépôt réservé à un `NC-CIT` citoyen actif ;
+- routage automatique vers le ministère compétent ;
+- vue citoyen limitée à ses propres dossiers ;
+- vue ministre limitée à son portefeuille ;
+- supervision Présidence / administration technique.
+
+### Instruction
+- états submitted / in_review / approved / rejected / withdrawn ;
+- historique append-only et sceaux à chaque étape ;
+- prise en instruction par l'administration compétente ;
+- retrait possible par le demandeur avant décision ;
+- décision motivée obligatoire.
+
+### Automatisation
+- approbation d'une demande de licence -> création automatique de `NC-LIC` ;
+- approbation d'une demande d'organisation -> création automatique de `NC-ORG` ;
+- lien permanent `resultObjectId` ;
+- notifications demandeur + administration compétente ;
+- impression de la demande et de la décision ;
+- compteur de demandes en cours dans le tableau national.
+
 ## 0.16.0
 
 ### Organisations / économie
