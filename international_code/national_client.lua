@@ -2707,8 +2707,8 @@ local function auditScreen()
 end
 
 
-local function portalSearchScreen(info)
-  local query=""
+local function portalSearchScreen(info,initialQuery)
+  local query=common.trim(initialQuery or "")
   while true do
     if query=="" then
       query=prompt("Recherche nationale: loi, ministere, acte, dossier")
@@ -2987,6 +2987,15 @@ function C.run()
     elseif p.id=="economy" then portalEconomyHub(info,dash)
     elseif p.id=="internal" then portalInternalHub(info,dash) end
   end
+end
+
+function C.search(initialQuery)
+  cfg=common.loadConfig()
+  if not cfg or cfg.role=="server" then error("Terminal client requis.",0) end
+  common.openModems()
+  local info,err=rpc("NC_INFO",{})
+  if not info then error(err or "Acces national refuse.",0) end
+  portalSearchScreen(info,initialQuery or "")
 end
 
 function C.verify(sealValue)
