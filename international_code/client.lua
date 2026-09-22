@@ -565,6 +565,16 @@ local function collectBooks(laws)
   return order
 end
 
+local function bookLabel(book)
+  if not book then return "SANS CATEGORIE" end
+  local name=book.name or tostring(book)
+  local prefix,rest=name:match("^(LIVRE%s+[^%-]+)%s*%-%s*(.*)$")
+  if not prefix then return name end
+  local range=""
+  if book.first and book.last then range=" ["..tostring(book.first).."-"..tostring(book.last).."]" end
+  return prefix..range.." "..rest
+end
+
 local function chooseLawFromList(title,laws,opts)
   opts=opts or {}
   if not laws or #laws==0 then
@@ -625,7 +635,7 @@ referenceBrowser=function(opts)
       for _,book in ipairs(books) do
         total=total+(book.count or 0)
         items[#items+1]={
-          text=book.name.."  ("..tostring(book.count or 0)..")",
+          text=bookLabel(book).."  ("..tostring(book.count or 0)..")",
           book=book
         }
       end
@@ -751,7 +761,7 @@ lawBasketBrowser=function(initial)
       else
         local bookItems={}
         for _,b in ipairs(books) do
-          bookItems[#bookItems+1]={text=b.name.." ("..tostring(b.count or 0)..")",book=b}
+          bookItems[#bookItems+1]={text=bookLabel(b).." ("..tostring(b.count or 0)..")",book=b}
         end
         local bp=menu("CHOISIR UN LIVRE",bookItems,"Ouvrez un Livre puis cochez plusieurs articles.")
         if bp and bp.book then
@@ -947,7 +957,7 @@ local function lawsScreen(query,status)
       local title=prompt("Titre")
       local books=rpc("LAW_BOOKS",{}) or {}
       local bookItems={}
-      for _,b in ipairs(books) do bookItems[#bookItems+1]={text=b.name.." ("..tostring(b.count or 0)..")",book=b.name} end
+      for _,b in ipairs(books) do bookItems[#bookItems+1]={text=bookLabel(b).." ("..tostring(b.count or 0)..")",book=b.name} end
       bookItems[#bookItems+1]={text="[NOUVELLE CATEGORIE]",book="__new"}
       local bp=menu("CATEGORIE / LIVRE",bookItems,"Choisissez le Livre de classement")
       local book=""
