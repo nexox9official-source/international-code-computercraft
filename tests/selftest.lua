@@ -23,7 +23,7 @@ end
 assert(total==500,"expected 500 seed articles, got "..total)
 for n=1,500 do assert(seen[n],"missing article "..n) end
 
-assert(common.VERSION=="0.16.0","unexpected application version: "..tostring(common.VERSION))
+assert(common.VERSION=="0.17.0","unexpected application version: "..tostring(common.VERSION))
 
 local function readSource(path)
   local h=assert(io.open(path,"r"))
@@ -82,6 +82,10 @@ assert(nationalServices:find('NC_LICENSE_ISSUE',1,true),"national license workfl
 assert(nationalServices:find('NC_FINE_ISSUE',1,true),"national fine workflow missing")
 assert(nationalServices:find('NC_FINE_CONTEST',1,true),"national fine contest workflow missing")
 assert(nationalServices:find('NC_RECORD_GET',1,true),"national citizen record synthesis missing")
+assert(nationalServices:find('NC_REQUEST_CREATE',1,true),"citizen administrative request workflow missing")
+assert(nationalServices:find('NC_REQUEST_START_REVIEW',1,true),"ministry request review missing")
+assert(nationalServices:find('NC_REQUEST_DECIDE',1,true),"administrative request decision missing")
+assert(nationalServices:find('NC%-REQ'),"administrative request identifiers/seals missing")
 assert(national:find('NC%-GAZ'),"official Gazette IDs/seals missing")
 assert(nationalClient:find('CODE NATIONAL / CATEGORIES / RECHERCHE',1,true),"national categorized code UI missing")
 assert(nationalClient:find('NOTIFICATIONS NATIONALES',1,true),"national notification center missing")
@@ -94,6 +98,7 @@ assert(nationalClient:find('ADMINISTRATION NATIONALE',1,true),"national administ
 assert(nationalClient:find('REGISTRE DES ORGANISATIONS',1,true),"organization UI missing")
 assert(nationalClient:find('LICENCES / AUTORISATIONS',1,true),"license UI missing")
 assert(nationalClient:find('AMENDES / SANCTIONS PECUNIAIRES',1,true),"fine UI missing")
+assert(nationalClient:find('GUICHET CITOYEN / DEMANDES',1,true),"citizen service desk UI missing")
 assert(nationalPrinter:find('function P.law',1,true),"national law printing missing")
 assert(nationalPrinter:find('function P.caseFile',1,true),"national case printing missing")
 assert(nationalPrinter:find('function P.judgment',1,true),"national judgment printing missing")
@@ -103,6 +108,7 @@ assert(nationalPrinter:find('function P.organization',1,true),"organization prin
 assert(nationalPrinter:find('function P.license',1,true),"license printing missing")
 assert(nationalPrinter:find('function P.fine',1,true),"fine printing missing")
 assert(nationalPrinter:find('function P.citizenRecord',1,true),"citizen record printing missing")
+assert(nationalPrinter:find('function P.request',1,true),"administrative request printing missing")
 assert(nationalPublic:find('JUSTICE NATIONALE',1,true),"national justice monitor missing")
 assert(nationalPublic:find('SESSIONS NATIONALES',1,true),"national session monitor missing")
 assert(nationalPublic:find('NC-GAZ / actes officiels scelles',1,true),"official Gazette monitor missing")
@@ -115,4 +121,4 @@ assert(nationalCorpus:find('"founding_phase_account": "NexoFr_"',1,true),"NexoFr
 local forbiddenServerName="Astra".."lium"
 assert(not nationalCorpus:find(forbiddenServerName,1,true),"forbidden server name leaked into national corpus")
 
-print("Self-test OK: 500 UNS articles + 400 NC articles + v0.16 regulated national administration intranet")
+print("Self-test OK: 500 UNS articles + 400 NC articles + v0.17 citizen service desk intranet")
