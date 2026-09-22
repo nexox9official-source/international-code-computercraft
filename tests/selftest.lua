@@ -23,7 +23,7 @@ end
 assert(total==500,"expected 500 seed articles, got "..total)
 for n=1,500 do assert(seen[n],"missing article "..n) end
 
-assert(common.VERSION=="0.14.0","unexpected application version: "..tostring(common.VERSION))
+assert(common.VERSION=="0.15.0","unexpected application version: "..tostring(common.VERSION))
 
 local function readSource(path)
   local h=assert(io.open(path,"r"))
@@ -73,17 +73,26 @@ assert(national:find('NC_CITIZEN_LINK_CLIENT',1,true),"citizen-terminal linking 
 assert(national:find('NC_SESSION_CREATE',1,true),"national sessions missing")
 assert(national:find('NC_SESSION_CHECKIN',1,true),"national session attendance missing")
 assert(national:find('NC_SESSION_CLOSE',1,true),"national session minutes missing")
+assert(national:find('NC_VERIFY_SEAL',1,true),"national seal verification missing")
+assert(national:find('NC_GAZETTE_LIST',1,true),"official Gazette listing missing")
+assert(national:find('NC_GAZETTE_GET',1,true),"official Gazette retrieval missing")
+assert(national:find('NC%-GAZ'),"official Gazette IDs/seals missing")
 assert(nationalClient:find('CODE NATIONAL / CATEGORIES / RECHERCHE',1,true),"national categorized code UI missing")
 assert(nationalClient:find('NOTIFICATIONS NATIONALES',1,true),"national notification center missing")
 assert(nationalClient:find('JUSTICE / DOSSIERS NATIONAUX',1,true),"national justice UI missing")
 assert(nationalClient:find('REGISTRE CIVIL / CITOYENS',1,true),"national citizen registry UI missing")
 assert(nationalClient:find('CALENDRIER / SESSIONS NATIONALES',1,true),"national sessions UI missing")
+assert(nationalClient:find('VERIFIER UN SCEAU NATIONAL',1,true),"national seal verification UI missing")
+assert(nationalClient:find('JOURNAL OFFICIEL NORTH COALITION',1,true),"official Gazette UI missing")
 assert(nationalPrinter:find('function P.law',1,true),"national law printing missing")
 assert(nationalPrinter:find('function P.caseFile',1,true),"national case printing missing")
 assert(nationalPrinter:find('function P.judgment',1,true),"national judgment printing missing")
 assert(nationalPrinter:find('function P.session',1,true),"national session printing missing")
+assert(nationalPrinter:find('function P.gazette',1,true),"official Gazette printing missing")
 assert(nationalPublic:find('JUSTICE NATIONALE',1,true),"national justice monitor missing")
 assert(nationalPublic:find('SESSIONS NATIONALES',1,true),"national session monitor missing")
+assert(nationalPublic:find('NC-GAZ / actes officiels scelles',1,true),"official Gazette monitor missing")
+assert(cli:find('cmd=="nc%-verify"'),"national seal verification CLI missing")
 
 local ncCount=0
 for _ in nationalCorpus:gmatch('"id"%s*:%s*"NC%-ART%-%d%d%d"') do ncCount=ncCount+1 end
@@ -91,4 +100,4 @@ assert(ncCount==400,"expected 400 North Coalition articles, got "..ncCount)
 assert(nationalCorpus:find('"founding_phase_account": "NexoFr_"',1,true),"NexoFr_ founding account missing")
 assert(not nationalCorpus:find("Astralium",1,true),"forbidden server name leaked into national corpus")
 
-print("Self-test OK: 500 UNS articles + 400 NC articles + v0.14 national state intranet")
+print("Self-test OK: 500 UNS articles + 400 NC articles + v0.15 regulated national state intranet")
