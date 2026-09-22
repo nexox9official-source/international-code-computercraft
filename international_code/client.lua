@@ -3866,6 +3866,304 @@ local function situationDeskScreen()
   end
 end
 
+local function conflictTypeLabel(v)
+  local labels={
+    international="Conflit international",civil="Conflit interne / civil",
+    border="Conflit frontalier",occupation="Occupation / controle territorial",
+    insurgency="Insurrection / conflit asymetrique",other="Autre conflit"
+  }
+  return labels[v] or tostring(v or "")
+end
+
+local function chooseConflictType(current)
+  local p=menu("TYPE DE CONFLIT",{
+    {text="Conflit international",v="international"},
+    {text="Conflit interne / civil",v="civil"},
+    {text="Conflit frontalier",v="border"},
+    {text="Occupation / controle territorial",v="occupation"},
+    {text="Insurrection / conflit asymetrique",v="insurgency"},
+    {text="Autre",v="other"}
+  },"Actuel: "..conflictTypeLabel(current))
+  return p and p.v or current or "other"
+end
+
+local function conflictStatusHistoryText(conflict)
+  local rows={}
+  for _,row in ipairs(conflict.statusHistory or {}) do
+    rows[#rows+1]=(row.at or "").." / "..(row.from or "?").." -> "..(row.to or "?")..
+      ((row.ceasefireTreatyId and row.ceasefireTreatyId~="") and (" / "..row.ceasefireTreatyId) or "")..
+      ((row.reason and row.reason~="") and ("\n"..row.reason) or "")..
+      "\nSceau: "..(row.seal or "-")
+  end
+  return #rows>0 and table.concat(rows,"\n\n") or "Aucun changement de statut."
+end
+
+local function conflictZonesText(conflict)
+  local rows={}
+  for _,zone in ipairs(conflict.zones or {}) do
+    rows[#rows+1]=(zone.id or "?").." ["..(zone.status or "?").."] "..(zone.name or "")..
+      "\n"..positionText(zone.position)..
+      ((zone.description and zone.description~="") and ("\n"..zone.description) or "")..
+      "\nSceau: "..(zone.seal or "-")
+  end
+  return #rows>0 and table.concat(rows,"\n\n") or "Aucune zone enregistree."
+end
+
+local function conflictZonesScreen(conflict)
+  while true do
+    local fresh,err=rpc("CONFLICT_GET",{id=conflict.id})
+    if not fresh then message("CONFLIT",err,palette.bad);return end
+    conflict=fresh
+    conflict.zones=conflict.zones or {}
+
+    local items={}
+    if allowed("conflictWrite") and conflict.status~="ended" then
+      items[#items+1]={text="[+] Ajouter une zone geolocalisee",id="new"}
+    end
+    for _,zone in ipairs(conflict.zones) do
+      items[#items+1]={
+        text=(zone.id or "?").." ["..(zone.status or "?").."] "..(zone.name or "")..
+          " / "..positionText(zone.position),
+        zone=zone
+      }
+    end
+
+    local p=menu("ZONES / "..conflict.id,items,#conflict.zones.." zone(s)")
+    if not p then return end
+
+    if p.id=="new" then
+      local name=prompt("Nom de la zone")
+      local description=multi("DESCRIPTION / ROLE DE LA ZONE","")
+      local pos=askPosition({})
+      local out,e=rpc("CONFLICT_ADD_ZONE",{
+        id=conflict.id,name=name,description=description,
+        dimension=pos.dimension,x=pos.x,y=pos.y,z=pos.z,radius=pos.radius
+      })
+      message("ZONE",out and "Zone ajoutee et scellee." or e,out and palette.ok or palette.bad)
+
+    elseif p.zone then
+      local zone=p.zone
+      local actions={{text="Lire la fiche de zone",id="read"}}
+      if allowed("conflictWrite") and conflict.status~="ended" then
+        actions[#actions+1]={text="Modifier / nouvelle version",id="edit"}
+      end
+      local a=menu(zone.id.." - "..zone.name,actions,
+        "["..(zone.status or "?").."] v"..tostring(zone.version or 1))
+      if a and a.id=="read" then
+        local hist={}
+        for _,old in ipairs(zone.history or {}) do
+          hist[#hist+1]="v"..tostring(old.version or "?").." ["..(old.status or "?").."] "..(old.archivedAt or "")..
+            "\n"..positionText(old.position).."\nSceau: "..(old.seal or "-")
+        end
+        textPage(zone.id,{
+          {label="Zone",text=zone.name or ""},
+          {label="Statut / version",text=(zone.status or "").." / v"..tostring(zone.version or 1)},
+          {label="Description",text=zone.description or ""},
+          {label="Coordonnees",text=positionText(zone.position)},
+          {label="Sceau actuel",text=zone.seal or "-"},
+          {label="Historique",text=#hist>0 and table.concat(hist,"\n\n") or "Aucune ancienne version."}
+        })
+      elseif a and a.id=="edit" then
+        local name=prompt("Nom",zone.name or "")
+        local st=menu("STATUT DE ZONE",{
+          {text="Active",v="active"},{text="Contestee",v="contested"},
+          {text="Demilitarisee",v="demilitarized"},{text="Humanitaire / protegee",v="humanitarian"},
+          {text="Fermee / archivee",v="closed"}
+        },"Actuel: "..(zone.status or "active"))
+        local description=multi("DESCRIPTION",zone.description or "")
+        local pos=askPosition(zone.position)
+        local out,e=rpc("CONFLICT_UPDATE_ZONE",{
+          id=conflict.id,zoneId=zone.id,name=name,status=st and st.v or zone.status,
+          description=description,dimension=pos.dimension,x=pos.x,y=pos.y,z=pos.z,radius=pos.radius
+        })
+        message("ZONE",out and "Nouvelle version de zone enregistree." or e,out and palette.ok or palette.bad)
+      end
+    end
+  end
+end
+
+conflictDetails=function(id)
+  while true do
+    local conflict,err=rpc("CONFLICT_GET",{id=id})
+    if not conflict then message("CONFLIT",err,palette.bad);return end
+    conflict.involvedStates=conflict.involvedStates or {}
+    conflict.zones=conflict.zones or {}
+    conflict.statusHistory=conflict.statusHistory or {}
+
+    local actions={
+      {text="Lire la fiche complete",id="read"},
+      {text="Zones / fronts / secteurs ("..#conflict.zones..")",id="zones"},
+      {text="Incidents lies",id="incidents"},
+      {text="Missions liees",id="missions"},
+      {text="Imprimer le dossier de conflit",id="print"}
+    }
+    if conflict.resolutionId and conflict.resolutionId~="" then actions[#actions+1]={text="Ouvrir la resolution liee",id="resolution"} end
+    if conflict.treatyId and conflict.treatyId~="" then actions[#actions+1]={text="Ouvrir le traite lie",id="treaty"} end
+    if conflict.caseId and conflict.caseId~="" then actions[#actions+1]={text="Ouvrir le dossier judiciaire",id="case"} end
+
+    if allowed("conflictWrite") and conflict.status~="ended" then
+      actions[#actions+1]={text="Modifier la fiche",id="edit"}
+      actions[#actions+1]={text="Changer le statut",id="status"}
+    end
+
+    local a=menu(conflict.id.." - "..conflict.title,actions,
+      "["..conflict.status.."] "..conflictTypeLabel(conflict.conflictType).." | "..#conflict.involvedStates.." Etat(s)")
+    if not a then return end
+
+    if a.id=="read" then
+      textPage(conflict.id,{
+        {label="Conflit",text=conflict.title or ""},
+        {label="Type / statut",text=conflictTypeLabel(conflict.conflictType).." / "..(conflict.status or "")},
+        {label="Resume",text=conflict.summary or ""},
+        {label="Parties / groupes",text=conflict.partiesText or ""},
+        {label="Etats impliques",text=#conflict.involvedStates>0 and table.concat(conflict.involvedStates,"\n") or "Aucun"},
+        {label="Periode",text=(conflict.startAt or "-").." -> "..(conflict.endAt or "-")},
+        {label="Sources",text="Resolution: "..(conflict.resolutionId or "-")..
+          "\nTraite: "..(conflict.treatyId or "-")..
+          "\nCessez-le-feu: "..(conflict.ceasefireTreatyId or "-")..
+          "\nDossier: "..(conflict.caseId or "-")},
+        {label="Zones",text=conflictZonesText(conflict)},
+        {label="Visibilite",text=conflict.visibility or "public"},
+        {label="Sceau initial",text=conflict.seal or "-"},
+        {label="Historique de statut",text=conflictStatusHistoryText(conflict)}
+      })
+
+    elseif a.id=="zones" then
+      conflictZonesScreen(conflict)
+
+    elseif a.id=="incidents" then
+      local rows,e=rpc("INCIDENT_LIST",{conflictId=conflict.id})
+      if not rows then message("INCIDENTS",e,palette.bad)
+      elseif #rows==0 then message("INCIDENTS","Aucun incident lie.",palette.ok)
+      else
+        local items={}
+        for _,x in ipairs(rows) do items[#items+1]={text=x.id.." ["..string.upper(x.severity or "?").."] "..x.title,incident=x} end
+        local p=menu("INCIDENTS / "..conflict.id,items,#rows.." incident(s)")
+        if p then incidentDetails(p.incident.id) end
+      end
+
+    elseif a.id=="missions" then
+      local rows,e=rpc("MISSION_LIST",{conflictId=conflict.id})
+      if not rows then message("MISSIONS",e,palette.bad)
+      elseif #rows==0 then message("MISSIONS","Aucune mission liee.",palette.ok)
+      else
+        local items={}
+        for _,x in ipairs(rows) do items[#items+1]={text=x.id.." "..x.title.." ["..x.status.."]",mission=x} end
+        local p=menu("MISSIONS / "..conflict.id,items,#rows.." mission(s)")
+        if p then missionDetails(p.mission.id) end
+      end
+
+    elseif a.id=="print" then
+      local ok,pages=printer.conflict(conflict)
+      message("IMPRESSION",ok and ("Conflit imprime: "..pages.." page(s).") or pages,ok and palette.ok or palette.bad)
+
+    elseif a.id=="resolution" then resolutionDetails(conflict.resolutionId)
+    elseif a.id=="treaty" then treatyDetails(conflict.treatyId)
+    elseif a.id=="case" then caseDetails(conflict.caseId)
+
+    elseif a.id=="edit" then
+      local title=prompt("Titre",conflict.title)
+      local typ=chooseConflictType(conflict.conflictType)
+      local startAt=prompt("Debut / date RP",conflict.startAt or "")
+      local involved=stateBasketBrowser(conflict.involvedStates) or conflict.involvedStates
+      local partiesText=multi("PARTIES / COALITIONS / GROUPES",conflict.partiesText or "")
+      local summary=multi("RESUME DU CONFLIT",conflict.summary or "")
+      local resolutionId=prompt("Resolution liee",conflict.resolutionId or "")
+      local treatyId=prompt("Traite lie",conflict.treatyId or "")
+      local caseId=prompt("Dossier judiciaire lie",conflict.caseId or "")
+      local visibility=menu("VISIBILITE",{
+        {text="Publique",v="public"},{text="Restreinte",v="restricted"}
+      },"Actuel: "..(conflict.visibility or "public"))
+      local out,e=rpc("CONFLICT_EDIT",{
+        id=conflict.id,title=title,conflictType=typ,startAt=startAt,
+        involvedStates=involved,partiesText=partiesText,summary=summary,
+        resolutionId=resolutionId,treatyId=treatyId,caseId=caseId,
+        visibility=visibility and visibility.v or conflict.visibility
+      })
+      message("CONFLIT",out and "Fiche mise a jour." or e,out and palette.ok or palette.bad)
+
+    elseif a.id=="status" then
+      local st=menu("STATUT DU CONFLIT",{
+        {text="Tension / crise",v="tension"},{text="Conflit actif",v="active"},
+        {text="Cessez-le-feu",v="ceasefire"},{text="Processus de paix",v="peace_process"},
+        {text="Termine",v="ended"}
+      },"Actuel: "..conflict.status)
+      if st then
+        local ceasefire=""
+        if st.v=="ceasefire" then ceasefire=prompt("Traite de cessez-le-feu TREATY-... (optionnel)",conflict.ceasefireTreatyId or "") end
+        local reason=multi("MOTIF / CONTEXTE / BILAN","")
+        local out,e=rpc("CONFLICT_SET_STATUS",{
+          id=conflict.id,status=st.v,reason=reason,ceasefireTreatyId=ceasefire
+        })
+        message("CONFLIT",out and ("Statut: "..out.status) or e,out and palette.ok or palette.bad)
+      end
+    end
+  end
+end
+
+local function conflictsScreen(query,status)
+  query=query or ""
+  status=status or ""
+  while true do
+    local rows,err=rpc("CONFLICT_LIST",{query=query,status=status})
+    if not rows then message("CONFLITS",err,palette.bad);return end
+
+    local items={}
+    if allowed("conflictWrite") then items[#items+1]={text="[+] Enregistrer un conflit / crise",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer par statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
+    if query~="" or status~="" then items[#items+1]={text="[R] Reinitialiser les filtres",id="reset"} end
+
+    for _,conflict in ipairs(rows) do
+      items[#items+1]={
+        text=conflict.id.." ["..conflict.status.."] "..conflict.title,
+        conflict=conflict
+      }
+    end
+
+    local p=menu("CONFLITS / CRISES INTERNATIONALES",items,#rows.." conflit(s)")
+    if not p then return end
+
+    if p.id=="new" then
+      local title=prompt("Nom / titre du conflit")
+      local typ=chooseConflictType("international")
+      local startAt=prompt("Debut / date RP")
+      local involved=stateBasketBrowser({}) or {}
+      local partiesText=multi("PARTIES / COALITIONS / GROUPES","")
+      local summary=multi("RESUME DU CONFLIT","")
+      local resolutionId=prompt("Resolution liee RES-... (optionnel)")
+      local treatyId=prompt("Traite lie TREATY-... (optionnel)")
+      local caseId=prompt("Dossier lie CASE-... (optionnel)")
+      local visibility=menu("VISIBILITE",{
+        {text="Publique",v="public"},{text="Restreinte",v="restricted"}
+      })
+      local out,e=rpc("CONFLICT_CREATE",{
+        title=title,conflictType=typ,startAt=startAt,involvedStates=involved,
+        partiesText=partiesText,summary=summary,resolutionId=resolutionId,
+        treatyId=treatyId,caseId=caseId,visibility=visibility and visibility.v or "public"
+      })
+      message("CONFLIT",out and ("Enregistre: "..out.id) or e,out and palette.ok or palette.bad)
+
+    elseif p.id=="search" then
+      query=prompt("Recherche conflit",query)
+
+    elseif p.id=="status" then
+      local st=menu("STATUT",{
+        {text="Tous",v=""},{text="Tensions / crises",v="tension"},{text="Actifs",v="active"},
+        {text="Cessez-le-feu",v="ceasefire"},{text="Processus de paix",v="peace_process"},
+        {text="Termines",v="ended"}
+      })
+      if st then status=st.v end
+
+    elseif p.id=="reset" then
+      query="";status=""
+
+    elseif p.conflict then
+      conflictDetails(p.conflict.id)
+    end
+  end
+end
+
 local function auditScreen()
   local rows,err=rpc("AUDIT_LIST",{limit=100})
   if not rows then message("JOURNAL",err,palette.bad);return end
