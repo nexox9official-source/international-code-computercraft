@@ -142,7 +142,7 @@ local function loadSeed()
               body = entry[3] or "",
               book = bookNames[math.ceil(n / 20)] or "",
               section = "",
-              status = "draft",
+              status = "active",
               version = 1,
               history = {}
             }
@@ -167,7 +167,7 @@ local function freshState()
     law.createdAt = law.createdAt or now
     law.updatedAt = law.updatedAt or now
     law.version = law.version or 1
-    law.status = law.status or "draft"
+    law.status = law.status or "active"
     law.history = law.history or {}
     laws[law.ref] = law
     if (law.number or 0) > maxN then maxN = law.number end
@@ -175,10 +175,14 @@ local function freshState()
   return {
     meta = {
       schema = 1, version = common.VERSION, revision = 0,
-      createdAt = now, updatedAt = now, codeStatus = "PROJECT_NON_RATIFIED",
+      createdAt = now, updatedAt = now, codeStatus = "RATIFIED_ACTIVE",
       organization = "Union des Nations Souveraines",
       court = "Cour internationale de l'Union",
-      proposingState = "North Coalition"
+      proposingState = "North Coalition",
+      ratifiedAt = "2026-09-22",
+      ratifiedBy = "Union des Nations Souveraines",
+      ratificationDocument = "UNS-CIC-500-V1.0",
+      initialCodeRatified = true
     },
     laws = laws,
     nextArticle = maxN + 1,
@@ -252,6 +256,34 @@ local function loadState()
   state.noticeCounter = state.noticeCounter or 0
   state.meta = state.meta or {}
 
+  local internationalRatificationChanged=false
+  if state.meta.initialCodeRatified~=true then
+    local ratifiedAt="2026-09-22"
+    for n=1,500 do
+      local ref=string.format("UNS-ART-%03d",n)
+      local law=state.laws[ref]
+      if law then
+        law.history=law.history or {}
+        if law.status~="active" then
+          law.history[#law.history+1]={
+            version=law.version or 1,status=law.status or "draft",
+            archivedAt=ratifiedAt,archivedBy="Union des Nations Souveraines",
+            supersededByReason="Ratification du Code international commun UNS-CIC-500-V1.0"
+          }
+          law.status="active"
+        end
+        law.ratifiedAt=ratifiedAt
+        law.updatedAt=common.now()
+      end
+    end
+    state.meta.codeStatus="RATIFIED_ACTIVE"
+    state.meta.ratifiedAt=ratifiedAt
+    state.meta.ratifiedBy="Union des Nations Souveraines"
+    state.meta.ratificationDocument="UNS-CIC-500-V1.0"
+    state.meta.initialCodeRatified=true
+    internationalRatificationChanged=true
+  end
+
   if next(state.states)==nil then
     local now=common.now()
     state.states["STATE-001"]={
@@ -277,7 +309,7 @@ local function loadState()
 
   state.meta.version = common.VERSION
   state.meta.schema = math.max(tonumber(state.meta.schema) or 1,9)
-  if nationalCreated then common.saveTableAtomic(common.STATE,state) end
+  if nationalCreated or internationalRatificationChanged then common.saveTableAtomic(common.STATE,state) end
   return state
 end
 
