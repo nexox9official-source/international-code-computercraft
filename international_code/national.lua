@@ -6,15 +6,69 @@ local network = dofile("/international_code/national_network.lua")
 
 local N = {}
 local CORPUS_PATH = "/international_code/national/corpus_v2.json"
+local CORPUS_META_PATH = "/international_code/national/corpus_meta.json"
+local CORPUS_SHARDS = {
+  "/international_code/national/articles_001_100.json",
+  "/international_code/national/articles_101_200.json",
+  "/international_code/national/articles_201_300.json",
+  "/international_code/national/articles_301_400.json"
+}
 local NORTH_STATE_ID = "STATE-001"
 
-local function loadCorpus()
-  local raw = common.readAll(CORPUS_PATH)
-  if not raw or raw=="" then return nil,"Corpus national absent: "..CORPUS_PATH end
-  local ok,data = pcall(textutils.unserializeJSON, raw)
-  if not ok or type(data)~="table" then return nil,"Corpus national JSON invalide." end
-  if type(data.articles)~="table" or #data.articles<1 then return nil,"Corpus national vide." end
+local function readJson(path)
+  local raw=common.readAll(path)
+  if not raw or raw=="" then return nil,"Fichier absent ou vide: "..path end
+  local ok,data=pcall(textutils.unserializeJSON,raw)
+  raw=nil
+  if not ok or type(data)~="table" then return nil,"JSON invalide: "..path end
   return data
+end
+
+local function loadCorpusMeta()
+  local meta,err=readJson(CORPUS_META_PATH)
+  if meta then return meta end
+
+  -- Compatibilite avec une ancienne installation avant le corpus fragmente.
+  local legacy,legacyErr=readJson(CORPUS_PATH)
+  if not legacy then return nil,err or legacyErr end
+  legacy.articles=nil
+  return legacy
+end
+
+local function eachCorpusArticle(fn)
+  local total=0
+  local haveShards=true
+  for _,path in ipairs(CORPUS_SHARDS) do
+    if not fs.exists(path) then haveShards=false break end
+  end
+
+  if haveShards then
+    for _,path in ipairs(CORPUS_SHARDS) do
+      local rows,err=readJson(path)
+      if not rows then return nil,err end
+      for _,seed in ipairs(rows) do
+        total=total+1
+        fn(seed)
+      end
+      rows=nil
+      if collectgarbage then pcall(collectgarbage,"collect") end
+    end
+    if total~=400 then return nil,"Corpus national incomplet: "..tostring(total).."/400 articles." end
+    return total
+  end
+
+  -- Fallback temporaire pour les installations qui n'ont pas encore lance ic update.
+  local raw=common.readAll(CORPUS_PATH)
+  if not raw or raw=="" then return nil,"Corpus national absent. Lancez la mise a jour depuis le centre de controle." end
+  local ok,legacy=pcall(textutils.unserializeJSON,raw)
+  raw=nil
+  if not ok or type(legacy)~="table" or type(legacy.articles)~="table" then
+    return nil,"Corpus national historique invalide."
+  end
+  for _,seed in ipairs(legacy.articles) do total=total+1;fn(seed) end
+  legacy=nil
+  if collectgarbage then pcall(collectgarbage,"collect") end
+  return total
 end
 
 local function seal(prefix,payload)
@@ -154,15 +208,16 @@ local function makeMinistry(seed)
 end
 
 function N.newState()
-  local corpus,err=loadCorpus()
+  local corpus,err=loadCorpusMeta()
   if not corpus then error(err,0) end
   local laws={}
   local maxN=0
-  for _,seed in ipairs(corpus.articles or {}) do
+  local count,articleErr=eachCorpusArticle(function(seed)
     local law=makeLaw(seed)
     laws[law.id]=law
     if (law.number or 0)>maxN then maxN=law.number end
-  end
+  end)
+  if not count then error(articleErr,0) end
   local ministries={}
   for _,m in ipairs(corpus.ministries or {}) do ministries[m.code]=makeMinistry(m) end
   return {
@@ -262,7 +317,7 @@ function N.ensure(state)
   network.ensure(n)
   n.nationalAudit=n.nationalAudit or {}
 
-  local corpus=loadCorpus()
+  local corpus=loadCorpusMeta()
   if corpus then
     if #n.categories==0 then n.categories=copy(corpus.categories or {}) end
     n.governmentSystem=n.governmentSystem or copy(corpus.government_system or {})
@@ -281,30 +336,57 @@ function N.ensure(state)
     if n.meta.sovereignAuthorityActive==nil then
       n.meta.sovereignAuthorityActive=((corpus.government_system or {}).sovereign_authority_active~=false)
     end
+
+    local applyRatification=(corpus.status=="ratified" and n.meta.corpusRatificationApplied~=true)
+    local applyPermanence=(n.meta.sovereignPermanenceApplied~=true)
+    local permanentRefs={
+      ["NC-ART-061"]=true,["NC-ART-093"]=true,["NC-ART-094"]=true,
+      ["NC-ART-095"]=true,["NC-ART-400"]=true
+    }
     local maxN=tonumber(n.nextArticle or 1)-1
-    for _,seed in ipairs(corpus.articles or {}) do
-      if not n.laws[seed.id] then n.laws[seed.id]=makeLaw(seed) end
+    local articleCount,articleErr=eachCorpusArticle(function(seed)
+      local law=n.laws[seed.id]
+      if not law then
+        law=makeLaw(seed)
+        n.laws[seed.id]=law
+        changed=true
+      end
       if (seed.number or 0)>maxN then maxN=seed.number end
-    end
-    n.nextArticle=math.max(tonumber(n.nextArticle) or 1,maxN+1)
-    for _,m in ipairs(corpus.ministries or {}) do
-      if not n.ministries[m.code] then n.ministries[m.code]=makeMinistry(m) end
+
+      if applyRatification then
+        law.title=seed.title
+        law.text=seed.text
+        law.status=seed.status or "active"
+        law.version=seed.version or law.version
+        law.effective_at=seed.effective_at
+        law.repealed_at=seed.repealed_at
+        law.history=copy(seed.history or law.history or {})
+        law.updatedAt=common.now()
+      end
+
+      if applyPermanence and permanentRefs[seed.id] then
+        law.title=seed.title
+        law.text=seed.text
+        law.status=seed.status or law.status or "active"
+        law.version=seed.version or law.version
+        law.effective_at=seed.effective_at or law.effective_at
+        law.repealed_at=seed.repealed_at
+        law.history=copy(seed.history or law.history or {})
+        law.search_tags=copy(seed.search_tags or law.search_tags or {})
+        law.updatedAt=common.now()
+        law.updatedBy="NexoFr_"
+      end
+    end)
+
+    if articleCount then
+      n.nextArticle=math.max(tonumber(n.nextArticle) or 1,maxN+1)
     end
 
-    if corpus.status=="ratified" and n.meta.corpusRatificationApplied~=true then
-      for _,seed in ipairs(corpus.articles or {}) do
-        local law=n.laws[seed.id]
-        if law then
-          law.title=seed.title
-          law.text=seed.text
-          law.status=seed.status or "active"
-          law.version=seed.version or law.version
-          law.effective_at=seed.effective_at
-          law.repealed_at=seed.repealed_at
-          law.history=copy(seed.history or law.history or {})
-          law.updatedAt=common.now()
-        end
-      end
+    for _,m in ipairs(corpus.ministries or {}) do
+      if not n.ministries[m.code] then n.ministries[m.code]=makeMinistry(m);changed=true end
+    end
+
+    if applyRatification and articleCount then
       n.meta.status="ratified"
       n.meta.ratifiedAt=((corpus.ratification or {}).ratified_at or common.now())
       n.meta.ratifiedBy=((corpus.ratification or {}).promulgated_by or "NexoFr_")
@@ -313,33 +395,18 @@ function N.ensure(state)
       changed=true
     end
 
-    if n.meta.sovereignPermanenceApplied~=true then
-      local permanentRefs={
-        ["NC-ART-061"]=true,["NC-ART-093"]=true,["NC-ART-094"]=true,
-        ["NC-ART-095"]=true,["NC-ART-400"]=true
-      }
-      for _,seed in ipairs(corpus.articles or {}) do
-        if permanentRefs[seed.id] then
-          local law=n.laws[seed.id]
-          if law then
-            law.title=seed.title
-            law.text=seed.text
-            law.status=seed.status or law.status or "active"
-            law.version=seed.version or law.version
-            law.effective_at=seed.effective_at or law.effective_at
-            law.repealed_at=seed.repealed_at
-            law.history=copy(seed.history or law.history or {})
-            law.search_tags=copy(seed.search_tags or law.search_tags or {})
-            law.updatedAt=common.now()
-            law.updatedBy="NexoFr_"
-          end
-        end
-      end
+    if applyPermanence and articleCount then
       if n.meta.sovereignAuthorityActive==nil then n.meta.sovereignAuthorityActive=true end
       n.meta.sovereignAuthorityTenure=((corpus.government_system or {}).sovereign_authority_tenure or "perpetual_until_voluntary_relinquishment")
       n.meta.sovereignPermanenceApplied=true
       n.meta.updatedAt=common.now()
       changed=true
+    end
+
+    if not articleCount and articleErr then
+      n.meta.corpusLoadError=articleErr
+    else
+      n.meta.corpusLoadError=nil
     end
   end
 
