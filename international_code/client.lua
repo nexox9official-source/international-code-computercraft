@@ -847,6 +847,8 @@ local roleAllows={
   resolutionVote={delegate=true},
   sessionWrite={writer=true,admin=true},
   sessionAttend={delegate=true},
+  missionWrite={writer=true,admin=true},
+  missionReport={writer=true,clerk=true,judge=true,admin=true},
   diplomacy={writer=true,admin=true},
   treatySign={delegate=true},
   delegateVote={delegate=true},
@@ -3249,6 +3251,232 @@ local function sessionsScreen(query,status)
 
     elseif p.session then
       sessionDetails(p.session.id)
+    end
+  end
+end
+
+local function missionTypeLabel(v)
+  local labels={
+    observer="Mission d'observation",peacekeeping="Maintien de la paix",
+    humanitarian="Mission humanitaire",investigation="Mission d'enquete",
+    inspection="Inspection internationale",monitoring="Mission de surveillance",
+    reconstruction="Reconstruction",mediation="Mediation",other="Autre mission"
+  }
+  return labels[v] or tostring(v or "")
+end
+
+local function chooseMissionType(current)
+  local p=menu("TYPE DE MISSION",{
+    {text="Mission d'observation",v="observer"},
+    {text="Maintien de la paix",v="peacekeeping"},
+    {text="Mission humanitaire",v="humanitarian"},
+    {text="Mission d'enquete",v="investigation"},
+    {text="Inspection internationale",v="inspection"},
+    {text="Mission de surveillance",v="monitoring"},
+    {text="Reconstruction",v="reconstruction"},
+    {text="Mediation",v="mediation"},
+    {text="Autre mission",v="other"}
+  },"Actuel: "..missionTypeLabel(current))
+  return p and p.v or current or "other"
+end
+
+local function chooseLeadState(ids,current)
+  if not ids or #ids==0 then return "" end
+  local states=rpc("STATE_LIST",{}) or {}
+  local byId={}
+  for _,st in ipairs(states) do byId[st.id]=st end
+  local items={{text="[AUCUN ETAT RESPONSABLE]",id=""}}
+  for _,id in ipairs(ids) do
+    local st=byId[id]
+    items[#items+1]={text=id.."  "..(st and st.name or id),id=id}
+  end
+  local p=menu("ETAT RESPONSABLE",items,"Actuel: "..tostring(current or ""))
+  return p and p.id or current or ""
+end
+
+local function missionReportText(m)
+  local rows={}
+  for _,r in ipairs(m.reports or {}) do
+    rows[#rows+1]=(r.id or "?").." ["..(r.classification or "public").."] "..(r.title or "")..
+      "\n"..(r.at or "").." / "..(r.by or "")..
+      "\n"..((r.classification=="restricted" and cfg.role=="viewer") and "[CONTENU RESTREINT]" or (r.body or ""))..
+      "\nSceau: "..(r.seal or "-")
+  end
+  return #rows>0 and table.concat(rows,"\n\n") or "Aucun rapport."
+end
+
+local function missionDetails(id)
+  while true do
+    local m,err=rpc("MISSION_GET",{id=id})
+    if not m then message("MISSION",err,palette.bad);return end
+    m.participatingStates=m.participatingStates or {}
+    m.reports=m.reports or {}
+
+    local actions={
+      {text="Lire le mandat complet",id="read"},
+      {text="Consulter les rapports ("..#m.reports..")",id="reports"},
+      {text="Imprimer le dossier de mission",id="print"}
+    }
+
+    if m.resolutionId and m.resolutionId~="" then actions[#actions+1]={text="Ouvrir la resolution source",id="resolution"} end
+    if m.treatyId and m.treatyId~="" then actions[#actions+1]={text="Ouvrir le traite source",id="treaty"} end
+    if m.caseId and m.caseId~="" then actions[#actions+1]={text="Ouvrir le dossier source",id="case"} end
+
+    if allowed("missionReport") and (m.status=="active" or m.status=="suspended") then
+      actions[#actions+1]={text="Ajouter un rapport de mission",id="report"}
+    end
+    if allowed("missionWrite") and m.status=="planned" then
+      actions[#actions+1]={text="Modifier le mandat",id="edit"}
+    end
+    if allowed("missionWrite") and m.status~="completed" and m.status~="cancelled" then
+      actions[#actions+1]={text="Changer le statut de la mission",id="status"}
+    end
+
+    local a=menu(m.id.." - "..m.title,actions,
+      "["..m.status.."] "..missionTypeLabel(m.missionType).." | "..#m.participatingStates.." Etat(s)")
+    if not a then return end
+
+    if a.id=="read" then
+      textPage(m.id,{
+        {label="Mission",text=m.title or ""},
+        {label="Type / statut",text=missionTypeLabel(m.missionType).." / "..(m.status or "")},
+        {label="Zone / periode",text=(m.area or "-").." / "..(m.startAt or "-").." -> "..(m.endAt or "-")},
+        {label="Mandat",text=m.mandate or ""},
+        {label="Sources",text="Resolution: "..(m.resolutionId or "-").."\nTraite: "..(m.treatyId or "-").."\nDossier: "..(m.caseId or "-")},
+        {label="Etat responsable",text=m.leadStateId or "-"},
+        {label="Responsable / commandement",text=m.commander or "-"},
+        {label="Etats participants",text=#m.participatingStates>0 and table.concat(m.participatingStates,"\n") or "Aucun"},
+        {label="Sceau du mandat",text=m.mandateSeal or "-"},
+        {label="Sceau d'activation",text=m.activationSeal or "-"},
+        {label="Cloture",text=(m.completionReason or m.cancelReason or "-")},
+        {label="Sceau final",text=m.completionSeal or m.cancellationSeal or "-"}
+      })
+
+    elseif a.id=="reports" then
+      textPage("RAPPORTS "..m.id,{{label="Rapports",text=missionReportText(m)}})
+
+    elseif a.id=="print" then
+      local ok,pages=printer.mission(m)
+      message("IMPRESSION",ok and ("Mission imprimee: "..pages.." page(s).") or pages,ok and palette.ok or palette.bad)
+
+    elseif a.id=="resolution" then
+      resolutionDetails(m.resolutionId)
+    elseif a.id=="treaty" then
+      treatyDetails(m.treatyId)
+    elseif a.id=="case" then
+      caseDetails(m.caseId)
+
+    elseif a.id=="report" then
+      local title=prompt("Titre du rapport")
+      local classification=menu("CLASSIFICATION",{
+        {text="Public",v="public"},
+        {text="Restreint",v="restricted"}
+      })
+      local body=multi("RAPPORT DE MISSION","")
+      local out,e=rpc("MISSION_ADD_REPORT",{
+        id=m.id,title=title,classification=classification and classification.v or "public",body=body
+      })
+      message("MISSION",out and "Rapport ajoute et scelle." or e,out and palette.ok or palette.bad)
+
+    elseif a.id=="edit" then
+      local title=prompt("Titre",m.title)
+      local typ=chooseMissionType(m.missionType)
+      local area=prompt("Zone / territoire",m.area or "")
+      local startAt=prompt("Debut",m.startAt or "")
+      local endAt=prompt("Fin prevue",m.endAt or "")
+      local commander=prompt("Responsable / commandement",m.commander or "")
+      local participants=stateBasketBrowser(m.participatingStates) or m.participatingStates
+      local lead=chooseLeadState(participants,m.leadStateId)
+      local mandate=multi("MANDAT DE LA MISSION",m.mandate or "")
+      local visibility=menu("VISIBILITE",{
+        {text="Publique",v="public"},{text="Restreinte",v="restricted"}
+      },"Actuel: "..(m.visibility or "public"))
+      local out,e=rpc("MISSION_EDIT",{
+        id=m.id,title=title,missionType=typ,area=area,startAt=startAt,endAt=endAt,
+        commander=commander,participatingStates=participants,leadStateId=lead,
+        mandate=mandate,visibility=visibility and visibility.v or m.visibility
+      })
+      message("MISSION",out and "Mandat mis a jour et rescelle." or e,out and palette.ok or palette.bad)
+
+    elseif a.id=="status" then
+      local st=menu("STATUT DE MISSION",{
+        {text="Planifiee",v="planned"},
+        {text="Active",v="active"},
+        {text="Suspendue",v="suspended"},
+        {text="Terminee",v="completed"},
+        {text="Annulee",v="cancelled"}
+      },"Actuel: "..m.status)
+      if st then
+        local reason=""
+        if st.v=="completed" or st.v=="cancelled" or st.v=="suspended" then
+          reason=multi("MOTIF / BILAN","")
+        end
+        local out,e=rpc("MISSION_SET_STATUS",{id=m.id,status=st.v,reason=reason})
+        message("MISSION",out and ("Statut: "..out.status) or e,out and palette.ok or palette.bad)
+      end
+    end
+  end
+end
+
+local function missionsScreen(query,status)
+  query=query or ""
+  status=status or ""
+  while true do
+    local rows,err=rpc("MISSION_LIST",{query=query,status=status})
+    if not rows then message("MISSIONS",err,palette.bad);return end
+
+    local items={}
+    if allowed("missionWrite") then items[#items+1]={text="[+] Creer une mission internationale",id="new"} end
+    items[#items+1]={text="[?] Rechercher",id="search"}
+    items[#items+1]={text="[S] Filtrer par statut"..(status~="" and (" ["..status.."]") or ""),id="status"}
+    if query~="" or status~="" then items[#items+1]={text="[R] Reinitialiser les filtres",id="reset"} end
+
+    for _,m in ipairs(rows) do
+      items[#items+1]={text=m.id.."  "..m.title.."  ["..m.status.."]",mission=m}
+    end
+
+    local p=menu("MISSIONS INTERNATIONALES",items,#rows.." mission(s)")
+    if not p then return end
+
+    if p.id=="new" then
+      local title=prompt("Titre de la mission")
+      local typ=chooseMissionType("observer")
+      local resolutionId=prompt("Resolution source RES-... (optionnel)")
+      local treatyId=prompt("Traite source TREATY-... (optionnel)")
+      local caseId=prompt("Dossier source CASE-... (optionnel)")
+      local area=prompt("Zone / territoire")
+      local startAt=prompt("Debut prevu")
+      local endAt=prompt("Fin prevue")
+      local commander=prompt("Responsable / commandement")
+      local participants=stateBasketBrowser({}) or {}
+      local lead=chooseLeadState(participants,"")
+      local mandate=multi("MANDAT DE LA MISSION","")
+      local visibility=menu("VISIBILITE",{
+        {text="Publique",v="public"},{text="Restreinte",v="restricted"}
+      })
+      local out,e=rpc("MISSION_CREATE",{
+        title=title,missionType=typ,resolutionId=resolutionId,treatyId=treatyId,caseId=caseId,
+        area=area,startAt=startAt,endAt=endAt,commander=commander,
+        participatingStates=participants,leadStateId=lead,mandate=mandate,
+        visibility=visibility and visibility.v or "public"
+      })
+      message("MISSION",out and ("Creee: "..out.id) or e,out and palette.ok or palette.bad)
+
+    elseif p.id=="search" then
+      query=prompt("Recherche mission",query)
+
+    elseif p.id=="status" then
+      local st=menu("STATUT MISSION",{
+        {text="Toutes",v=""},{text="Planifiees",v="planned"},{text="Actives",v="active"},
+        {text="Suspendues",v="suspended"},{text="Terminees",v="completed"},{text="Annulees",v="cancelled"}
+      })
+      if st then status=st.v end
+
+    elseif p.id=="reset" then
+      query="";status=""
+
+    elseif p.mission then
+      missionDetails(p.mission.id)
     end
   end
 end
