@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.8.0
+
+### Calendrier institutionnel
+- registre `SESSION-AAAA-XXXX` ;
+- Assemblée, Conseil de paix/sécurité, diplomatie, urgence, commissions et sessions libres ;
+- convocation avec date/heure, salle, description et sceau ;
+- notifications automatiques aux États membres ;
+- ordre du jour structuré reliant BILL, RES, TREATY, CASE, UNS-ART, ENF ou un point libre ;
+- ajout/retrait des points avant ouverture ;
+- suivi pending / discussing / discussed / voted / postponed / withdrawn ;
+- notes et issue par point.
+
+### Présence et procès-verbal
+- présence enregistrée par État depuis les terminaux `delegate` ;
+- une seule présence par État même avec plusieurs délégués ;
+- ouverture officielle avec sceau ;
+- procès-verbal final de session ;
+- conclusions et archive des présences ;
+- sceau final `UNS-SESSION-...` ;
+- impression complète de la session.
+
+### Affichage
+- sessions ouvertes et programmées dans le registre public ;
+- `ic session SESSION-...` pour un tableau LIVE ;
+- tableau serveur avec nombre de sessions ouvertes et prévues ;
+- registre public étendu à neuf pages.
+
 ## 0.7.0
 
 ### Résolutions de l'Union
