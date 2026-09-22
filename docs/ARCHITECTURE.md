@@ -88,6 +88,31 @@ Une signature de traité est attribuée à l'État rattaché au terminal `delega
 
 L'activation finale reçoit un sceau `UNS-TRT`. Les anciennes versions de brouillon et l'historique des signatures restent conservés.
 
+## Notifications et actions en attente
+
+Le serveur central maintient une file `notices`. Chaque notification peut être :
+
+- globale ;
+- limitée à un rôle ;
+- ciblée vers un État ;
+- ciblée vers un terminal précis.
+
+L'état lu/non-lu est stocké par `clientId`. La notification elle-même reste unique : plusieurs délégués du même État peuvent donc la voir sans créer des copies divergentes.
+
+Les événements majeurs génèrent les notifications avant la sauvegarde de la mutation principale, de façon à enregistrer l'action métier et l'alerte dans le même état serveur.
+
+## Registre d'exécution
+
+Le registre `enforcements` est séparé des jugements afin de distinguer :
+
+1. ce que la Cour a décidé ;
+2. ce qui doit être exécuté ;
+3. ce qui a réellement été accompli.
+
+Chaque entrée `ENF-...` conserve sa cible, son fondement judiciaire, son type, ses conditions, une éventuelle échéance, sa visibilité, ses comptes rendus et son historique de statut.
+
+Un changement de statut ne réécrit jamais l'état antérieur : une nouvelle entrée scellée est ajoutée à `statusHistory`. Les comptes rendus sont eux aussi append-only au niveau applicatif.
+
 ## Évolution prévue
 
 - audiences et calendrier d'audience ;
