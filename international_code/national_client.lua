@@ -1572,6 +1572,7 @@ local function gazetteScreen(info)
         {text="Resultats electoraux",v="election_result"},
         {text="Proces-verbaux de session",v="session_minutes"},
         {text="Jugements",v="judgment"},{text="Decisions d'appel",v="appeal_decision"},
+        {text="Immatriculations",v="organization"},{text="Statuts d'organisations",v="organization_status"},
         {text="Actes fondateurs",v="founding"}
       })
       if k then kind=k.v end
