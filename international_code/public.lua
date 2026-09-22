@@ -235,7 +235,7 @@ function P.run()
       if ev=="timer" and a==timer then page=page%8+1 break
       elseif ev=="key" and (a==keys.q or a==keys.escape) then
         term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
-      elseif ev=="monitor_touch" then page=page%7+1 break end
+      elseif ev=="monitor_touch" then page=page%8+1 break end
     end
   end
 end
