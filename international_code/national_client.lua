@@ -67,6 +67,11 @@ local function prompt(label,default)
   return v
 end
 
+-- Forward declarations: the draft editor can open the legal browser without
+-- destroying the text currently being written.
+local chooseLaw
+local lawDetails
+
 local function multi(label,initial)
   common.ensureLayout()
   local dir=common.ROOT.."/drafts/north_coalition"
@@ -88,10 +93,17 @@ local function multi(label,initial)
       if y>=h-2 then break end
       at(2,y,common.fit(lines[i],math.max(1,w-3)),palette.text);y=y+1
     end
-    footer("E=editer  F=terminer  A=annuler (brouillon conserve)")
+    footer("E=editer  C=consulter le Code  F=finir  A=annuler")
     local ev,key=os.pullEvent("key")
     if key==keys.e then
       shell.run("edit",path)
+    elseif key==keys.c then
+      -- The editor file stays untouched while the user browses/searches the
+      -- national code, then we return to the same draft preview.
+      if chooseLaw then
+        local picked=chooseLaw("")
+        if picked and lawDetails then lawDetails(picked.id) end
+      end
     elseif key==keys.f or key==keys.enter then
       local out=common.readAll(path) or ""
       fs.delete(path)
@@ -191,7 +203,7 @@ local function chooseStatus()
   return p and p.v or ""
 end
 
-local function lawDetails(ref)
+lawDetails=function(ref)
   while true do
     local law,err=rpc("NC_LAW_GET",{ref=ref})
     if not law then message("ARTICLE",err,palette.bad);return end
@@ -227,15 +239,122 @@ local function lawDetails(ref)
   end
 end
 
-local function chooseLaw(query)
-  local rows,err=rpc("NC_LAW_LIST",{query=query or ""})
-  if not rows then message("CODE",err,palette.bad);return nil end
-  local items={}
-  for _,law in ipairs(rows) do
-    items[#items+1]={text=(law.display_reference or law.id).." "..law.title.." ["..law.status.."]",law=law}
+chooseLaw=function(query)
+  local function pickRows(rows,title,subtitle)
+    if not rows or #rows==0 then
+      message(title or "CODE","Aucun article correspondant.",palette.muted)
+      return nil
+    end
+    local items={}
+    for _,law in ipairs(rows) do
+      items[#items+1]={
+        text=(law.display_reference or law.id).." "..law.title.." / "..(law.category_code or "").." ["..(law.status or "?").."]",
+        law=law
+      }
+    end
+    local p=menu(title or "CHOISIR UN ARTICLE",items,subtitle or (#rows.." resultat(s)"))
+    return p and p.law or nil
   end
-  local p=menu("CHOISIR UN ARTICLE",items,#rows.." resultat(s)")
-  return p and p.law or nil
+
+  local function browseCategory()
+    local cats,err=rpc("NC_CATEGORY_LIST",{})
+    if not cats then message("CODE",err,palette.bad);return nil end
+    local catItems={}
+    for _,cat in ipairs(cats) do
+      local counts=cat.counts or {}
+      catItems[#catItems+1]={
+        text=cat.code.." "..cat.name.." ("..tostring(counts.total or 0)..")",cat=cat
+      }
+    end
+    local pickedCat=menu("PARCOURIR PAR CATEGORIE",catItems,#catItems.." categorie(s)")
+    if not pickedCat then return nil end
+
+    local rows,lawErr=rpc("NC_LAW_LIST",{category_code=pickedCat.cat.code})
+    if not rows then message("CODE",lawErr,palette.bad);return nil end
+
+    local titleMap={}
+    for _,law in ipairs(rows) do
+      local titleKey=(law.title_code or "").."|"..(law.title_group or "Sans titre")
+      local title=titleMap[titleKey]
+      if not title then
+        title={code=law.title_code or "",name=law.title_group or "Sans titre",chapters={}}
+        titleMap[titleKey]=title
+      end
+      local chapterKey=(law.chapter_code or "").."|"..(law.chapter or "Sans chapitre")
+      local chapter=title.chapters[chapterKey]
+      if not chapter then
+        chapter={code=law.chapter_code or "",name=law.chapter or "Sans chapitre",laws={}}
+        title.chapters[chapterKey]=chapter
+      end
+      chapter.laws[#chapter.laws+1]=law
+    end
+
+    local titles={}
+    for _,title in pairs(titleMap) do titles[#titles+1]=title end
+    table.sort(titles,function(a,b) return tostring(a.code)<tostring(b.code) end)
+    local titleItems={}
+    for _,title in ipairs(titles) do
+      local count=0
+      for _,chapter in pairs(title.chapters) do count=count+#chapter.laws end
+      titleItems[#titleItems+1]={text=(title.code~="" and (title.code.." / ") or "")..title.name.." ("..count..")",title=title}
+    end
+    local pickedTitle=menu(pickedCat.cat.code.." / TITRES",titleItems,#rows.." article(s)")
+    if not pickedTitle then return nil end
+
+    local chapters={}
+    for _,chapter in pairs(pickedTitle.title.chapters) do chapters[#chapters+1]=chapter end
+    table.sort(chapters,function(a,b) return tostring(a.code)<tostring(b.code) end)
+    local chapterItems={}
+    for _,chapter in ipairs(chapters) do
+      chapterItems[#chapterItems+1]={
+        text=(chapter.code~="" and (chapter.code.." / ") or "")..chapter.name.." ("..#chapter.laws..")",chapter=chapter
+      }
+    end
+    local pickedChapter=menu((pickedTitle.title.code or "").." / CHAPITRES",chapterItems,"Choisissez un chapitre")
+    if not pickedChapter then return nil end
+
+    table.sort(pickedChapter.chapter.laws,function(a,b) return (a.number or 0)<(b.number or 0) end)
+    return pickRows(pickedChapter.chapter.laws,
+      (pickedChapter.chapter.code or "").." / ARTICLES",
+      pickedCat.cat.name.." / "..pickedTitle.title.name)
+  end
+
+  query=common.trim(query or "")
+  if query~="" then
+    local rows,err=rpc("NC_LAW_LIST",{query=query})
+    if not rows then message("CODE",err,palette.bad);return nil end
+    return pickRows(rows,"RESULTATS DE RECHERCHE",#rows.." resultat(s) pour \""..query.."\"")
+  end
+
+  while true do
+    local mode=menu("CHOISIR UN ARTICLE",{
+      {text="[?] Rechercher par numero, titre ou mot",id="search"},
+      {text="[C] Parcourir categorie > titre > chapitre",id="category"},
+      {text="[#] Ouvrir directement NC-ART-...",id="direct"}
+    },"Le Code reste accessible sans fermer votre brouillon.")
+    if not mode then return nil end
+
+    if mode.id=="search" then
+      local q=prompt("Numero, titre, mot, chapitre, ministere")
+      if q~="" then
+        local rows,err=rpc("NC_LAW_LIST",{query=q})
+        if not rows then message("CODE",err,palette.bad)
+        else
+          local law=pickRows(rows,"RESULTATS DE RECHERCHE",#rows.." resultat(s)")
+          if law then return law end
+        end
+      end
+    elseif mode.id=="category" then
+      local law=browseCategory()
+      if law then return law end
+    elseif mode.id=="direct" then
+      local ref=prompt("Reference","NC-ART-001")
+      if ref~="" then
+        local law,err=rpc("NC_LAW_GET",{ref=ref})
+        if law then return law else message("ARTICLE",err,palette.bad) end
+      end
+    end
+  end
 end
 
 local function categoryScreen(cat,status)
