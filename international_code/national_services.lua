@@ -37,7 +37,8 @@ local function role(actor)
 end
 
 local function technicalAdmin(actor)
-  return actor and actor.role=="admin" and (not actor.nationalRole or actor.nationalRole=="admin")
+  return actor and (actor.nationalRoot==true or
+    (actor.role=="admin" and (not actor.nationalRole or actor.nationalRole=="admin")))
 end
 
 local function identity(actor)
