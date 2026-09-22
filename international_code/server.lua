@@ -527,6 +527,9 @@ local function sessionAgendaReference(state,kind,ref)
   elseif kind=="incident" then
     local x=state.incidents[ref]
     return x and x.title or nil
+  elseif kind=="conflict" then
+    local x=state.conflicts[ref]
+    return x and x.title or nil
   elseif kind=="custom" then
     return ref~="" and ref or nil
   end
@@ -2514,7 +2517,7 @@ local function handleAction(state, actor, action, p)
     local kind=common.trim(p.kind)
     local ref=common.trim(p.ref):upper()
     local title=common.trim(p.title)
-    local validKind={bill=true,resolution=true,treaty=true,case=true,law=true,enforcement=true,mission=true,incident=true,custom=true}
+    local validKind={bill=true,resolution=true,treaty=true,case=true,law=true,enforcement=true,mission=true,incident=true,conflict=true,custom=true}
     if not validKind[kind] then return nil,"Type d'element d'ordre du jour invalide." end
 
     if kind~="custom" then
