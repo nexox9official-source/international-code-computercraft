@@ -636,7 +636,7 @@ referenceBrowser=function(opts)
       if p.id=="search" then
         local q=prompt("Recherche article / mot / numero")
         if q~="" then
-          local found,e=rpc("LAW_LIST",{query=q})
+          local found,e=rpc("LAW_LIST",{query=q,status=opts.status or ""})
           if not found then
             message("RECHERCHE",e,palette.bad)
           else
