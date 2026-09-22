@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.4.0
+
+### Union et États membres
+- registre permanent `STATE-XXX` ;
+- North Coalition initialisé comme premier État sur une nouvelle base ;
+- statuts candidat / membre / suspendu / retiré / exclu ;
+- rôle `delegate` ;
+- rattachement d'un terminal délégué à un État par l'administration.
+
+### Assemblée
+- propositions `BILL-AAAA-XXXX` ;
+- nouveaux articles ou amendements d'articles existants ;
+- phases brouillon, débat, vote, adoption/rejet et promulgation ;
+- vote POUR / CONTRE / ABSTENTION, une voix par État ;
+- corps électoral figé au début d'un tour ;
+- quorum automatique ;
+- plusieurs tours de scrutin ;
+- quatre règles de majorité ;
+- promulgation directe vers le Code avec versionnement automatique.
+
+### Cour
+- dossiers publics, restreints ou scellés ;
+- audiences ;
+- ordonnances, mandats, mesures provisoires, convocations et préservation de preuves ;
+- appels formels et décisions d'appel ;
+- protection serveur des dossiers scellés ;
+- chronologie enrichie.
+
+### Documents officiels
+- sceaux d'intégrité applicatifs sur les jugements, ordonnances, audiences, appels, scrutins et promulgations ;
+- impression des avis d'audience, ordonnances, appels et propositions législatives.
+
+### Affichage
+- `ic public` : registre public rotatif sur Monitor ;
+- `ic display CASE-...` : affichage d'un dossier public dans une salle d'audience.
+
 ## 0.3.0
 
 ### Navigation juridique
