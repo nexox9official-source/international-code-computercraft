@@ -606,6 +606,9 @@ function S.handle(state,actor,action,p,ctx)
     if title=="" or body=="" then return true,nil,"Titre et motivation obligatoires." end
     local applicant=citizen(n,actor.citizenId)
     local target=requestTargetForType(requestType,p)
+    if target~="PRESIDENCE" and not (n.ministries and n.ministries[target]) then
+      return true,nil,"Administration destinataire invalide: "..tostring(target)
+    end
     local id=nextYearId(n.requestCounters,"NC-REQ")
     local req={
       id=id,requestType=requestType,status="submitted",
