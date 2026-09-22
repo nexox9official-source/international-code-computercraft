@@ -101,7 +101,10 @@ local function drawBills(t,bills)
     for _,b in ipairs(bills) do
       if y>=h then break end
       fillLine(t,y," "..b.id.."  "..(b.title or ""),colors.yellow);y=y+1
-      if y<h then fillLine(t,y,"   "..(b.proposalType=="amendment" and ("Amendement "..(b.targetRef or "")) or "Nouvel article"),colors.lightGray);y=y+1 end
+      local kind="Nouvel article"
+      if b.proposalType=="amendment" then kind="Amendement "..(b.targetRef or "")
+      elseif b.proposalType=="ratification_bundle" then kind="Ratification groupee ("..tostring(#(b.targetRefs or {}))..")" end
+      if y<h then fillLine(t,y,"   "..kind,colors.lightGray);y=y+1 end
     end
   end
   fillLine(t,h," Votes officiels UNS",colors.gray)
@@ -186,36 +189,101 @@ function P.caseDisplay(caseId)
   local target=monitor or old
   if monitor and monitor.setTextScale then pcall(monitor.setTextScale,0.5) end
   term.redirect(target)
-  target.setBackgroundColor(colors.black);target.clear()
-
-  local c,err=rpc(cfg,"CASE_GET",{id=caseId},4)
-  if not c then
-    drawOffline(target,err)
-    sleep(3)
-    term.redirect(old)
-    return
-  end
-
-  header(target,"COUR / "..c.id,c.title or "")
-  local _,h=target.getSize()
-  local y=4
-  fillLine(target,y," Statut: "..tostring(c.status).." / "..tostring(c.visibility),colors.cyan);y=y+2
-  fillLine(target,y," Demandeur: "..tostring(c.complainant or "-"),colors.white);y=y+1
-  fillLine(target,y," Mis en cause: "..tostring(c.accused or "-"),colors.white);y=y+2
-  fillLine(target,y," Articles: "..table.concat(c.citedArticles or {},", "),colors.lightGray);y=y+2
-  if c.hearings and c.hearings[1] and y<h then
-    local nextH=c.hearings[#c.hearings]
-    fillLine(target,y," Audience: "..tostring(nextH.scheduledFor or "-"),colors.yellow);y=y+1
-    fillLine(target,y," "..tostring(nextH.subject or ""),colors.lightGray)
-  end
-  fillLine(target,h," Q/Echap pour quitter",colors.gray)
 
   while true do
-    local ev,a=os.pullEvent()
-    if ev=="key" and (a==keys.q or a==keys.escape) then break end
+    target.setCursorBlink(false)
+    target.setBackgroundColor(colors.black);target.clear()
+    local c,err=rpc(cfg,"CASE_GET",{id=caseId},4)
+    if not c then
+      drawOffline(target,err)
+    else
+      header(target,"COUR / "..c.id,c.title or "")
+      local _,h=target.getSize()
+      local y=4
+      fillLine(target,y," Statut: "..tostring(c.status).." / "..tostring(c.visibility),colors.cyan);y=y+1
+      fillLine(target,y," Faits "..tostring(#(c.facts or {})).." | Preuves "..tostring(#(c.evidence or {}))..
+        " | Jugements "..tostring(#(c.judgments or {})),colors.lightGray);y=y+2
+      fillLine(target,y," Demandeur: "..tostring(c.complainant or "-"),colors.white);y=y+1
+      fillLine(target,y," Mis en cause: "..tostring(c.accused or "-"),colors.white);y=y+2
+
+      if #(c.citedArticles or {})>0 and y<h-4 then
+        fillLine(target,y," Articles: "..table.concat(c.citedArticles or {},", "),colors.lightGray);y=y+2
+      end
+
+      if c.hearings and #c.hearings>0 and y<h-3 then
+        local nextH=c.hearings[#c.hearings]
+        fillLine(target,y," Audience: "..tostring(nextH.scheduledFor or "-").." ["..tostring(nextH.status or "?").."]",colors.yellow);y=y+1
+        fillLine(target,y," "..tostring(nextH.subject or ""),colors.lightGray);y=y+2
+      end
+
+      if c.judgments and #c.judgments>0 and y<h then
+        local j=c.judgments[#c.judgments]
+        fillLine(target,y," Derniere decision:",colors.cyan);y=y+1
+        fillLine(target,y," "..tostring(j.verdict or ""):gsub("\n"," "),colors.white)
+      end
+      fillLine(target,h," LIVE / actualisation 5s / Q pour quitter",colors.gray)
+    end
+
+    local timer=os.startTimer(5)
+    while true do
+      local ev,a=os.pullEvent()
+      if ev=="timer" and a==timer then break
+      elseif ev=="key" and (a==keys.q or a==keys.escape) then
+        term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
+      end
+    end
   end
-  term.redirect(old)
-  old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1)
+end
+
+function P.billDisplay(billId)
+  local cfg=common.loadConfig()
+  if not cfg or cfg.role=="server" then error("Terminal client requis.",0) end
+  local monitor=findMonitor()
+  local old=term.current()
+  local target=monitor or old
+  if monitor and monitor.setTextScale then pcall(monitor.setTextScale,0.5) end
+  term.redirect(target)
+
+  while true do
+    target.setCursorBlink(false)
+    target.setBackgroundColor(colors.black);target.clear()
+    local bill,err=rpc(cfg,"BILL_GET",{id=billId},4)
+    if not bill then
+      drawOffline(target,err)
+    else
+      local tally=bill.tally or {}
+      header(target,"ASSEMBLEE / "..bill.id,bill.title or "")
+      local _,h=target.getSize()
+      local y=4
+      fillLine(target,y," Etape: "..tostring(bill.stage).." / Tour "..tostring(bill.votingRound or 0),colors.cyan);y=y+2
+      fillLine(target,y," POUR       "..tostring(tally.yes or 0),colors.lime);y=y+1
+      fillLine(target,y," CONTRE     "..tostring(tally.no or 0),colors.red);y=y+1
+      fillLine(target,y," ABSTENTION "..tostring(tally.abstain or 0),colors.yellow);y=y+2
+      fillLine(target,y," Participation "..tostring(tally.participation or 0).."/"..tostring(tally.eligible or 0),colors.white);y=y+1
+      fillLine(target,y," Quorum minimum "..tostring(tally.quorumRequired or 0)..
+        " : "..(tally.quorumMet and "ATTEINT" or "NON ATTEINT"),tally.quorumMet and colors.lime or colors.orange);y=y+2
+
+      local votes={}
+      for stateId,v in pairs(bill.votes or {}) do
+        votes[#votes+1]=(v.stateName or stateId).."="..string.upper(v.choice or "?")
+      end
+      table.sort(votes)
+      for _,line in ipairs(votes) do
+        if y>=h then break end
+        fillLine(target,y," "..line,colors.lightGray);y=y+1
+      end
+      fillLine(target,h," LIVE / actualisation 3s / Q pour quitter",colors.gray)
+    end
+
+    local timer=os.startTimer(3)
+    while true do
+      local ev,a=os.pullEvent()
+      if ev=="timer" and a==timer then break
+      elseif ev=="key" and (a==keys.q or a==keys.escape) then
+        term.redirect(old);old.setBackgroundColor(colors.black);old.clear();old.setCursorPos(1,1);return
+      end
+    end
+  end
 end
 
 return P
